@@ -8,8 +8,8 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -117,8 +117,8 @@ const SettingsScreen: React.FC = () => {
     title: string,
     subtitle: string,
     onPress: () => void,
-    showArrow: boolean = true,
-    index: number = 0
+    index: number = 0,
+    showArrow: boolean = true
   ) => (
     <Animatable.View
       animation="fadeInUp"
@@ -181,21 +181,24 @@ const SettingsScreen: React.FC = () => {
             'Edit Profile',
             'Update your profile information',
             () => {},
-            0
+            0,
+            true
           )}
           {renderSettingItem(
             'notifications',
             'Notifications',
             'Manage your notification preferences',
             () => {},
-            1
+            1,
+            true
           )}
           {renderSettingItem(
-            'privacy',
+            'security',
             'Privacy',
             'Control your privacy settings',
             () => {},
-            2
+            2,
+            true
           )}
         </Animatable.View>
 
@@ -209,28 +212,32 @@ const SettingsScreen: React.FC = () => {
             'Language',
             'English',
             () => {},
-            0
+            0,
+            true
           )}
           {renderSettingItem(
-            'storage',
+            'folder',
             'Storage',
             'Manage app storage',
             () => {},
-            1
+            1,
+            true
           )}
           {renderSettingItem(
-            'help',
+            'help-outline',
             'Help & Support',
             'Get help and contact support',
             () => {},
-            2
+            2,
+            true
           )}
           {renderSettingItem(
             'info',
             'About',
             'App version 1.0.0',
             () => {},
-            3
+            3,
+            true
           )}
         </Animatable.View>
 
@@ -240,20 +247,20 @@ const SettingsScreen: React.FC = () => {
             Danger Zone
           </Text>
           {renderSettingItem(
-            'logout',
+            'exit-to-app',
             'Logout',
             'Sign out of your account',
             handleLogout,
-            false,
-            0
+            0,
+            false
           )}
           {renderSettingItem(
-            'delete',
+            'delete-outline',
             'Clear All Data',
             'Delete all your data permanently',
             handleClearData,
-            false,
-            1
+            1,
+            false
           )}
         </Animatable.View>
       </ScrollView>

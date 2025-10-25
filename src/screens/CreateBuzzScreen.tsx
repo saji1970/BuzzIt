@@ -11,10 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import {launchImageLibrary, launchCamera, MediaType} from 'react-native-image-picker';
-import Share from 'react-native-share';
+import * as Sharing from 'expo-sharing';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -122,25 +122,41 @@ const CreateBuzzScreen: React.FC = () => {
     Alert.alert('Success', 'Your buzz has been created!');
   };
 
-  const handleShareToSocial = () => {
+  const handleShareToSocial = async () => {
     if (!content.trim()) {
       Alert.alert('Error', 'Please enter some content first');
       return;
     }
 
-    const shareOptions = {
-      title: 'Check out my buzz!',
-      message: content,
-      url: media.url,
-    };
-
-    Share.open(shareOptions)
-      .then(() => {
-        console.log('Shared successfully');
-      })
-      .catch(error => {
-        console.log('Share error:', error);
-      });
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        // Only share if we have a valid local file URI
+        if (media.url && !media.url.startsWith('http')) {
+          await Sharing.shareAsync(media.url);
+          Alert.alert('Success', 'Content shared successfully!');
+        } else {
+          // For text or remote URLs, use clipboard or show info
+          Alert.alert(
+            'Share Info',
+            'Copy to clipboard:\n\n' + content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+            [
+              {text: 'OK'}
+            ]
+          );
+        }
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (error) {
+      console.log('Share error:', error);
+      // Provide a fallback
+      Alert.alert(
+        'Share Your Buzz',
+        'Buzz Content:\n\n' + content,
+        [{text: 'OK'}]
+      );
+    }
   };
 
   return (

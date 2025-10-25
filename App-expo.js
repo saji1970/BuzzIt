@@ -6,8 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemeProvider } from './src/context/ThemeContext';
 import { UserProvider } from './src/context/UserContext';
+import { BuzzChannelProvider } from './src/context/BuzzChannelContext';
+import { RadioChannelProvider } from './src/context/RadioChannelContext';
 import HomeScreen from './src/screens/HomeScreen';
 import CreateBuzzScreen from './src/screens/CreateBuzzScreen';
+import BuzzChannelScreen from './src/screens/BuzzChannelScreen';
+import CreateChannelContentScreen from './src/screens/CreateChannelContentScreen';
+import RadioChannelScreen from './src/screens/RadioChannelScreen';
+import CreateRadioChannelScreen from './src/screens/CreateRadioChannelScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { useTheme } from './src/context/ThemeContext';
@@ -19,7 +25,7 @@ const AppContent = () => {
 
   return (
     <>
-      <StatusBar style={theme.dark ? 'light' : 'dark'} />
+      <StatusBar style="auto" />
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={({ route }) => ({
@@ -33,6 +39,12 @@ const AppContent = () => {
                 case 'Create':
                   iconName = focused ? 'add-circle' : 'add-circle-outline';
                   break;
+                case 'Channel':
+                  iconName = focused ? 'play-circle' : 'play-circle-outline';
+                  break;
+                case 'Radio':
+                  iconName = focused ? 'radio' : 'radio-outline';
+                  break;
                 case 'Profile':
                   iconName = focused ? 'person' : 'person-outline';
                   break;
@@ -40,7 +52,7 @@ const AppContent = () => {
                   iconName = focused ? 'settings' : 'settings-outline';
                   break;
                 default:
-                  iconName = 'home-outline';
+                  iconName = 'home';
               }
 
               return <Ionicons name={iconName} size={size} color={color} />;
@@ -61,6 +73,8 @@ const AppContent = () => {
           })}>
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Create" component={CreateBuzzScreen} />
+          <Tab.Screen name="Channel" component={BuzzChannelScreen} />
+          <Tab.Screen name="Radio" component={RadioChannelScreen} />
           <Tab.Screen name="Profile" component={ProfileScreen} />
           <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>
@@ -73,7 +87,11 @@ const App = () => {
   return (
     <ThemeProvider>
       <UserProvider>
-        <AppContent />
+        <BuzzChannelProvider>
+          <RadioChannelProvider>
+            <AppContent />
+          </RadioChannelProvider>
+        </BuzzChannelProvider>
       </UserProvider>
     </ThemeProvider>
   );

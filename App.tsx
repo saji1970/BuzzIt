@@ -2,7 +2,7 @@ import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {StatusBar} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 import {ThemeProvider} from './src/context/ThemeContext';
 import {UserProvider} from './src/context/UserContext';
@@ -43,10 +43,10 @@ const AppContent = () => {
                   iconName = 'add-circle';
                   break;
                 case 'Channel':
-                  iconName = 'play-circle';
+                  iconName = 'video-library';
                   break;
                 case 'Radio':
-                  iconName = 'radio';
+                  iconName = 'library-music';
                   break;
                 case 'Profile':
                   iconName = 'person';

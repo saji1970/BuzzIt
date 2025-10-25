@@ -9,33 +9,58 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
 import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
+import BuzzDetailScreen from './BuzzDetailScreen';
+import CreateProfileScreen from './CreateProfileScreen';
 
 const {width} = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
   const {theme} = useTheme();
-  const {user, getBuzzesByInterests, likeBuzz, shareBuzz} = useUser();
+  const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz} = useUser();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
+  const [showCreateProfile, setShowCreateProfile] = useState(false);
 
   useEffect(() => {
     loadBuzzes();
-  }, [user]);
+  }, [user, buzzes]);
 
   const loadBuzzes = () => {
-    if (user && user.interests.length > 0) {
-      const buzzes = getBuzzesByInterests(user.interests);
-      setFilteredBuzzes(buzzes);
+    if (!user || !buzzes) return;
+    
+    // Show all buzzes if no interests selected, otherwise filter by interests
+    let filtered: Buzz[];
+    
+    if (selectedInterests.length > 0) {
+      const interestObjects = user.interests.filter(i => 
+        selectedInterests.includes(i.id)
+      );
+      filtered = getBuzzesByInterests(interestObjects);
+    } else if (user.interests.length > 0) {
+      filtered = getBuzzesByInterests(user.interests);
+    } else {
+      // If user has no interests, show all buzzes
+      filtered = buzzes;
     }
+    
+    // Sort by creation date (newest first)
+    filtered.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    setFilteredBuzzes(filtered);
   };
 
   const onRefresh = () => {
@@ -46,15 +71,33 @@ const HomeScreen: React.FC = () => {
 
   const handleInterestFilter = (interestIds: string[]) => {
     setSelectedInterests(interestIds);
-    if (interestIds.length === 0) {
+    // Reload buzzes when filter changes
+    setTimeout(() => {
       loadBuzzes();
-    } else {
-      const filtered = getBuzzesByInterests(
-        user?.interests.filter(interest => 
-          interestIds.includes(interest.id)
-        ) || []
-      );
-      setFilteredBuzzes(filtered);
+    }, 0);
+  };
+
+  const handleBuzzPress = (buzz: Buzz) => {
+    setSelectedBuzz(buzz);
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedBuzz(null);
+  };
+
+  const handleNextBuzz = () => {
+    if (!selectedBuzz) return;
+    const currentIndex = filteredBuzzes.findIndex(b => b.id === selectedBuzz.id);
+    if (currentIndex < filteredBuzzes.length - 1) {
+      setSelectedBuzz(filteredBuzzes[currentIndex + 1]);
+    }
+  };
+
+  const handlePreviousBuzz = () => {
+    if (!selectedBuzz) return;
+    const currentIndex = filteredBuzzes.findIndex(b => b.id === selectedBuzz.id);
+    if (currentIndex > 0) {
+      setSelectedBuzz(filteredBuzzes[currentIndex - 1]);
     }
   };
 
@@ -67,6 +110,7 @@ const HomeScreen: React.FC = () => {
         buzz={item}
         onLike={() => likeBuzz(item.id)}
         onShare={() => shareBuzz(item.id)}
+        onPress={() => handleBuzzPress(item)}
       />
     </Animatable.View>
   );
@@ -85,6 +129,11 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
+  // Show Create Profile screen if user has no interests (first time user)
+  if (showCreateProfile || (user && user.interests.length === 0)) {
+    return <CreateProfileScreen />;
+  }
+
   return (
     <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
       <LinearGradient
@@ -92,10 +141,19 @@ const HomeScreen: React.FC = () => {
         start={{x: 0, y: 0}}
         end={{x: 1, y: 0}}
         style={styles.header}>
-        <Text style={styles.headerTitle}>🔥 Buzz Feed</Text>
-        <Text style={styles.headerSubtitle}>
-          What's buzzing in your world?
-        </Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>🔥 Buzz Feed</Text>
+            <Text style={styles.headerSubtitle}>
+              What's buzzing in your world?
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.createProfileButton, {backgroundColor: theme.colors.accent}]}
+            onPress={() => setShowCreateProfile(true)}>
+            <Icon name="person-add" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <InterestFilter
@@ -119,6 +177,15 @@ const HomeScreen: React.FC = () => {
         }
         ListEmptyComponent={renderEmptyState}
       />
+
+      {selectedBuzz && (
+        <BuzzDetailScreen
+          buzz={selectedBuzz}
+          onClose={handleCloseDetail}
+          onNext={handleNextBuzz}
+          onPrevious={handlePreviousBuzz}
+        />
+      )}
     </View>
   );
 };
@@ -132,6 +199,11 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 30,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -142,6 +214,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     opacity: 0.9,
+  },
+  createProfileButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   listContainer: {
     padding: 15,

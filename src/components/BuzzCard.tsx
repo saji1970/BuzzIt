@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {Buzz} from '../context/UserContext';
+import SocialMediaShareModal from './SocialMediaShareModal';
 
 const {width} = Dimensions.get('window');
 
@@ -20,14 +21,23 @@ interface BuzzCardProps {
   buzz: Buzz;
   onLike: () => void;
   onShare: () => void;
+  onPress?: () => void;
 }
 
-const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare}) => {
+const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress}) => {
   const {theme} = useTheme();
+  const [showShareModal, setShowShareModal] = useState(false);
 
-  const formatTimeAgo = (date: Date) => {
+  const handleShareClick = () => {
+    setShowShareModal(true);
+    onShare(); // Increment share count
+  };
+
+  const formatTimeAgo = (date: Date | string) => {
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    // Convert to Date if it's a string
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
     
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
@@ -36,9 +46,10 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare}) => {
   };
 
   return (
-    <Animatable.View
-      animation="fadeInUp"
-      style={[styles.container, {backgroundColor: theme.colors.surface}]}>
+    <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+      <Animatable.View
+        animation="fadeInUp"
+        style={[styles.container, {backgroundColor: theme.colors.surface}]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
@@ -67,7 +78,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare}) => {
 
       {/* Content */}
       <View style={styles.content}>
-        <Text style={[styles.buzzText, {color: theme.colors.text}]}>
+        <Text style={[styles.buzzText, {color: theme.colors.text}]} numberOfLines={3}>
           {buzz.content}
         </Text>
 
@@ -131,7 +142,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare}) => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={onShare}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleShareClick}>
           <Icon name="share" size={20} color={theme.colors.textSecondary} />
           <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
             {buzz.shares}
@@ -149,7 +160,15 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare}) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </Animatable.View>
+      </Animatable.View>
+
+      <SocialMediaShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        buzzContent={buzz.content}
+        buzzMedia={buzz.media.url || undefined}
+      />
+    </TouchableOpacity>
   );
 };
 

@@ -79,7 +79,115 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   useEffect(() => {
     loadUser();
     loadBuzzes();
+    // Add sample data if no user exists
+    checkAndInitializeData();
   }, []);
+
+  const checkAndInitializeData = async () => {
+    try {
+      const savedUser = await AsyncStorage.getItem('user');
+      const savedBuzzes = await AsyncStorage.getItem('buzzes');
+      
+      if (!savedUser) {
+        // Create a default user
+        const defaultUser: User = {
+          id: '1',
+          username: 'buzzuser',
+          displayName: 'Buzz User',
+          email: 'user@buzzit.app',
+          bio: 'Creating buzz in social media! 🔥',
+          avatar: null,
+          interests: defaultInterests.slice(0, 4),
+          followers: 1520,
+          following: 890,
+          buzzCount: 42,
+          createdAt: new Date(),
+        };
+        setUserState(defaultUser);
+        await AsyncStorage.setItem('user', JSON.stringify(defaultUser));
+      }
+      
+      if (!savedBuzzes || (savedBuzzes && JSON.parse(savedBuzzes).length === 0)) {
+        // Add sample buzzes
+        const sampleBuzzes: Buzz[] = [
+          {
+            id: '1',
+            userId: '1',
+            username: 'buzzuser',
+            userAvatar: null,
+            content: 'Just launched my new music video! 🎵 Check it out and let me know what you think! #MusicMonday #NewRelease',
+            media: { type: 'image', url: 'https://via.placeholder.com/400x300/FF6B6B/FFFFFF?text=Music+Video' },
+            interests: [defaultInterests[1]],
+            likes: 254,
+            comments: 18,
+            shares: 45,
+            createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+            isLiked: false,
+          },
+          {
+            id: '2',
+            userId: '2',
+            username: 'techguru',
+            userAvatar: null,
+            content: 'Check out the latest AI innovations that are changing the world! 🚀 #Technology #Innovation #AI',
+            media: { type: 'image', url: 'https://via.placeholder.com/400x300/4ECDC4/FFFFFF?text=AI+Tech' },
+            interests: [defaultInterests[0]],
+            likes: 892,
+            comments: 56,
+            shares: 123,
+            createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+            isLiked: true,
+          },
+          {
+            id: '3',
+            userId: '3',
+            username: 'foodie',
+            userAvatar: null,
+            content: 'Made the most delicious homemade pizza tonight! 🍕 Recipe in bio #Food #Cooking #Homemade',
+            media: { type: 'image', url: 'https://via.placeholder.com/400x300/95E1D3/FFFFFF?text=Homemade+Pizza' },
+            interests: [defaultInterests[4]],
+            likes: 445,
+            comments: 32,
+            shares: 67,
+            createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+            isLiked: false,
+          },
+          {
+            id: '4',
+            userId: '4',
+            username: 'adventurer',
+            userAvatar: null,
+            content: 'Just returned from an amazing trip to Japan! 🇯🇵 The cherry blossoms were incredible! #Travel #Japan #Adventure',
+            media: { type: 'image', url: 'https://via.placeholder.com/400x300/F38181/FFFFFF?text=Japan+Trip' },
+            interests: [defaultInterests[5]],
+            likes: 623,
+            comments: 41,
+            shares: 89,
+            createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
+            isLiked: true,
+          },
+          {
+            id: '5',
+            userId: '5',
+            username: 'fitnesspro',
+            userAvatar: null,
+            content: 'Morning workout complete! 💪 Remember, consistency is key! #Fitness #Workout #Motivation',
+            media: { type: 'image', url: 'https://via.placeholder.com/400x300/A8E6CF/FFFFFF?text=Workout' },
+            interests: [defaultInterests[8]],
+            likes: 378,
+            comments: 24,
+            shares: 51,
+            createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
+            isLiked: false,
+          },
+        ];
+        setBuzzes(sampleBuzzes);
+        await AsyncStorage.setItem('buzzes', JSON.stringify(sampleBuzzes));
+      }
+    } catch (error) {
+      console.log('Error initializing data:', error);
+    }
+  };
 
   const loadUser = async () => {
     try {
@@ -98,7 +206,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
       const savedBuzzes = await AsyncStorage.getItem('buzzes');
       if (savedBuzzes) {
         const buzzesData = JSON.parse(savedBuzzes);
-        setBuzzes(buzzesData);
+        // Convert createdAt strings back to Date objects
+        const buzzesWithDates = buzzesData.map((buzz: any) => ({
+          ...buzz,
+          createdAt: buzz.createdAt ? new Date(buzz.createdAt) : new Date(),
+        }));
+        setBuzzes(buzzesWithDates);
       }
     } catch (error) {
       console.log('Error loading buzzes:', error);

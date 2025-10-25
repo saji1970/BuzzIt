@@ -21,29 +21,29 @@ export interface Theme {
 
 const themes: {[key: string]: Theme} = {
   default: {
-    name: 'Default',
+    name: 'Instagram',
     colors: {
-      primary: '#FF6B6B',
-      secondary: '#4ECDC4',
-      accent: '#45B7D1',
-      background: '#FFFFFF',
-      surface: '#F8F9FA',
-      text: '#2C3E50',
-      textSecondary: '#7F8C8D',
-      border: '#E1E8ED',
-      success: '#2ECC71',
-      warning: '#F39C12',
-      error: '#E74C3C',
+      primary: '#E4405F', // Instagram pink
+      secondary: '#8E44AD', // Purple gradient
+      accent: '#F58529', // Orange accent
+      background: '#FAFAFA', // Instagram gray
+      surface: '#FFFFFF',
+      text: '#262626',
+      textSecondary: '#8E8E8E',
+      border: '#DBDBDB',
+      success: '#4ECDC4',
+      warning: '#F58529',
+      error: '#E4405F',
     },
     dark: false,
   },
   neon: {
-    name: 'Neon',
+    name: 'Electric',
     colors: {
-      primary: '#FF0080',
-      secondary: '#00FF80',
-      accent: '#8000FF',
-      background: '#000000',
+      primary: '#FF0080', // Hot pink
+      secondary: '#00FFFF', // Cyan
+      accent: '#FFFF00', // Yellow
+      background: '#0A0A0A',
       surface: '#1A1A1A',
       text: '#FFFFFF',
       textSecondary: '#CCCCCC',
@@ -57,51 +57,51 @@ const themes: {[key: string]: Theme} = {
   sunset: {
     name: 'Sunset',
     colors: {
-      primary: '#FF8C42',
-      secondary: '#FF6B9D',
-      accent: '#C44569',
-      background: '#FFF5F5',
-      surface: '#FFE8E8',
+      primary: '#FF6B35', // Vibrant orange
+      secondary: '#F7931E', // Golden
+      accent: '#FFE66D', // Bright yellow
+      background: '#FFF8F0',
+      surface: '#FFFFFF',
       text: '#2D3436',
       textSecondary: '#636E72',
-      border: '#FDCB6E',
-      success: '#00B894',
-      warning: '#FDCB6E',
-      error: '#E17055',
+      border: '#FFC49B',
+      success: '#2ECC71',
+      warning: '#F7931E',
+      error: '#E74C3C',
     },
     dark: false,
   },
   ocean: {
     name: 'Ocean',
     colors: {
-      primary: '#0984E3',
-      secondary: '#00CEC9',
-      accent: '#6C5CE7',
+      primary: '#667EEA', // Bright blue
+      secondary: '#764BA2', // Purple
+      accent: '#48CAE4', // Sky blue
       background: '#F0F8FF',
-      surface: '#E3F2FD',
+      surface: '#FFFFFF',
       text: '#2D3436',
       textSecondary: '#636E72',
-      border: '#74B9FF',
+      border: '#A8DAF0',
       success: '#00B894',
       warning: '#FDCB6E',
-      error: '#E17055',
+      error: '#E74C3C',
     },
     dark: false,
   },
   forest: {
-    name: 'Forest',
+    name: 'Vibrant',
     colors: {
-      primary: '#00B894',
-      secondary: '#55A3FF',
-      accent: '#FDCB6E',
+      primary: '#00D2D3', // Teal
+      secondary: '#00B894', // Green
+      accent: '#6C5CE7', // Purple
       background: '#F0FFF4',
-      surface: '#E8F5E8',
+      surface: '#FFFFFF',
       text: '#2D3436',
       textSecondary: '#636E72',
       border: '#A8E6CF',
       success: '#00B894',
       warning: '#FDCB6E',
-      error: '#E17055',
+      error: '#E74C3C',
     },
     dark: false,
   },
