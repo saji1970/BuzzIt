@@ -29,7 +29,7 @@ const HomeScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
-  const [showCreateProfile, setShowCreateProfile] = useState(false);
+  // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
     loadBuzzes();
@@ -129,8 +129,8 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  // Show Create Profile screen if user has no interests (first time user)
-  if (showCreateProfile || (user && user.interests.length === 0)) {
+  // Show Create Profile screen only for first-time users (no interests)
+  if (user && user.interests.length === 0) {
     return <CreateProfileScreen />;
   }
 
@@ -148,11 +148,6 @@ const HomeScreen: React.FC = () => {
               What's buzzing in your world?
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.createProfileButton, {backgroundColor: theme.colors.accent}]}
-            onPress={() => setShowCreateProfile(true)}>
-            <Icon name="person-add" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
       </LinearGradient>
 
@@ -201,7 +196,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   headerTitle: {
@@ -215,18 +210,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     opacity: 0.9,
   },
-  createProfileButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
+  // Removed createProfileButton style - no longer needed
   listContainer: {
     padding: 15,
     paddingBottom: 100,

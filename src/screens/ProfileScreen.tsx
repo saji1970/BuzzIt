@@ -66,6 +66,24 @@ const ProfileScreen: React.FC = () => {
     Alert.alert('Success', 'Profile updated successfully!');
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => {
+            setUser(null);
+            Alert.alert('Success', 'Logged out successfully!');
+          },
+        },
+      ]
+    );
+  };
+
   const toggleInterest = (interest: Interest) => {
     const isSelected = selectedInterests.some(i => i.id === interest.id);
     if (isSelected) {
@@ -341,15 +359,22 @@ const ProfileScreen: React.FC = () => {
         end={{x: 1, y: 0}}
         style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => setIsEditing(!isEditing)}>
-          <Icon
-            name={isEditing ? 'close' : 'edit'}
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}>
+            <Icon name="logout" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => setIsEditing(!isEditing)}>
+            <Icon
+              name={isEditing ? 'close' : 'edit'}
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -381,6 +406,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     opacity: 0.9,
     marginTop: 5,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoutButton: {
+    padding: 8,
+    marginRight: 8,
   },
   editButton: {
     padding: 8,
