@@ -7,9 +7,26 @@
     "preview": {
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "your-email@example.com",
+        "ascAppId": "your-app-store-connect-app-id",
+        "appleTeamId": "your-team-id"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./service-account-key.json",
+        "track": "internal"
+      }
+    }
   }
 }

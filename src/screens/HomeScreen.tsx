@@ -19,6 +19,7 @@ import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
 import CreateProfileScreen from './CreateProfileScreen';
+import SubscribedChannels from '../components/SubscribedChannels';
 
 const {width} = Dimensions.get('window');
 
@@ -101,6 +102,11 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleFollow = (buzzId: string) => {
+    // TODO: Implement follow functionality
+    console.log('Follow buzz:', buzzId);
+  };
+
   const renderBuzz = ({item, index}: {item: Buzz; index: number}) => (
     <Animatable.View
       animation="fadeInUp"
@@ -111,6 +117,8 @@ const HomeScreen: React.FC = () => {
         onLike={() => likeBuzz(item.id)}
         onShare={() => shareBuzz(item.id)}
         onPress={() => handleBuzzPress(item)}
+        isFollowing={false}
+        onFollow={handleFollow}
       />
     </Animatable.View>
   );
@@ -150,6 +158,8 @@ const HomeScreen: React.FC = () => {
           </View>
         </View>
       </LinearGradient>
+
+      <SubscribedChannels />
 
       <InterestFilter
         onFilterChange={handleInterestFilter}

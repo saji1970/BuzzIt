@@ -15,7 +15,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.buzzit.app"
+      "bundleIdentifier": "com.buzzit.app",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to take photos and videos for your buzzes.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select photos and videos for your buzzes.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record videos for your buzzes.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to location when open."
+      }
     },
     "android": {
       "package": "com.buzzit.app"

@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Alert,
+  Modal,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,15 +24,99 @@ interface BuzzCardProps {
   onLike: () => void;
   onShare: () => void;
   onPress?: () => void;
+  isFollowing?: boolean;
+  onFollow?: (buzzId: string) => void;
 }
 
-const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress}) => {
+interface MenuModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onBlock: () => void;
+  onAbout: () => void;
+  onSave: () => void;
+}
+
+const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout, onSave}) => {
+  const {theme} = useTheme();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}>
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={onClose}>
+        <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onBlock}>
+            <Icon name="block" size={24} color="#E4405F" />
+            <Text style={[styles.menuItemText, {color: '#E4405F'}]}>Block Buzzer</Text>
+          </TouchableOpacity>
+          <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onAbout}>
+            <Icon name="info-outline" size={24} color={theme.colors.text} />
+            <Text style={[styles.menuItemText, {color: theme.colors.text}]}>About Buzzer</Text>
+          </TouchableOpacity>
+          <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onSave}>
+            <Icon name="bookmark-outline" size={24} color={theme.colors.text} />
+            <Text style={[styles.menuItemText, {color: theme.colors.text}]}>Save Buzz</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFollowing = false, onFollow}) => {
   const {theme} = useTheme();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   const handleShareClick = () => {
     setShowShareModal(true);
     onShare(); // Increment share count
+  };
+
+  const handleFollow = () => {
+    if (onFollow) {
+      onFollow(buzz.id);
+    }
+    Alert.alert('Success', isFollowing ? 'Unfollowed successfully!' : 'Following!');
+  };
+
+  const handleBlock = () => {
+    setShowMenuModal(false);
+    Alert.alert(
+      'Block Buzzer',
+      `Are you sure you want to block ${buzz.username}?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => Alert.alert('Blocked', `${buzz.username} has been blocked.`),
+        },
+      ]
+    );
+  };
+
+  const handleAbout = () => {
+    setShowMenuModal(false);
+    Alert.alert('About Buzzer', `Username: @${buzz.username}\n\nThis user is sharing content related to your interests.`);
+  };
+
+  const handleSave = () => {
+    setShowMenuModal(false);
+    Alert.alert('Saved', 'This buzz has been saved to your collection!');
   };
 
   const formatTimeAgo = (date: Date | string) => {
@@ -64,15 +150,19 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress}) => 
           </View>
           <View style={styles.userDetails}>
             <Text style={[styles.username, {color: theme.colors.text}]}>
-              @{buzz.username}
-            </Text>
-            <Text style={[styles.timeAgo, {color: theme.colors.textSecondary}]}>
-              {formatTimeAgo(buzz.createdAt)}
+              {buzz.username}
             </Text>
           </View>
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing && styles.followingButton]}
+            onPress={handleFollow}>
+            <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+              {isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.moreButton}>
-          <Icon name="more-vert" size={20} color={theme.colors.textSecondary} />
+        <TouchableOpacity style={styles.moreButton} onPress={() => setShowMenuModal(true)}>
+          <Icon name="more-vert" size={24} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -167,6 +257,14 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress}) => 
         onClose={() => setShowShareModal(false)}
         buzzContent={buzz.content}
         buzzMedia={buzz.media.url || undefined}
+      />
+
+      <MenuModal
+        visible={showMenuModal}
+        onClose={() => setShowMenuModal(false)}
+        onBlock={handleBlock}
+        onAbout={handleAbout}
+        onSave={handleSave}
       />
     </TouchableOpacity>
   );
@@ -309,6 +407,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 4,
+  },
+  followButton: {
+    backgroundColor: '#1DA1F2',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  followingButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DBDBDB',
+  },
+  followButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  followingButtonText: {
+    color: '#000000',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: width * 0.8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
+    marginLeft: 16,
+    fontWeight: '400',
+  },
+  menuDivider: {
+    height: 1,
+    marginHorizontal: 20,
   },
 });
 
