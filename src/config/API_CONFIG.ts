@@ -7,7 +7,7 @@ export const API_CONFIG = {
 
   // Backend URLs
   LOCAL_BACKEND: 'http://localhost:3000',
-  PRODUCTION_BACKEND: 'https://buzzit-production.up.railway.app', // Replace with your Railway URL
+  PRODUCTION_BACKEND: 'https://buzzit-production.up.railway.app', // Will be updated after deployment
 
   // Get the current backend URL
   getBackendURL() {

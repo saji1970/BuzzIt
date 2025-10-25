@@ -1,127 +1,105 @@
-# 🚂 Deploy Buzz it Backend to Railway
+# 🚂 Railway Deployment with Your Token
 
-This guide will help you deploy the Buzz it backend API to Railway.com.
-
-## Prerequisites
-
-1. GitHub account
-2. Railway account (login with GitHub)
-3. Backend server code (in `/server` directory)
-
-## Step 1: Push Code to GitHub
-
-```bash
-# Make sure you're in the project root
-cd /Users/sajipillai/Buzzit
-
-# Add all files
-git add .
-
-# Commit changes
-git commit -m "Add backend API for Railway deployment"
-
-# Push to GitHub
-git push origin main
+## Your Railway Token
+```
+2a211ac2-6f2f-4720-947d-2f5ec3812ad3
 ```
 
-## Step 2: Deploy to Railway
+## Quick Deploy Options
 
-### Method 1: Via Railway Web Dashboard (Recommended)
+### Option 1: Using Railway CLI (Recommended)
 
-1. **Go to [railway.app](https://railway.app)** and login with GitHub
-2. **Click "New Project"**
-3. **Select "Deploy from GitHub repo"**
-4. **Select your Buzz it repository**
-5. **Configure the deployment:**
-   - Root Directory: Set to `server` (since backend is in server folder)
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-6. **Click "Deploy"**
+1. **Install Railway CLI:**
+   ```bash
+   npm install -g @railway/cli
+   ```
 
-### Method 2: Via Railway CLI
+2. **Login with your token:**
+   ```bash
+   railway login --token 2a211ac2-6f2f-4720-947d-2f5ec3812ad3
+   ```
 
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
+3. **Navigate to server directory:**
+   ```bash
+   cd server
+   ```
 
-# Login to Railway
-railway login
+4. **Deploy:**
+   ```bash
+   railway up
+   ```
 
-# Go to server directory
-cd server
+### Option 2: Using the Deploy Script
 
-# Initialize Railway project
-railway init
+1. **Run the deployment script:**
+   ```bash
+   ./deploy-to-railway.sh
+   ```
 
-# Set root directory to server
-railway link
+### Option 3: Manual Railway Dashboard
 
-# Deploy
-railway up
-```
+1. Go to https://railway.app
+2. Click "New Project"
+3. Select "Deploy from GitHub repo"
+4. Choose your `BuzzIt` repository
+5. **IMPORTANT:** Set Root Directory to `server`
+6. Click "Deploy"
 
-## Step 3: Configure Environment Variables
+## After Deployment
 
-In Railway dashboard:
-1. Go to your project
-2. Click on your service
-3. Go to "Variables" tab
-4. Add:
-   - `NODE_ENV=production`
-   - `PORT=3000` (Railway auto-assigns this)
+1. **Get your Railway URL** from the Railway dashboard
+2. **Update the app configuration:**
 
-## Step 4: Get Your API URL
+   Edit `src/config/API_CONFIG.ts`:
+   ```typescript
+   PRODUCTION_BACKEND: 'https://your-actual-url.up.railway.app',
+   ```
 
-1. In Railway dashboard, go to your service
-2. Click on the domain
-3. Copy the generated URL (e.g., `https://buzzit-backend.railway.app`)
-4. This is your backend API URL
+   Edit `src/services/APIService.ts`:
+   ```typescript
+   const API_BASE_URL = 'https://your-actual-url.up.railway.app';
+   ```
 
-## Step 5: Update Frontend to Use API
+3. **Test the deployment:**
+   ```bash
+   curl https://your-url.up.railway.app/health
+   ```
 
-In your React Native app, create an API configuration file:
+   Should return:
+   ```json
+   {
+     "status": "ok",
+     "uptime": 123.45,
+     "timestamp": "2025-10-25T13:00:00.000Z"
+   }
+   ```
 
-```typescript
-// src/config/api.ts
-export const API_URL = 'https://your-backend-url.railway.app';
-```
+## Enable Backend in App
 
-Then update your fetch calls to use this URL instead of AsyncStorage.
-
-## Monitoring & Logs
-
-- View logs: Railway dashboard → Service → Logs
-- Monitor metrics: Railway dashboard → Service → Metrics
-- Check domain: Railway dashboard → Service → Networking
+1. **Set `USE_BACKEND: true`** in `src/config/API_CONFIG.ts`
+2. **Update UserContext** to use APIService instead of AsyncStorage
+3. **Test the integration**
 
 ## Troubleshooting
 
-### Build Fails
-- Check that `server/package.json` exists
-- Verify Node.js version compatibility
-- Check build logs in Railway dashboard
+### If deployment fails:
+- Check that Root Directory is set to `server`
+- Verify `server/package.json` exists
+- Check Railway logs in dashboard
 
-### API Not Responding
-- Check if service is running (Status should be "Running")
-- Verify PORT environment variable
-- Check server logs for errors
+### If API calls fail:
+- Verify the URL is correct
+- Check CORS settings
+- Test with curl first
 
-### CORS Errors
-- Add frontend domain to CORS whitelist in `server/index.js`
-- Update CORS configuration in production
+## Your Token Details
+- **Token:** `2a211ac2-6f2f-4720-947d-2f5ec3812ad3`
+- **Usage:** For Railway CLI authentication
+- **Security:** Keep this token secure
 
 ## Next Steps
-
-1. **Add Database**: Replace in-memory storage with PostgreSQL
-2. **Add Authentication**: Implement JWT tokens
-3. **Add Rate Limiting**: Protect your API from abuse
-4. **Set up Monitoring**: Add error tracking (Sentry)
-5. **Configure Custom Domain**: Use your own domain name
-
-## Support
-
-For Railway-specific issues, check:
-- [Railway Documentation](https://docs.railway.app)
-- [Railway Community](https://community.railway.app)
-
-For backend issues, check the server logs in Railway dashboard.
+1. Deploy backend using one of the methods above
+2. Get your Railway URL
+3. Update app configuration
+4. Test the connection
+5. Enable backend mode in the app
