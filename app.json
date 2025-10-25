@@ -25,7 +25,26 @@
       }
     },
     "android": {
-      "package": "com.buzzit.app"
+      "package": "com.buzzit.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "🔥",
+        "backgroundColor": "#E4405F"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET"
+      ],
+      "icon": "🔥",
+      "splash": {
+        "backgroundColor": "#E4405F",
+        "resizeMode": "contain"
+      }
     },
     "plugins": [
       "expo-image-picker",
