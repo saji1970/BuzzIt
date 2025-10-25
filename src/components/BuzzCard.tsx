@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Video } from 'expo-av';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -178,9 +179,14 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
             {buzz.media.type === 'image' ? (
               <Image source={{uri: buzz.media.url}} style={styles.media} />
             ) : (
-              <View style={[styles.videoPlaceholder, {backgroundColor: theme.colors.primary}]}>
-                <Icon name="play-arrow" size={40} color="#FFFFFF" />
-              </View>
+              <Video
+                source={{ uri: buzz.media.url }}
+                style={styles.video}
+                useNativeControls
+                resizeMode="contain"
+                shouldPlay={false}
+                isLooping={false}
+              />
             )}
           </View>
         )}
@@ -345,6 +351,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     resizeMode: 'cover',
+  },
+  video: {
+    width: '100%',
+    height: 200,
   },
   videoPlaceholder: {
     width: '100%',
