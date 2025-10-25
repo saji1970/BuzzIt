@@ -5,7 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "icon": "🔥",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#E4405F"
@@ -28,7 +27,7 @@
       "package": "com.buzzit.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "🔥",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#E4405F"
       },
       "permissions": [
@@ -40,7 +39,7 @@
         "ACCESS_COARSE_LOCATION",
         "INTERNET"
       ],
-      "icon": "🔥",
+      "icon": "./assets/icon.png",
       "splash": {
         "backgroundColor": "#E4405F",
         "resizeMode": "contain"
