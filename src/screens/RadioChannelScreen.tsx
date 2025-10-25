@@ -19,6 +19,7 @@ import {useRadioChannel, RadioChannel} from '../context/RadioChannelContext';
 import RadioChannelCard from '../components/RadioChannelCard';
 import RadioCategoryFilter from '../components/RadioCategoryFilter';
 import RadioStatsCard from '../components/RadioStatsCard';
+import LiveStreamingControls from '../components/LiveStreamingControls';
 
 const {width} = Dimensions.get('window');
 
@@ -40,6 +41,9 @@ const RadioChannelScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filteredChannels, setFilteredChannels] = useState<RadioChannel[]>([]);
   const [showStats, setShowStats] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentViewers, setCurrentViewers] = useState(0);
 
   useEffect(() => {
     filterChannels();
@@ -85,6 +89,20 @@ const RadioChannelScreen: React.FC = () => {
 
   const handleShare = (channelId: string) => {
     shareChannel(channelId);
+  };
+
+  const handleStartStream = () => {
+    setIsLive(true);
+    setCurrentViewers(Math.floor(Math.random() * 100) + 50);
+  };
+
+  const handleStopStream = () => {
+    setIsLive(false);
+    setCurrentViewers(0);
+  };
+
+  const handleToggleMute = () => {
+    setIsMuted(!isMuted);
   };
 
   const renderChannel = ({item, index}: {item: RadioChannel; index: number}) => (
@@ -149,6 +167,15 @@ const RadioChannelScreen: React.FC = () => {
         onCategorySelect={setSelectedCategory}
         selectedFilter={selectedFilter}
         onFilterSelect={setSelectedFilter}
+      />
+
+      <LiveStreamingControls
+        isLive={isLive}
+        onStartStream={handleStartStream}
+        onStopStream={handleStopStream}
+        onToggleMute={handleToggleMute}
+        isMuted={isMuted}
+        viewers={currentViewers}
       />
 
       <FlatList

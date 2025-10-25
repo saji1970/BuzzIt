@@ -19,6 +19,7 @@ import {useBuzzChannel, BuzzChannelContent, BuzzChannelCategory} from '../contex
 import ChannelContentCard from '../components/ChannelContentCard';
 import ChannelCategoryFilter from '../components/ChannelCategoryFilter';
 import ChannelStatsCard from '../components/ChannelStatsCard';
+import LiveStreamingControls from '../components/LiveStreamingControls';
 
 const {width} = Dimensions.get('window');
 
@@ -40,6 +41,9 @@ const BuzzChannelScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filteredContent, setFilteredContent] = useState<BuzzChannelContent[]>([]);
   const [showStats, setShowStats] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentViewers, setCurrentViewers] = useState(0);
 
   useEffect(() => {
     filterContent();
@@ -86,6 +90,20 @@ const BuzzChannelScreen: React.FC = () => {
 
   const handleShare = (contentId: string) => {
     shareContent(contentId);
+  };
+
+  const handleStartStream = () => {
+    setIsLive(true);
+    setCurrentViewers(Math.floor(Math.random() * 100) + 50);
+  };
+
+  const handleStopStream = () => {
+    setIsLive(false);
+    setCurrentViewers(0);
+  };
+
+  const handleToggleMute = () => {
+    setIsMuted(!isMuted);
   };
 
   const renderContent = ({item, index}: {item: BuzzChannelContent; index: number}) => (
@@ -151,6 +169,15 @@ const BuzzChannelScreen: React.FC = () => {
         onCategorySelect={setSelectedCategory}
         selectedType={selectedType}
         onTypeSelect={setSelectedType}
+      />
+
+      <LiveStreamingControls
+        isLive={isLive}
+        onStartStream={handleStartStream}
+        onStopStream={handleStopStream}
+        onToggleMute={handleToggleMute}
+        isMuted={isMuted}
+        viewers={currentViewers}
       />
 
       <FlatList
