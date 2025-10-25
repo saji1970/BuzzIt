@@ -160,7 +160,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress}) => 
           </LinearGradient>
         </TouchableOpacity>
       </View>
-      </Animatable.View>
+    </Animatable.View>
 
       <SocialMediaShareModal
         visible={showShareModal}
