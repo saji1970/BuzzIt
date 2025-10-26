@@ -10,6 +10,7 @@ import {
   PanResponder,
   Animated,
   Alert,
+  Platform,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
@@ -105,14 +106,15 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
           },
         ]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={styles.header} pointerEvents="box-none">
           <TouchableOpacity
             style={[styles.closeButton, {backgroundColor: theme.colors.surface}]}
             onPress={() => {
               console.log('Close button pressed');
               onClose();
             }}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Icon name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           
@@ -124,7 +126,8 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
                   console.log('Previous button pressed');
                   onPrevious();
                 }}
-                activeOpacity={0.7}>
+                activeOpacity={0.7}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
                 <Icon name="chevron-left" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             )}
@@ -135,7 +138,8 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
                   console.log('Next button pressed');
                   onNext();
                 }}
-                activeOpacity={0.7}>
+                activeOpacity={0.7}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
                 <Icon name="chevron-right" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             )}
