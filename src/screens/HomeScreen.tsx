@@ -26,7 +26,7 @@ const {width} = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
   const {theme} = useTheme();
-  const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz} = useUser();
+  const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -41,6 +41,9 @@ const HomeScreen: React.FC = () => {
   const loadBuzzes = () => {
     if (!user || !buzzes) return;
     
+    // First, filter out buzzes from blocked users
+    let unblockedBuzzes = buzzes.filter(buzz => !isBlocked(buzz.userId));
+    
     // Show all buzzes if no interests selected, otherwise filter by interests
     let filtered: Buzz[];
     
@@ -48,12 +51,16 @@ const HomeScreen: React.FC = () => {
       const interestObjects = user.interests.filter(i => 
         selectedInterests.includes(i.id)
       );
-      filtered = getBuzzesByInterests(interestObjects);
+      filtered = getBuzzesByInterests(interestObjects).filter(buzz => 
+        unblockedBuzzes.some(b => b.id === buzz.id)
+      );
     } else if (user.interests.length > 0) {
-      filtered = getBuzzesByInterests(user.interests);
+      filtered = getBuzzesByInterests(user.interests).filter(buzz => 
+        unblockedBuzzes.some(b => b.id === buzz.id)
+      );
     } else {
-      // If user has no interests, show all buzzes
-      filtered = buzzes;
+      // If user has no interests, show all unblocked buzzes
+      filtered = unblockedBuzzes;
     }
     
     // Sort by creation date (newest first)

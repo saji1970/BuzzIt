@@ -9,6 +9,7 @@ import {
   FlatList,
   Dimensions,
   Modal,
+  Alert,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,7 +48,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
   onClose,
 }) => {
   const {theme} = useTheme();
-  const {buzzes, likeBuzz, shareBuzz} = useUser();
+  const {buzzes, likeBuzz, shareBuzz, subscribeToChannel, unsubscribeFromChannel, blockUser, isSubscribed, isBlocked} = useUser();
   const [buzzer, setBuzzer] = useState<Buzzer | null>(null);
   const [buzzerBuzzes, setBuzzerBuzzes] = useState<Buzz[]>([]);
   const [activeTab, setActiveTab] = useState<'grid' | 'reels' | 'tagged'>('grid');
@@ -70,7 +71,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
       following: 242,
       buzzCount: 190,
       isVerified: true,
-      isFollowing: false,
+      isFollowing: isSubscribed(buzzerId), // Check real subscription status
       isLive: true,
       website: 'link.me/hannahmarblesxx',
     };
@@ -82,18 +83,47 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     setBuzzerBuzzes(userBuzzes);
   };
 
-  const handleFollow = () => {
+  const handleFollow = async () => {
     if (buzzer) {
+      const newFollowingState = !buzzer.isFollowing;
+      
+      if (newFollowingState) {
+        await subscribeToChannel(buzzer.id);
+      } else {
+        await unsubscribeFromChannel(buzzer.id);
+      }
+      
       setBuzzer({
         ...buzzer,
-        isFollowing: !buzzer.isFollowing,
-        followers: buzzer.isFollowing ? buzzer.followers - 1 : buzzer.followers + 1,
+        isFollowing: newFollowingState,
+        followers: newFollowingState ? buzzer.followers + 1 : buzzer.followers - 1,
       });
     }
   };
 
   const handleShare = () => {
     // TODO: Implement share profile functionality
+  };
+
+  const handleBlock = () => {
+    if (buzzer) {
+      Alert.alert(
+        'Block User',
+        `Are you sure you want to block ${buzzer.username}? Their buzzes will be hidden from your feed.`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Block',
+            style: 'destructive',
+            onPress: async () => {
+              await blockUser(buzzer.id);
+              Alert.alert('Blocked', `${buzzer.username} has been blocked.`);
+              onClose();
+            },
+          },
+        ]
+      );
+    }
   };
 
   const formatNumber = (num: number): string => {
@@ -299,11 +329,9 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.messageButton, {backgroundColor: theme.colors.surface}]}
-                onPress={() => {/* No messaging feature */}}>
-                <Text style={[styles.messageButtonText, {color: theme.colors.text}]}>
-                  Message
-                </Text>
+                style={[styles.blockButton, {backgroundColor: theme.colors.surface}]}
+                onPress={handleBlock}>
+                <Icon name="block" size={16} color={theme.colors.error} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -537,18 +565,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 4,
   },
-  messageButton: {
-    flex: 1,
+  blockButton: {
+    width: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 16,
     borderRadius: 8,
     marginRight: 8,
-  },
-  messageButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   shareButton: {
     width: 40,

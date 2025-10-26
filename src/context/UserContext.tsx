@@ -20,6 +20,8 @@ export interface User {
   following: number;
   buzzCount: number;
   createdAt: Date;
+  subscribedChannels: string[]; // Array of user IDs
+  blockedUsers: string[]; // Array of user IDs
 }
 
 export interface Buzz {
@@ -50,6 +52,12 @@ interface UserContextType {
   shareBuzz: (buzzId: string) => void;
   updateUserInterests: (interests: Interest[]) => void;
   getBuzzesByInterests: (userInterests: Interest[]) => Buzz[];
+  subscribeToChannel: (channelId: string) => Promise<void>;
+  unsubscribeFromChannel: (channelId: string) => Promise<void>;
+  blockUser: (userId: string) => Promise<void>;
+  unblockUser: (userId: string) => Promise<void>;
+  isBlocked: (userId: string) => boolean;
+  isSubscribed: (channelId: string) => boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -102,6 +110,8 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           following: 890,
           buzzCount: 42,
           createdAt: new Date(),
+          subscribedChannels: ['2', '3', '4', '5'], // Pre-subscribed to sample channels
+          blockedUsers: [],
         };
         setUserState(defaultUser);
         await AsyncStorage.setItem('user', JSON.stringify(defaultUser));
@@ -310,6 +320,89 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     );
   };
 
+  const subscribeToChannel = async (channelId: string) => {
+    if (!user) return;
+    
+    if (!user.subscribedChannels.includes(channelId)) {
+      const updatedUser = {
+        ...user,
+        subscribedChannels: [...user.subscribedChannels, channelId],
+        following: user.following + 1,
+      };
+      setUserState(updatedUser);
+      
+      try {
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      } catch (error) {
+        console.log('Error subscribing to channel:', error);
+      }
+    }
+  };
+
+  const unsubscribeFromChannel = async (channelId: string) => {
+    if (!user) return;
+    
+    const updatedUser = {
+      ...user,
+      subscribedChannels: user.subscribedChannels.filter(id => id !== channelId),
+      following: Math.max(0, user.following - 1),
+    };
+    setUserState(updatedUser);
+    
+    try {
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.log('Error unsubscribing from channel:', error);
+    }
+  };
+
+  const blockUser = async (userId: string) => {
+    if (!user) return;
+    
+    if (!user.blockedUsers.includes(userId)) {
+      // Remove from subscribed channels if subscribed
+      const updatedSubscriptions = user.subscribedChannels.filter(id => id !== userId);
+      
+      const updatedUser = {
+        ...user,
+        blockedUsers: [...user.blockedUsers, userId],
+        subscribedChannels: updatedSubscriptions,
+        following: Math.max(0, user.following - (user.subscribedChannels.includes(userId) ? 1 : 0)),
+      };
+      setUserState(updatedUser);
+      
+      try {
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      } catch (error) {
+        console.log('Error blocking user:', error);
+      }
+    }
+  };
+
+  const unblockUser = async (userId: string) => {
+    if (!user) return;
+    
+    const updatedUser = {
+      ...user,
+      blockedUsers: user.blockedUsers.filter(id => id !== userId),
+    };
+    setUserState(updatedUser);
+    
+    try {
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.log('Error unblocking user:', error);
+    }
+  };
+
+  const isBlocked = (userId: string): boolean => {
+    return user?.blockedUsers.includes(userId) || false;
+  };
+
+  const isSubscribed = (channelId: string): boolean => {
+    return user?.subscribedChannels.includes(channelId) || false;
+  };
+
   return (
     <UserContext.Provider
       value={{
@@ -322,6 +415,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         shareBuzz,
         updateUserInterests,
         getBuzzesByInterests,
+        subscribeToChannel,
+        unsubscribeFromChannel,
+        blockUser,
+        unblockUser,
+        isBlocked,
+        isSubscribed,
       }}>
       {children}
     </UserContext.Provider>

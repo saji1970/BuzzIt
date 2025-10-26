@@ -11,6 +11,7 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 import {useTheme} from '../context/ThemeContext';
+import {useUser} from '../context/UserContext';
 
 const {width} = Dimensions.get('window');
 
@@ -29,9 +30,10 @@ interface SubscribedChannelsProps {
 
 const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress}) => {
   const {theme} = useTheme();
+  const {user, isSubscribed} = useUser();
 
-  // Mock data for subscribed channels
-  const subscribedChannels: Channel[] = [
+  // All available channels
+  const allChannels: Channel[] = [
     {
       id: '1',
       username: 'buzzuser',
@@ -72,6 +74,11 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
       isLive: true,
     },
   ];
+
+  // Filter to show only subscribed channels
+  const subscribedChannels = allChannels.filter(
+    channel => channel.id === '1' || (user && isSubscribed(channel.id))
+  );
 
   const handleChannelPress = (channelId: string) => {
     if (onChannelPress) {
