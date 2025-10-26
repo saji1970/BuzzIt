@@ -13,6 +13,7 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
@@ -24,6 +25,9 @@ const CreateProfileScreen: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
   const [buzzProfileName, setBuzzProfileName] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
 
@@ -35,7 +39,50 @@ const CreateProfileScreen: React.FC = () => {
     }
   };
 
-  const handleCreateProfile = () => {
+  const handleSendVerificationCode = async () => {
+    // Basic mobile number validation
+    const mobileRegex = /^[0-9]{10,15}$/;
+    if (!mobileNumber.trim()) {
+      Alert.alert('Error', 'Please enter a mobile number');
+      return;
+    }
+    if (!mobileRegex.test(mobileNumber.replace(/\s/g, ''))) {
+      Alert.alert('Error', 'Please enter a valid mobile number');
+      return;
+    }
+
+    // Check if username already exists
+    try {
+      const existingUsers = await AsyncStorage.getItem('users');
+      if (existingUsers) {
+        const users = JSON.parse(existingUsers);
+        const isDuplicate = users.some((u: any) => u.username === username.trim());
+        if (isDuplicate) {
+          Alert.alert('Error', 'Username already exists. Please choose a different username.');
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('Error checking username:', error);
+    }
+
+    // TODO: Send verification code via SMS
+    // For now, show alert with demo code
+    const demoCode = Math.floor(100000 + Math.random() * 900000).toString();
+    Alert.alert(
+      'Verification Code Sent',
+      `A verification code has been sent to ${mobileNumber}.\n\nDemo Code: ${demoCode}\n\nPlease enter this code to verify your account.`,
+      [{text: 'OK', onPress: () => setIsVerifying(true)}]
+    );
+  };
+
+  const handleVerifyAndCreate = async () => {
+    if (!verificationCode.trim()) {
+      Alert.alert('Error', 'Please enter the verification code');
+      return;
+    }
+
+    // Validate profile details
     if (!username.trim()) {
       Alert.alert('Error', 'Please enter a username');
       return;
@@ -57,10 +104,14 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
+    // TODO: Verify code with backend
+    // For now, accept any 6-digit code
+    
     // Create new user
     const newUser = {
       id: Date.now().toString(),
       username: username.trim(),
+      mobileNumber: mobileNumber.trim(),
       displayName: buzzProfileName.trim(),
       email: `${username.trim()}@buzzit.app`,
       bio: '',
@@ -72,12 +123,31 @@ const CreateProfileScreen: React.FC = () => {
       createdAt: new Date(),
       subscribedChannels: [],
       blockedUsers: [],
+      isVerified: true,
     };
+
+    // Save user to users list for duplicate checking
+    try {
+      const existingUsers = await AsyncStorage.getItem('users');
+      const users = existingUsers ? JSON.parse(existingUsers) : [];
+      users.push(newUser);
+      await AsyncStorage.setItem('users', JSON.stringify(users));
+    } catch (error) {
+      console.log('Error saving user:', error);
+    }
 
     setUser(newUser);
     updateUserInterests(selectedInterests);
     
-    Alert.alert('Success', 'Profile created successfully! 🎉');
+    Alert.alert('Success', 'Profile created and verified successfully! 🎉');
+  };
+
+  const handleCreateProfile = () => {
+    if (!isVerifying) {
+      handleSendVerificationCode();
+    } else {
+      handleVerifyAndCreate();
+    }
   };
 
   return (
@@ -146,8 +216,43 @@ const CreateProfileScreen: React.FC = () => {
           </View>
         </Animatable.View>
 
-        {/* Buzz Profile Name */}
+        {/* Mobile Number */}
         <Animatable.View animation="fadeInUp" delay={400}>
+          <Text style={[styles.label, {color: theme.colors.text}]}>Mobile Number</Text>
+          <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
+            <Icon name="phone" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, {color: theme.colors.text}]}
+              placeholder="Enter mobile number"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={mobileNumber}
+              onChangeText={setMobileNumber}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </Animatable.View>
+
+        {/* Verification Code (only show when isVerifying is true) */}
+        {isVerifying && (
+          <Animatable.View animation="fadeInUp" delay={450}>
+            <Text style={[styles.label, {color: theme.colors.text}]}>Verification Code</Text>
+            <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
+              <Icon name="lock" size={20} color={theme.colors.textSecondary} />
+              <TextInput
+                style={[styles.input, {color: theme.colors.text}]}
+                placeholder="Enter verification code"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </View>
+          </Animatable.View>
+        )}
+
+        {/* Buzz Profile Name */}
+        <Animatable.View animation="fadeInUp" delay={500}>
           <Text style={[styles.label, {color: theme.colors.text}]}>Buzz Profile Name</Text>
           <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
             <Icon name="badge" size={20} color={theme.colors.textSecondary} />
@@ -162,7 +267,7 @@ const CreateProfileScreen: React.FC = () => {
         </Animatable.View>
 
         {/* Interests */}
-        <Animatable.View animation="fadeInUp" delay={500}>
+        <Animatable.View animation="fadeInUp" delay={600}>
           <Text style={[styles.label, {color: theme.colors.text}]}>Select Interests</Text>
           <Text style={[styles.subLabel, {color: theme.colors.textSecondary}]}>
             Choose your interests to customize your feed
@@ -197,7 +302,7 @@ const CreateProfileScreen: React.FC = () => {
         </Animatable.View>
 
         {/* Create Profile Button */}
-        <Animatable.View animation="fadeInUp" delay={600}>
+        <Animatable.View animation="fadeInUp" delay={700}>
           <TouchableOpacity
             style={styles.createButton}
             onPress={handleCreateProfile}>
@@ -206,8 +311,10 @@ const CreateProfileScreen: React.FC = () => {
               start={{x: 0, y: 0}}
               end={{x: 1, y: 0}}
               style={styles.createButtonGradient}>
-              <Icon name="check-circle" size={24} color="#FFFFFF" />
-              <Text style={styles.createButtonText}>Create Profile</Text>
+              <Icon name={isVerifying ? "check-circle" : "send"} size={24} color="#FFFFFF" />
+              <Text style={styles.createButtonText}>
+                {isVerifying ? 'Verify & Create Profile' : 'Send Verification Code'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         </Animatable.View>
