@@ -64,6 +64,13 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
       name: 'Fitness Pro',
       avatar: null,
     },
+    {
+      id: 'hannahmarblesx',
+      username: 'hannahmarblesx',
+      name: 'Hannah',
+      avatar: null,
+      isLive: true,
+    },
   ];
 
   const handleChannelPress = (channelId: string) => {

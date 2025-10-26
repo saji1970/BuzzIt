@@ -19,6 +19,7 @@ import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
 import CreateProfileScreen from './CreateProfileScreen';
+import BuzzerProfileScreen from './BuzzerProfileScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
 
 const {width} = Dimensions.get('window');
@@ -30,6 +31,7 @@ const HomeScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
+  const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
@@ -107,6 +109,14 @@ const HomeScreen: React.FC = () => {
     console.log('Follow buzz:', buzzId);
   };
 
+  const handleBuzzerPress = (buzzerId: string) => {
+    setSelectedBuzzerId(buzzerId);
+  };
+
+  const handleCloseBuzzerProfile = () => {
+    setSelectedBuzzerId(null);
+  };
+
   const renderBuzz = ({item, index}: {item: Buzz; index: number}) => (
     <Animatable.View
       animation="fadeInUp"
@@ -159,7 +169,7 @@ const HomeScreen: React.FC = () => {
         </View>
       </LinearGradient>
 
-      <SubscribedChannels />
+      <SubscribedChannels onChannelPress={handleBuzzerPress} />
 
       <InterestFilter
         onFilterChange={handleInterestFilter}
@@ -189,6 +199,14 @@ const HomeScreen: React.FC = () => {
           onClose={handleCloseDetail}
           onNext={handleNextBuzz}
           onPrevious={handlePreviousBuzz}
+        />
+      )}
+
+      {selectedBuzzerId && (
+        <BuzzerProfileScreen
+          buzzerId={selectedBuzzerId}
+          visible={!!selectedBuzzerId}
+          onClose={handleCloseBuzzerProfile}
         />
       )}
     </View>
