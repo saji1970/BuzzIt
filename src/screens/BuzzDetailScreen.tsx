@@ -45,32 +45,60 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
   };
 
   const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      // Only respond to significant gestures
+      return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
+    },
     onPanResponderMove: Animated.event([null, {dx: pan.x, dy: pan.y}], {
       useNativeDriver: false,
     }),
     onPanResponderRelease: (evt, gestureState) => {
-      // Swipe right - next buzz
-      if (gestureState.dx > 100 && onNext) {
+      const absDx = Math.abs(gestureState.dx);
+      const absDy = Math.abs(gestureState.dy);
+      
+      // Check if the gesture is primarily vertical (pull down to close)
+      if (absDy > absDx && gestureState.dy > 100) {
+        // Pull down gesture - close the screen
+        console.log('Pull down gesture detected - closing buzz');
         Animated.spring(pan, {
-          toValue: {x: width, y: 0},
+          toValue: {x: 0, y: height},
           useNativeDriver: true,
         }).start(() => {
           pan.setValue({x: 0, y: 0});
-          onNext();
+          onClose();
         });
       }
-      // Swipe left - previous buzz
-      else if (gestureState.dx < -100 && onPrevious) {
-        Animated.spring(pan, {
-          toValue: {x: -width, y: 0},
-          useNativeDriver: true,
-        }).start(() => {
-          pan.setValue({x: 0, y: 0});
-          onPrevious();
-        });
+      // Check if the gesture is primarily horizontal
+      else if (absDx > absDy) {
+        // Swipe right - next buzz
+        if (gestureState.dx > 100 && onNext) {
+          Animated.spring(pan, {
+            toValue: {x: width, y: 0},
+            useNativeDriver: true,
+          }).start(() => {
+            pan.setValue({x: 0, y: 0});
+            onNext();
+          });
+        }
+        // Swipe left - previous buzz
+        else if (gestureState.dx < -100 && onPrevious) {
+          Animated.spring(pan, {
+            toValue: {x: -width, y: 0},
+            useNativeDriver: true,
+          }).start(() => {
+            pan.setValue({x: 0, y: 0});
+            onPrevious();
+          });
+        }
+        // Snap back
+        else {
+          Animated.spring(pan, {
+            toValue: {x: 0, y: 0},
+            useNativeDriver: true,
+          }).start();
+        }
       }
-      // Snap back
+      // Snap back for any other case
       else {
         Animated.spring(pan, {
           toValue: {x: 0, y: 0},
@@ -102,7 +130,7 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
         style={[
           styles.content,
           {
-            transform: [{translateX: pan.x}],
+            transform: [{translateX: pan.x}, {translateY: pan.y}],
           },
         ]}>
         {/* Header */}
