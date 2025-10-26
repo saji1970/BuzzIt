@@ -19,13 +19,15 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "your-email@example.com",
+        "appleId": "your-apple-id@example.com",
         "ascAppId": "your-app-store-connect-app-id",
-        "appleTeamId": "your-team-id"
+        "appleTeamId": "your-team-id",
+        "sku": "com.buzzit.app"
       },
       "android": {
         "serviceAccountKeyPath": "./service-account-key.json",
-        "track": "internal"
+        "track": "internal",
+        "keytoolPath": ""
       }
     }
   }
