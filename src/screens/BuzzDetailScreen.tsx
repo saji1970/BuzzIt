@@ -108,21 +108,37 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
         <View style={styles.header}>
           <TouchableOpacity
             style={[styles.closeButton, {backgroundColor: theme.colors.surface}]}
-            onPress={onClose}>
+            onPress={() => {
+              console.log('Close button pressed');
+              onClose();
+            }}
+            activeOpacity={0.7}>
             <Icon name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, {backgroundColor: theme.colors.surface}]}
-              onPress={onPrevious}>
-              <Icon name="chevron-left" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, {backgroundColor: theme.colors.surface}]}
-              onPress={onNext}>
-              <Icon name="chevron-right" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
+            {onPrevious && (
+              <TouchableOpacity
+                style={[styles.actionButton, {backgroundColor: theme.colors.surface}]}
+                onPress={() => {
+                  console.log('Previous button pressed');
+                  onPrevious();
+                }}
+                activeOpacity={0.7}>
+                <Icon name="chevron-left" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            )}
+            {onNext && (
+              <TouchableOpacity
+                style={[styles.actionButton, {backgroundColor: theme.colors.surface}]}
+                onPress={() => {
+                  console.log('Next button pressed');
+                  onNext();
+                }}
+                activeOpacity={0.7}>
+                <Icon name="chevron-right" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -250,22 +266,32 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   scrollView: {
     flex: 1,
