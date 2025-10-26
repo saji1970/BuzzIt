@@ -85,10 +85,11 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const [interests] = useState<Interest[]>(defaultInterests);
 
   useEffect(() => {
-    loadUser();
-    loadBuzzes();
-    // Add sample data if no user exists
-    checkAndInitializeData();
+    // Clear storage first for testing
+    checkAndInitializeData().then(() => {
+      loadUser();
+      loadBuzzes();
+    });
   }, []);
 
   const checkAndInitializeData = async () => {
