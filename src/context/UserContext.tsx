@@ -204,7 +204,16 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
       const savedUser = await AsyncStorage.getItem('user');
       if (savedUser) {
         const userData = JSON.parse(savedUser);
+        // Migrate old users to include new fields
+        if (!userData.subscribedChannels) {
+          userData.subscribedChannels = [];
+        }
+        if (!userData.blockedUsers) {
+          userData.blockedUsers = [];
+        }
         setUserState(userData);
+        // Save migrated user data
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
       }
     } catch (error) {
       console.log('Error loading user:', error);
@@ -396,11 +405,11 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const isBlocked = (userId: string): boolean => {
-    return user?.blockedUsers.includes(userId) || false;
+    return (user?.blockedUsers?.includes(userId)) || false;
   };
 
   const isSubscribed = (channelId: string): boolean => {
-    return user?.subscribedChannels.includes(channelId) || false;
+    return (user?.subscribedChannels?.includes(channelId)) || false;
   };
 
   return (
