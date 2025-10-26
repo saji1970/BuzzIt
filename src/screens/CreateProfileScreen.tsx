@@ -19,7 +19,7 @@ import {useUser, Interest} from '../context/UserContext';
 
 const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();
-  const {interests, updateUserInterests} = useUser();
+  const {interests, updateUserInterests, setUser} = useUser();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -57,10 +57,27 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
-    // Update user interests
+    // Create new user
+    const newUser = {
+      id: Date.now().toString(),
+      username: username.trim(),
+      displayName: buzzProfileName.trim(),
+      email: `${username.trim()}@buzzit.app`,
+      bio: '',
+      avatar: null,
+      interests: selectedInterests,
+      followers: 0,
+      following: 0,
+      buzzCount: 0,
+      createdAt: new Date(),
+      subscribedChannels: [],
+      blockedUsers: [],
+    };
+
+    setUser(newUser);
     updateUserInterests(selectedInterests);
     
-    Alert.alert('Success', 'Profile created successfully!');
+    Alert.alert('Success', 'Profile created successfully! 🎉');
   };
 
   return (
