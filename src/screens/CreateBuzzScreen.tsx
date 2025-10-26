@@ -20,11 +20,15 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 
+type BuzzType = 'event' | 'gossip' | 'news' | 'buzz';
+
 const CreateBuzzScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, addBuzz, interests} = useUser();
   const [content, setContent] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
+  const [buzzType, setBuzzType] = useState<BuzzType | null>(null);
+  const [eventDate, setEventDate] = useState<string>('');
   const [media, setMedia] = useState<{type: 'image' | 'video' | null; url: string | null}>({
     type: null,
     url: null,
@@ -44,53 +48,64 @@ const CreateBuzzScreen: React.FC = () => {
 
   const openCamera = async () => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+      // Request camera permissions
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraPermission.status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos. Please enable it in Settings.');
         return;
       }
 
+      // Request microphone permission for videos
+      const audioPermission = await ImagePicker.requestCameraPermissionsAsync();
+      
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: true,
         quality: 0.8,
+        aspect: [4, 3],
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setMedia({
-          type: asset.type === 'video' ? 'video' : 'image',
+          type: asset.type?.startsWith('video') ? 'video' : 'image',
           url: asset.uri || null,
         });
+        Alert.alert('Success', 'Media captured successfully!');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to open camera');
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to open camera. Please try again.');
     }
   };
 
   const openGallery = async () => {
     try {
+      // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Gallery permission is required to select media');
+        Alert.alert('Permission Denied', 'Gallery permission is required to select media. Please enable it in Settings.');
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: true,
         quality: 0.8,
+        allowsMultipleSelection: false,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setMedia({
-          type: asset.type === 'video' ? 'video' : 'image',
+          type: asset.type?.startsWith('video') ? 'video' : 'image',
           url: asset.uri || null,
         });
+        Alert.alert('Success', 'Media selected successfully!');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to open gallery');
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to open gallery. Please try again.');
     }
   };
 
@@ -104,8 +119,18 @@ const CreateBuzzScreen: React.FC = () => {
   };
 
   const handleCreateBuzz = () => {
+    if (!buzzType) {
+      Alert.alert('Error', 'Please select a buzz type');
+      return;
+    }
+
     if (!content.trim()) {
       Alert.alert('Error', 'Please enter some content for your buzz');
+      return;
+    }
+
+    if (buzzType === 'event' && !eventDate.trim()) {
+      Alert.alert('Error', 'Please enter an event date');
       return;
     }
 
@@ -123,7 +148,9 @@ const CreateBuzzScreen: React.FC = () => {
       userId: user.id,
       username: user.username,
       userAvatar: user.avatar,
-      content: content.trim(),
+      content: buzzType === 'event' && eventDate 
+        ? `${content.trim()}\n\n📅 Event Date: ${eventDate}`
+        : content.trim(),
       media,
       interests: selectedInterests,
       likes: 0,
@@ -137,6 +164,8 @@ const CreateBuzzScreen: React.FC = () => {
     // Reset form
     setContent('');
     setSelectedInterests([]);
+    setBuzzType(null);
+    setEventDate('');
     setMedia({type: null, url: null});
     
     Alert.alert('Success', 'Your buzz has been created!');
@@ -193,8 +222,65 @@ const CreateBuzzScreen: React.FC = () => {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Content Input */}
+        {/* Buzz Type Selection */}
         <Animatable.View animation="fadeInUp" style={styles.section}>
+          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+            What type of buzz?
+          </Text>
+          <View style={styles.buzzTypeContainer}>
+            {(['event', 'gossip', 'news', 'buzz'] as BuzzType[]).map((type, index) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.buzzTypeButton,
+                  {
+                    backgroundColor: buzzType === type ? theme.colors.primary : theme.colors.surface,
+                    borderColor: buzzType === type ? theme.colors.primary : theme.colors.border,
+                  },
+                ]}
+                onPress={() => setBuzzType(type)}>
+                <Icon
+                  name={
+                    type === 'event' ? 'event' :
+                    type === 'gossip' ? 'chat' :
+                    type === 'news' ? 'article' :
+                    'send'
+                  }
+                  size={20}
+                  color={buzzType === type ? '#FFFFFF' : theme.colors.text}
+                />
+                <Text
+                  style={[
+                    styles.buzzTypeText,
+                    {color: buzzType === type ? '#FFFFFF' : theme.colors.text},
+                  ]}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {buzzType === 'event' && (
+            <Animatable.View animation="fadeIn" style={styles.eventDateContainer}>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.text,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+                placeholder="Event Date (e.g., Dec 25, 2024 at 7 PM)"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={eventDate}
+                onChangeText={setEventDate}
+              />
+            </Animatable.View>
+          )}
+        </Animatable.View>
+
+        {/* Content Input */}
+        <Animatable.View animation="fadeInUp" delay={50} style={styles.section}>
           <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
             What's buzzing?
           </Text>
@@ -370,6 +456,29 @@ const styles = StyleSheet.create({
   mediaSection: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  buzzTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+  },
+  buzzTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  buzzTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  eventDateContainer: {
+    marginTop: 15,
   },
   mediaButton: {
     flexDirection: 'row',
