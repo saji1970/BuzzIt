@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import {launchImageLibrary, launchCamera, MediaType} from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import * as Animatable from 'react-native-animatable';
 
@@ -42,36 +42,56 @@ const CreateBuzzScreen: React.FC = () => {
     );
   };
 
-  const openCamera = () => {
-    const options = {
-      mediaType: 'mixed' as MediaType,
-      quality: 0.8,
-    };
-    launchCamera(options, response => {
-      if (response.assets && response.assets[0]) {
-        const asset = response.assets[0];
+  const openCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
         setMedia({
-          type: asset.type?.startsWith('video') ? 'video' : 'image',
+          type: asset.type === 'video' ? 'video' : 'image',
           url: asset.uri || null,
         });
       }
-    });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open camera');
+    }
   };
 
-  const openGallery = () => {
-    const options = {
-      mediaType: 'mixed' as MediaType,
-      quality: 0.8,
-    };
-    launchImageLibrary(options, response => {
-      if (response.assets && response.assets[0]) {
-        const asset = response.assets[0];
+  const openGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Gallery permission is required to select media');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
         setMedia({
-          type: asset.type?.startsWith('video') ? 'video' : 'image',
+          type: asset.type === 'video' ? 'video' : 'image',
           url: asset.uri || null,
         });
       }
-    });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open gallery');
+    }
   };
 
   const toggleInterest = (interest: Interest) => {
