@@ -154,8 +154,8 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  // Show Create Profile screen only for first-time users (no interests)
-  if (user && user.interests.length === 0) {
+  // Show Create Profile screen for first-time users (no user or no interests)
+  if (!user || (user && user.interests.length === 0)) {
     return <CreateProfileScreen />;
   }
 

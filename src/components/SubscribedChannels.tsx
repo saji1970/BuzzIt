@@ -32,6 +32,11 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
   const {theme} = useTheme();
   const {user, isSubscribed} = useUser();
 
+  // Don't render if no user
+  if (!user) {
+    return null;
+  }
+
   // All available channels
   const allChannels: Channel[] = [
     {
