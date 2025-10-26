@@ -182,10 +182,11 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
               <Video
                 source={{ uri: buzz.media.url }}
                 style={styles.video}
-                useNativeControls
+                useNativeControls={true}
                 resizeMode="contain"
                 shouldPlay={false}
                 isLooping={false}
+                isMuted={false}
               />
             )}
           </View>
@@ -256,7 +257,6 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </Animatable.View>
 
       <SocialMediaShareModal
         visible={showShareModal}
@@ -272,6 +272,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         onAbout={handleAbout}
         onSave={handleSave}
       />
+    </Animatable.View>
     </TouchableOpacity>
   );
 };
