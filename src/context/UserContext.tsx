@@ -85,25 +85,10 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const [interests] = useState<Interest[]>(defaultInterests);
 
   useEffect(() => {
-    // Clear storage first for testing
-    checkAndInitializeData().then(() => {
-      loadUser();
-      loadBuzzes();
-    });
+    // Load user and buzzes on app start
+    loadUser();
+    loadBuzzes();
   }, []);
-
-  const checkAndInitializeData = async () => {
-    try {
-      // Clear all data for testing
-      await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('buzzes');
-      
-      // No default data - user must create profile first
-      // This allows us to test the profile creation flow properly
-    } catch (error) {
-      console.log('Error initializing data:', error);
-    }
-  };
 
   const loadUser = async () => {
     try {
@@ -137,6 +122,54 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           createdAt: buzz.createdAt ? new Date(buzz.createdAt) : new Date(),
         }));
         setBuzzes(buzzesWithDates);
+      } else {
+        // Initialize with sample buzzes if no saved data
+        const sampleBuzzes: Buzz[] = [
+          {
+            id: '1',
+            userId: 'buzzuser',
+            username: 'buzzuser',
+            userAvatar: null,
+            content: 'Welcome to Buzzit! 🎉 Join the conversation and share what\'s buzzing!',
+            media: {type: null, url: null},
+            interests: [interests[0]],
+            likes: 42,
+            comments: 12,
+            shares: 8,
+            isLiked: false,
+            createdAt: new Date(Date.now() - 86400000), // 1 day ago
+          },
+          {
+            id: '2',
+            userId: 'techguru',
+            username: 'techguru',
+            userAvatar: null,
+            content: 'Tech update: New features coming soon! Stay tuned 🚀',
+            media: {type: null, url: null},
+            interests: [interests[0]],
+            likes: 89,
+            comments: 23,
+            shares: 15,
+            isLiked: false,
+            createdAt: new Date(Date.now() - 43200000), // 12 hours ago
+          },
+          {
+            id: '3',
+            userId: 'foodie',
+            username: 'foodie',
+            userAvatar: null,
+            content: 'Check out this amazing recipe! 🍕 Home made pizza is the best!',
+            media: {type: 'image', url: null},
+            interests: [interests[1]],
+            likes: 156,
+            comments: 45,
+            shares: 32,
+            isLiked: false,
+            createdAt: new Date(Date.now() - 3600000), // 1 hour ago
+          },
+        ];
+        setBuzzes(sampleBuzzes);
+        await AsyncStorage.setItem('buzzes', JSON.stringify(sampleBuzzes));
       }
     } catch (error) {
       console.log('Error loading buzzes:', error);
