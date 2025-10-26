@@ -55,11 +55,8 @@ const CreateBuzzScreen: React.FC = () => {
         return;
       }
 
-      // Request microphone permission for videos
-      const audioPermission = await ImagePicker.requestCameraPermissionsAsync();
-      
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Only images for camera on simulator
         allowsEditing: true,
         quality: 0.8,
         aspect: [4, 3],
@@ -68,14 +65,23 @@ const CreateBuzzScreen: React.FC = () => {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setMedia({
-          type: asset.type?.startsWith('video') ? 'video' : 'image',
+          type: 'image',
           url: asset.uri || null,
         });
-        Alert.alert('Success', 'Media captured successfully!');
+        Alert.alert('Success', 'Photo captured successfully!');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to open camera. Please try again.');
+      // Check if it's a simulator error
+      if (error.message && error.message.includes('simulator')) {
+        Alert.alert(
+          'Camera Not Available',
+          'Camera is not available on the simulator. Please use the gallery option or test on a real device.',
+          [{text: 'OK'}]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to open camera. Please try the gallery option instead.');
+      }
     }
   };
 
