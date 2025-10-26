@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "🐱🔥",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#E4405F"

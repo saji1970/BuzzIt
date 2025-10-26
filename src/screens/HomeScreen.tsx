@@ -161,9 +161,9 @@ const HomeScreen: React.FC = () => {
         style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.headerTitle}>🔥 Buzz Feed</Text>
+            <Text style={styles.headerTitle}>🐱🔥 Buzz Feed</Text>
             <Text style={styles.headerSubtitle}>
-              What's buzzing in your world?
+              Many cats buzzing together! 🐱
             </Text>
           </View>
         </View>
