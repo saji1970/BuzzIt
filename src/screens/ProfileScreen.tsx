@@ -25,6 +25,8 @@ const ProfileScreen: React.FC = () => {
     displayName: '',
     email: '',
     bio: '',
+    city: '',
+    country: '',
   });
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
 
@@ -35,6 +37,8 @@ const ProfileScreen: React.FC = () => {
         displayName: user.displayName,
         email: user.email,
         bio: user.bio,
+        city: user.city || '',
+        country: user.country || '',
       });
       setSelectedInterests(user.interests);
     }
@@ -57,6 +61,8 @@ const ProfileScreen: React.FC = () => {
       displayName: editForm.displayName.trim(),
       email: editForm.email.trim(),
       bio: editForm.bio.trim(),
+      city: editForm.city.trim(),
+      country: editForm.country.trim(),
       interests: selectedInterests,
     };
 
@@ -180,6 +186,46 @@ const ProfileScreen: React.FC = () => {
           placeholderTextColor={theme.colors.textSecondary}
           multiline
           maxLength={150}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, {color: theme.colors.text}]}>
+          City
+        </Text>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.text,
+              borderColor: theme.colors.border,
+            },
+          ]}
+          value={editForm.city}
+          onChangeText={text => setEditForm({...editForm, city: text})}
+          placeholder="Enter your city"
+          placeholderTextColor={theme.colors.textSecondary}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, {color: theme.colors.text}]}>
+          Country
+        </Text>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.text,
+              borderColor: theme.colors.border,
+            },
+          ]}
+          value={editForm.country}
+          onChangeText={text => setEditForm({...editForm, country: text})}
+          placeholder="Enter your country"
+          placeholderTextColor={theme.colors.textSecondary}
         />
       </View>
 

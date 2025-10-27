@@ -16,6 +16,8 @@ export interface User {
   email: string;
   bio: string;
   avatar: string | null;
+  city?: string;
+  country?: string;
   mobileNumber?: string; // Optional for backward compatibility
   isVerified?: boolean; // Optional for backward compatibility
   interests: Interest[];

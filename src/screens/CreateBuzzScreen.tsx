@@ -21,7 +21,12 @@ import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
 
-type BuzzType = 'event' | 'gossip' | 'news' | 'buzz';
+type BuzzType = 'event' | 'gossip' | 'thought' | 'poll';
+
+interface PollOption {
+  id: string;
+  text: string;
+}
 
 const CreateBuzzScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -31,6 +36,11 @@ const CreateBuzzScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
   const [buzzType, setBuzzType] = useState<BuzzType | null>(null);
   const [eventDate, setEventDate] = useState<string>('');
+  const [pollOptions, setPollOptions] = useState<PollOption[]>([
+    {id: '1', text: 'Yes'},
+    {id: '2', text: 'No'},
+    {id: '3', text: "Don't Know"},
+  ]);
   const [media, setMedia] = useState<{type: 'image' | 'video' | null; url: string | null}>({
     type: null,
     url: null,
@@ -126,6 +136,23 @@ const CreateBuzzScreen: React.FC = () => {
     }
   };
 
+  const handlePollOptionChange = (id: string, text: string) => {
+    setPollOptions(prev => prev.map(option => 
+      option.id === id ? {...option, text} : option
+    ));
+  };
+
+  const addPollOption = () => {
+    const newId = (pollOptions.length + 1).toString();
+    setPollOptions([...pollOptions, {id: newId, text: ''}]);
+  };
+
+  const removePollOption = (id: string) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter(option => option.id !== id));
+    }
+  };
+
   const handleCreateBuzz = () => {
     // Check if buzz creation is enabled
     if (!features.buzzCreation) {
@@ -148,6 +175,14 @@ const CreateBuzzScreen: React.FC = () => {
       return;
     }
 
+    if (buzzType === 'poll') {
+      const validOptions = pollOptions.filter(option => option.text.trim());
+      if (validOptions.length < 2) {
+        Alert.alert('Error', 'Please provide at least 2 poll options');
+        return;
+      }
+    }
+
     if (selectedInterests.length === 0) {
       Alert.alert('Error', 'Please select at least one interest');
       return;
@@ -158,15 +193,29 @@ const CreateBuzzScreen: React.FC = () => {
       return;
     }
 
+    let buzzContent = content.trim();
+    
+    // Add event date if it's an event
+    if (buzzType === 'event' && eventDate) {
+      buzzContent += `\n\n📅 Event Date: ${eventDate}`;
+    }
+    
+    // Add poll options if it's a poll
+    if (buzzType === 'poll') {
+      const validOptions = pollOptions.filter(option => option.text.trim());
+      buzzContent += `\n\n📊 Poll Options:\n${validOptions.map((option, index) => `${index + 1}. ${option.text}`).join('\n')}`;
+    }
+
     const newBuzz = {
       userId: user.id,
       username: user.username,
       userAvatar: user.avatar,
-      content: buzzType === 'event' && eventDate 
-        ? `${content.trim()}\n\n📅 Event Date: ${eventDate}`
-        : content.trim(),
+      content: buzzContent,
       media,
       interests: selectedInterests,
+      buzzType,
+      eventDate: buzzType === 'event' ? eventDate : undefined,
+      pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,
       likes: 0,
       comments: 0,
       shares: 0,
@@ -180,6 +229,11 @@ const CreateBuzzScreen: React.FC = () => {
     setSelectedInterests([]);
     setBuzzType(null);
     setEventDate('');
+    setPollOptions([
+      {id: '1', text: 'Yes'},
+      {id: '2', text: 'No'},
+      {id: '3', text: "Don't Know"},
+    ]);
     setMedia({type: null, url: null});
     
     Alert.alert('Success', 'Your buzz has been created!');
@@ -242,7 +296,7 @@ const CreateBuzzScreen: React.FC = () => {
             What type of buzz?
           </Text>
           <View style={styles.buzzTypeContainer}>
-            {(['event', 'gossip', 'news', 'buzz'] as BuzzType[]).map((type, index) => (
+            {(['event', 'gossip', 'thought', 'poll'] as BuzzType[]).map((type, index) => (
               <TouchableOpacity
                 key={type}
                 style={[
@@ -257,7 +311,8 @@ const CreateBuzzScreen: React.FC = () => {
                   name={
                     type === 'event' ? 'event' :
                     type === 'gossip' ? 'chat' :
-                    type === 'news' ? 'article' :
+                    type === 'thought' ? 'lightbulb' :
+                    type === 'poll' ? 'poll' :
                     'send'
                   }
                   size={20}
@@ -268,7 +323,9 @@ const CreateBuzzScreen: React.FC = () => {
                     styles.buzzTypeText,
                     {color: buzzType === type ? '#FFFFFF' : theme.colors.text},
                   ]}>
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                  {type === 'thought' ? 'Just a Thought' : 
+                   type === 'poll' ? 'Poll' :
+                   type.charAt(0).toUpperCase() + type.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -289,6 +346,47 @@ const CreateBuzzScreen: React.FC = () => {
                 value={eventDate}
                 onChangeText={setEventDate}
               />
+            </Animatable.View>
+          )}
+
+          {buzzType === 'poll' && (
+            <Animatable.View animation="fadeIn" style={styles.pollOptionsContainer}>
+              <Text style={[styles.pollLabel, {color: theme.colors.text}]}>
+                Poll Options
+              </Text>
+              {pollOptions.map((option, index) => (
+                <View key={option.id} style={styles.pollOptionRow}>
+                  <TextInput
+                    style={[
+                      styles.pollOptionInput,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        color: theme.colors.text,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                    placeholder={`Option ${index + 1}`}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={option.text}
+                    onChangeText={(text) => handlePollOptionChange(option.id, text)}
+                  />
+                  {pollOptions.length > 2 && (
+                    <TouchableOpacity
+                      style={styles.removePollOptionButton}
+                      onPress={() => removePollOption(option.id)}>
+                      <Icon name="close" size={16} color={theme.colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+              <TouchableOpacity
+                style={[styles.addPollOptionButton, {borderColor: theme.colors.primary}]}
+                onPress={addPollOption}>
+                <Icon name="add" size={16} color={theme.colors.primary} />
+                <Text style={[styles.addPollOptionText, {color: theme.colors.primary}]}>
+                  Add Option
+                </Text>
+              </TouchableOpacity>
             </Animatable.View>
           )}
         </Animatable.View>
@@ -493,6 +591,50 @@ const styles = StyleSheet.create({
   },
   eventDateContainer: {
     marginTop: 15,
+  },
+  pollOptionsContainer: {
+    marginTop: 15,
+  },
+  pollLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  pollOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pollOptionInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    marginRight: 8,
+  },
+  removePollOptionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFE5E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPollOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 5,
+  },
+  addPollOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
   },
   mediaButton: {
     flexDirection: 'row',
