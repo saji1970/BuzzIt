@@ -32,8 +32,59 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // In-memory database (replace with real database in production)
-let users = [];
-let buzzes = [];
+let users = [
+  {
+    id: 'test-user-1',
+    username: 'testuser',
+    password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password: "Test123!"
+    buzzProfileName: 'Test Buzzer',
+    interests: ['Technology', 'Music', 'Sports'],
+    mobileNumber: '+1234567890',
+    isVerified: true,
+    createdAt: new Date().toISOString(),
+  }
+];
+let buzzes = [
+  {
+    id: 'buzz-1',
+    userId: 'test-user-1',
+    username: 'testuser',
+    content: 'Welcome to Buzzit! This is my first buzz! 🎉',
+    type: 'text',
+    mediaUrl: null,
+    likes: 5,
+    comments: 2,
+    shares: 1,
+    isLiked: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+  },
+  {
+    id: 'buzz-2',
+    userId: 'test-user-1',
+    username: 'testuser',
+    content: 'Just discovered this amazing new feature! The UI looks incredible! ✨',
+    type: 'text',
+    mediaUrl: null,
+    likes: 12,
+    comments: 4,
+    shares: 3,
+    isLiked: true,
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+  },
+  {
+    id: 'buzz-3',
+    userId: 'test-user-1',
+    username: 'testuser',
+    content: 'Check out this cool video I found!',
+    type: 'video',
+    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    likes: 8,
+    comments: 1,
+    shares: 2,
+    isLiked: false,
+    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+  }
+];
 let socialAccounts = [];
 let verificationCodes = new Map(); // Store verification codes temporarily
 let adminUsers = [
