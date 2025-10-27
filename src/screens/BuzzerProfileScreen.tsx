@@ -148,7 +148,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
               {backgroundColor: theme.colors.surface},
             ]}
             onPress={() => {/* TODO: Open buzz detail */}}>
-            {buzz.media.url ? (
+            {buzz.media && buzz.media.url ? (
               <Image
                 source={{uri: buzz.media.url}}
                 style={styles.gridImage}

@@ -176,7 +176,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         </Text>
 
         {/* Media */}
-        {buzz.media.url && (
+        {buzz.media && buzz.media.url && (
           <View style={styles.mediaContainer}>
             {buzz.media.type === 'image' ? (
               <Image source={{uri: buzz.media.url}} style={styles.media} />
@@ -268,7 +268,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
         buzzContent={buzz.content}
-        buzzMedia={buzz.media.url || undefined}
+        buzzMedia={buzz.media?.url || undefined}
       />
 
       <MenuModal

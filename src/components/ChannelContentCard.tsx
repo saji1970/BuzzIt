@@ -125,7 +125,7 @@ const ChannelContentCard: React.FC<ChannelContentCardProps> = ({
         )}
 
         {/* Media Preview */}
-        {content.media.url && (
+        {content.media && content.media.url && (
           <View style={styles.mediaContainer}>
             <Image source={{uri: content.media.thumbnail || content.media.url}} style={styles.mediaImage} />
             <View style={styles.mediaOverlay}>

@@ -51,7 +51,10 @@ let buzzes = [
     username: 'testuser',
     content: 'Welcome to Buzzit! This is my first buzz! 🎉',
     type: 'text',
-    mediaUrl: null,
+    media: {
+      type: null,
+      url: null
+    },
     likes: 5,
     comments: 2,
     shares: 1,
@@ -64,7 +67,10 @@ let buzzes = [
     username: 'testuser',
     content: 'Just discovered this amazing new feature! The UI looks incredible! ✨',
     type: 'text',
-    mediaUrl: null,
+    media: {
+      type: null,
+      url: null
+    },
     likes: 12,
     comments: 4,
     shares: 3,
@@ -77,7 +83,10 @@ let buzzes = [
     username: 'testuser',
     content: 'Check out this cool video I found!',
     type: 'video',
-    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    media: {
+      type: 'video',
+      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+    },
     likes: 8,
     comments: 1,
     shares: 2,
