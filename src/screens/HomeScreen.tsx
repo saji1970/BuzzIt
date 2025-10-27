@@ -46,6 +46,11 @@ const HomeScreen: React.FC = () => {
     // First, filter out buzzes from blocked users
     let unblockedBuzzes = buzzes.filter(buzz => !isBlocked(buzz.userId));
     
+    // Ensure unblockedBuzzes is not undefined
+    if (!unblockedBuzzes) {
+      unblockedBuzzes = [];
+    }
+    
     // Show all buzzes if no interests selected, otherwise filter by interests
     let filtered: Buzz[];
     

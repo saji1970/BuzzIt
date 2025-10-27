@@ -412,7 +412,7 @@ export const RadioChannelProvider: React.FC<{children: React.ReactNode}> = ({
     return radioChannels.filter(channel => 
       channel.title.toLowerCase().includes(lowercaseQuery) ||
       channel.description.toLowerCase().includes(lowercaseQuery) ||
-      channel.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery))
+      (channel.tags && channel.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)))
     );
   };
 

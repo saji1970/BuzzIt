@@ -325,7 +325,7 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     
     const userInterestIds = userInterests.map(interest => interest.id);
     return buzzes.filter(buzz => 
-      buzz.interests.some(interest => userInterestIds.includes(interest.id))
+      buzz.interests && buzz.interests.some(interest => userInterestIds.includes(interest.id))
     );
   };
 

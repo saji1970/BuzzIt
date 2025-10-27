@@ -310,7 +310,7 @@ export const BuzzChannelProvider: React.FC<{children: React.ReactNode}> = ({
     return channelContent.filter(content => 
       content.title.toLowerCase().includes(lowercaseQuery) ||
       content.description.toLowerCase().includes(lowercaseQuery) ||
-      content.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery))
+      (content.tags && content.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)))
     );
   };
 
