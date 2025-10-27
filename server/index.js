@@ -11,11 +11,14 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Twilio configuration
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// Twilio configuration (optional for development)
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  twilioClient = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  );
+}
 
 // JWT secret (use environment variable in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
@@ -172,22 +175,27 @@ app.post('/api/auth/send-verification', async (req, res) => {
       expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
     });
 
-    // Send SMS via Twilio
-    try {
-      await twilioClient.messages.create({
-        body: `Your Buzzit verification code is: ${code}. This code expires in 5 minutes.`,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: mobileNumber,
-      });
+    // Send SMS via Twilio (if available)
+    if (twilioClient) {
+      try {
+        await twilioClient.messages.create({
+          body: `Your Buzzit verification code is: ${code}. This code expires in 5 minutes.`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: mobileNumber,
+        });
 
-      res.json({
-        success: true,
-        message: 'Verification code sent successfully',
-        verificationId,
-      });
-    } catch (twilioError) {
-      console.error('Twilio error:', twilioError);
-      // For development, still return success with demo code
+        res.json({
+          success: true,
+          message: 'Verification code sent successfully',
+          verificationId,
+        });
+      } catch (twilioError) {
+        console.error('Twilio error:', twilioError);
+        return res.status(500).json({ error: 'Failed to send verification code' });
+      }
+    } else {
+      // For development, just log the code and return success
+      console.log(`[DEV] Verification code for ${mobileNumber}: ${code}`);
       res.json({
         success: true,
         message: `Demo mode: Verification code is ${code}`,

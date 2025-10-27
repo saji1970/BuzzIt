@@ -1,8 +1,32 @@
-// API Service for connecting to Railway backend
-// Change this URL to your Railway deployment URL
-const API_BASE_URL = 'https://buzzit-production.up.railway.app'; // Replace with your Railway URL
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Types
+const API_BASE_URL = __DEV__ ? 'http://localhost:3000' : 'https://buzzit-production.up.railway.app';
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  mobileNumber: string;
+  isVerified: boolean;
+  bio?: string;
+  avatar?: string;
+  interests: any[];
+  followers: number;
+  following: number;
+  buzzCount: number;
+  createdAt: string;
+  subscribedChannels: string[];
+  blockedUsers: string[];
+}
+
 export interface Buzz {
   id: string;
   userId: string;
@@ -13,181 +37,266 @@ export interface Buzz {
     type: 'image' | 'video' | null;
     url: string | null;
   };
-  interests: Interest[];
+  interests: any[];
   likes: number;
   comments: number;
   shares: number;
-  createdAt: Date | string;
+  createdAt: string;
   isLiked: boolean;
 }
 
-export interface Interest {
-  id: string;
-  name: string;
-  category: string;
-  emoji: string;
-}
-
-export interface User {
-  id: string;
+export interface VerificationRequest {
+  mobileNumber: string;
   username: string;
-  displayName: string;
-  email: string;
-  bio: string;
-  avatar: string | null;
-  interests: Interest[];
-  followers: number;
-  following: number;
-  buzzCount: number;
-  createdAt: Date | string;
 }
 
-export interface SocialAccount {
-  id: string;
-  userId: string;
-  platform: string;
-  username: string;
-  isConnected: boolean;
-  createdAt: Date | string;
+export interface VerificationResponse {
+  success: boolean;
+  message: string;
+  verificationId?: string;
 }
 
-// API Service Class
-class APIService {
-  private baseURL: string;
+export interface VerifyCodeRequest {
+  mobileNumber: string;
+  code: string;
+  verificationId: string;
+}
 
-  constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
-  }
-
-  // Generic fetch method
-  private async fetchAPI(endpoint: string, options: RequestInit = {}) {
+class ApiService {
+  private async makeRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        ...options,
+      const url = `${API_BASE_URL}${endpoint}`;
+      const token = await AsyncStorage.getItem('authToken');
+      
+      const config: RequestInit = {
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
           ...options.headers,
         },
-      });
+        ...options,
+      };
+
+      const response = await fetch(url, config);
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        return {
+          success: false,
+          error: data.message || 'Request failed',
+        };
       }
 
-      return await response.json();
+      return {
+        success: true,
+        data,
+      };
     } catch (error) {
-      console.error('API Error:', error);
-      throw error;
+      console.error('API Request Error:', error);
+      console.error('API URL:', url);
+      return {
+        success: false,
+        error: `Network error: ${error.message || 'Please check your connection.'}`,
+      };
     }
+  }
+
+  // Authentication
+  async sendVerificationCode(request: VerificationRequest): Promise<ApiResponse<VerificationResponse>> {
+    return this.makeRequest<VerificationResponse>('/api/auth/send-verification', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async verifyCode(request: VerifyCodeRequest): Promise<ApiResponse<{ user: User; token: string }>> {
+    return this.makeRequest<{ user: User; token: string }>('/api/auth/verify-code', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async login(username: string, password: string): Promise<ApiResponse<{ user: User; token: string }>> {
+    return this.makeRequest<{ user: User; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  }
+
+  async logout(): Promise<void> {
+    await AsyncStorage.removeItem('authToken');
+    await AsyncStorage.removeItem('user');
+  }
+
+  // Users
+  async getCurrentUser(): Promise<ApiResponse<User>> {
+    return this.makeRequest<User>('/api/users/me');
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<ApiResponse<User>> {
+    return this.makeRequest<User>(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async checkUsernameAvailability(username: string): Promise<ApiResponse<{ available: boolean }>> {
+    return this.makeRequest<{ available: boolean }>(`/api/users/check-username/${username}`);
+  }
+
+  // Buzzes
+  async getBuzzes(): Promise<ApiResponse<Buzz[]>> {
+    return this.makeRequest<Buzz[]>('/api/buzzes');
+  }
+
+  async createBuzz(buzz: Omit<Buzz, 'id' | 'createdAt' | 'isLiked'>): Promise<ApiResponse<Buzz>> {
+    return this.makeRequest<Buzz>('/api/buzzes', {
+      method: 'POST',
+      body: JSON.stringify(buzz),
+    });
+  }
+
+  async likeBuzz(buzzId: string): Promise<ApiResponse<Buzz>> {
+    return this.makeRequest<Buzz>(`/api/buzzes/${buzzId}/like`, {
+      method: 'PATCH',
+    });
+  }
+
+  async shareBuzz(buzzId: string): Promise<ApiResponse<Buzz>> {
+    return this.makeRequest<Buzz>(`/api/buzzes/${buzzId}/share`, {
+      method: 'PATCH',
+    });
+  }
+
+  // Social Media
+  async getSocialAccounts(userId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/social/${userId}`);
+  }
+
+  async addSocialAccount(platform: string, accountData: any): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/social', {
+      method: 'POST',
+      body: JSON.stringify({ platform, ...accountData }),
+    });
   }
 
   // Health check
-  async checkHealth() {
-    return this.fetchAPI('/health');
+  async healthCheck(): Promise<ApiResponse<{ status: string; version: string }>> {
+    return this.makeRequest<{ status: string; version: string }>('/health');
   }
 
-  // User methods
-  async getUsers() {
-    return this.fetchAPI('/api/users') as Promise<User[]>;
+  // Admin endpoints
+  async getAdminDashboard(): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/admin/dashboard');
   }
 
-  async getUser(id: string) {
-    return this.fetchAPI(`/api/users/${id}`) as Promise<User>;
+  async getAdminUsers(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    
+    return this.makeRequest<any>(`/api/admin/users?${queryParams.toString()}`);
   }
 
-  async createUser(userData: Partial<User>) {
-    return this.fetchAPI('/api/users', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    }) as Promise<User>;
+  async getAdminBuzzes(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    
+    return this.makeRequest<any>(`/api/admin/buzzes?${queryParams.toString()}`);
   }
 
-  async updateUser(id: string, userData: Partial<User>) {
-    return this.fetchAPI(`/api/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(userData),
-    }) as Promise<User>;
-  }
-
-  // Buzz methods
-  async getBuzzes(options?: { userId?: string; interests?: string[] }) {
-    const params = new URLSearchParams();
-    if (options?.userId) params.append('userId', options.userId);
-    if (options?.interests && options.interests.length > 0) {
-      params.append('interests', options.interests.join(','));
-    }
-
-    const queryString = params.toString();
-    const endpoint = queryString ? `/api/buzzes?${queryString}` : '/api/buzzes';
-    return this.fetchAPI(endpoint) as Promise<Buzz[]>;
-  }
-
-  async getBuzz(id: string) {
-    return this.fetchAPI(`/api/buzzes/${id}`) as Promise<Buzz>;
-  }
-
-  async createBuzz(buzzData: Partial<Buzz>) {
-    return this.fetchAPI('/api/buzzes', {
-      method: 'POST',
-      body: JSON.stringify(buzzData),
-    }) as Promise<Buzz>;
-  }
-
-  async likeBuzz(id: string) {
-    return this.fetchAPI(`/api/buzzes/${id}/like`, {
-      method: 'PATCH',
-    }) as Promise<Buzz>;
-  }
-
-  async shareBuzz(id: string) {
-    return this.fetchAPI(`/api/buzzes/${id}/share`, {
-      method: 'PATCH',
-    }) as Promise<Buzz>;
-  }
-
-  async deleteBuzz(id: string) {
-    return this.fetchAPI(`/api/buzzes/${id}`, {
+  async deleteUser(userId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeRequest<{ message: string }>(`/api/admin/users/${userId}`, {
       method: 'DELETE',
     });
   }
 
-  // Social accounts methods
-  async getSocialAccounts(userId: string) {
-    return this.fetchAPI(`/api/social/${userId}`) as Promise<SocialAccount[]>;
-  }
-
-  async createSocialAccount(accountData: Partial<SocialAccount>) {
-    return this.fetchAPI('/api/social', {
-      method: 'POST',
-      body: JSON.stringify(accountData),
-    }) as Promise<SocialAccount>;
-  }
-
-  async updateSocialAccount(id: string, accountData: Partial<SocialAccount>) {
-    return this.fetchAPI(`/api/social/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(accountData),
-    }) as Promise<SocialAccount>;
-  }
-
-  async deleteSocialAccount(id: string) {
-    return this.fetchAPI(`/api/social/${id}`, {
+  async deleteBuzz(buzzId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeRequest<{ message: string }>(`/api/admin/buzzes/${buzzId}`, {
       method: 'DELETE',
     });
   }
 
-  // Update the base URL (useful for switching between local and production)
-  setBaseURL(url: string) {
-    this.baseURL = url;
+  async banUser(userId: string, banned: boolean): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/admin/users/${userId}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ banned }),
+    });
   }
 
-  getBaseURL() {
-    return this.baseURL;
+  // Feature management
+  async getFeatures(): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/features');
+  }
+
+  async updateFeatures(features: any): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/features', {
+      method: 'PATCH',
+      body: JSON.stringify({ features }),
+    });
+  }
+
+  async checkFeatureAccess(feature: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/features/check/${feature}`);
+  }
+
+  // Subscription management
+  async getSubscriptionPlans(): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/subscriptions/plans');
+  }
+
+  async getUserSubscription(userId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/subscriptions/user/${userId}`);
+  }
+
+  async subscribeToPlan(planId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/subscriptions/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    });
+  }
+
+  async unsubscribe(): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/subscriptions/unsubscribe', {
+      method: 'DELETE',
+    });
+  }
+
+  async getAdminSubscriptions(params: {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    
+    return this.makeRequest<any>(`/api/admin/subscriptions?${queryParams.toString()}`);
   }
 }
 
-// Export singleton instance
-export default new APIService();
-
-// Export class for custom instances
-export { APIService };
+export default new ApiService();
