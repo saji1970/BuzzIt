@@ -1,109 +1,190 @@
 # 🔥 Buzz it Backend API
 
-Backend API for the Buzz it social media platform.
+Backend API for Buzz it - Create buzz in social media with Twilio SMS verification.
 
-## 🚀 Quick Start
+## Features
 
-### Local Development
+- ✅ **Twilio SMS Verification** - Real SMS verification codes
+- ✅ **JWT Authentication** - Secure user authentication
+- ✅ **User Management** - Create, read, update users
+- ✅ **Buzz Management** - Create, like, share buzzes
+- ✅ **Social Media Integration** - Connect social accounts
+- ✅ **CORS Enabled** - Cross-origin requests supported
+
+## Quick Start
+
+### 1. Install Dependencies
 
 ```bash
-# Install dependencies
+cd server
 npm install
+```
 
-# Run development server
+### 2. Configure Environment Variables
+
+Copy the example environment file:
+
+```bash
+cp env.example .env
+```
+
+Edit `.env` with your Twilio credentials:
+
+```env
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
+JWT_SECRET=your-super-secret-jwt-key
+PORT=3000
+```
+
+### 3. Get Twilio Credentials
+
+1. Sign up at [twilio.com](https://www.twilio.com)
+2. Get your Account SID and Auth Token from the Console
+3. Purchase a phone number for SMS
+4. Add credentials to `.env` file
+
+### 4. Run the Server
+
+```bash
+# Development
 npm run dev
 
-# Run production server
+# Production
 npm start
 ```
 
-The API will be available at `http://localhost:3000`
+## API Endpoints
 
-## 📡 API Endpoints
+### Authentication
+
+- `POST /api/auth/send-verification` - Send SMS verification code
+- `POST /api/auth/verify-code` - Verify code and create user
+- `POST /api/auth/login` - Login with username/password
 
 ### Users
-- `GET /api/users` - Get all users
+
+- `GET /api/users` - List all users
+- `GET /api/users/me` - Get current user (requires auth)
 - `GET /api/users/:id` - Get user by ID
-- `POST /api/users` - Create new user
-- `PUT /api/users/:id` - Update user
+- `PATCH /api/users/:id` - Update user (requires auth)
+- `GET /api/users/check-username/:username` - Check username availability
 
 ### Buzzes
-- `GET /api/buzzes` - Get all buzzes
-- `GET /api/buzzes/:id` - Get buzz by ID
-- `POST /api/buzzes` - Create new buzz
-- `PATCH /api/buzzes/:id/like` - Toggle like on buzz
-- `PATCH /api/buzzes/:id/share` - Share buzz
-- `DELETE /api/buzzes/:id` - Delete buzz
 
-### Social Accounts
+- `GET /api/buzzes` - List all buzzes
+- `POST /api/buzzes` - Create buzz (requires auth)
+- `PATCH /api/buzzes/:id/like` - Like/unlike buzz (requires auth)
+- `PATCH /api/buzzes/:id/share` - Share buzz (requires auth)
+- `DELETE /api/buzzes/:id` - Delete buzz (requires auth)
+
+### Social Media
+
 - `GET /api/social/:userId` - Get user's social accounts
-- `POST /api/social` - Add social account
-- `PUT /api/social/:id` - Update social account
-- `DELETE /api/social/:id` - Remove social account
+- `POST /api/social` - Add social account (requires auth)
+- `PUT /api/social/:id` - Update social account (requires auth)
+- `DELETE /api/social/:id` - Delete social account (requires auth)
 
-## 🚢 Deploy to Railway
+## Authentication
 
-### Option 1: Deploy via Railway CLI
+Include the JWT token in the Authorization header:
 
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login to Railway
-railway login
-
-# Initialize project
-railway init
-
-# Deploy
-railway up
+```
+Authorization: Bearer your-jwt-token
 ```
 
-### Option 2: Deploy via GitHub
+## SMS Verification Flow
 
-1. **Push code to GitHub repository**
-2. **Go to [Railway.app](https://railway.app)**
-3. **Click "New Project" → "Deploy from GitHub repo"**
-4. **Select your repository**
-5. **Railway will auto-detect the server folder**
-6. **Add environment variables if needed**
-7. **Click "Deploy"**
+1. **Send Verification Code**
+   ```bash
+   POST /api/auth/send-verification
+   {
+     "mobileNumber": "+1234567890",
+     "username": "johndoe"
+   }
+   ```
 
-### Environment Variables
+2. **Verify Code**
+   ```bash
+   POST /api/auth/verify-code
+   {
+     "mobileNumber": "+1234567890",
+     "code": "123456",
+     "verificationId": "uuid-from-step-1"
+   }
+   ```
 
-Set these in Railway dashboard under your project → Variables:
+## Deployment
 
-- `PORT` - Server port (default: 3000, auto-set by Railway)
-- `NODE_ENV` - Environment (production/development)
+### Railway
 
-### Railway Configuration
+1. Connect your GitHub repository to Railway
+2. Set environment variables in Railway dashboard
+3. Deploy automatically on push
 
-Create `railway.json` in the server folder:
+### Other Platforms
 
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "startCommand": "npm start",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
-```
+- **Heroku**: Add `"start": "node index.js"` to package.json
+- **DigitalOcean**: Use Docker or PM2
+- **AWS**: Use Elastic Beanstalk or ECS
 
-## 🔒 Production Considerations
+## Development
 
-- Replace in-memory storage with a real database (PostgreSQL, MongoDB)
-- Add authentication middleware (JWT)
-- Implement rate limiting
-- Add input validation
-- Set up CORS properly
-- Add logging and monitoring
-- Implement error handling
+### Adding New Features
 
-## 📝 License
+1. Add new routes in `index.js`
+2. Update API documentation
+3. Test with Postman or curl
+4. Update frontend API service
 
-MIT
+### Database Integration
+
+Currently uses in-memory storage. To add a real database:
+
+1. Install database driver (e.g., `pg`, `mongodb`)
+2. Replace in-memory arrays with database calls
+3. Add connection pooling
+4. Add migrations
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID | Yes |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token | Yes |
+| `TWILIO_PHONE_NUMBER` | Twilio Phone Number | Yes |
+| `JWT_SECRET` | JWT signing secret | Yes |
+| `PORT` | Server port | No (default: 3000) |
+
+## Troubleshooting
+
+### Twilio Issues
+
+- Verify phone number format: `+1234567890`
+- Check Twilio account balance
+- Ensure phone number is verified for trial accounts
+
+### Authentication Issues
+
+- Check JWT token format
+- Verify token hasn't expired
+- Ensure proper Authorization header
+
+### CORS Issues
+
+- CORS is enabled for all origins
+- For production, restrict to your domain
+
+## Support
+
+- Check logs for error details
+- Verify environment variables
+- Test with Postman collection
+- Check Twilio console for SMS delivery
+
+---
+
+**Happy Coding! 🎉**
+
+The backend is now ready to power your Buzz it app with real SMS verification!
