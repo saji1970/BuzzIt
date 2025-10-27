@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 
@@ -30,7 +31,9 @@ interface SubscribedChannelsProps {
 
 const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress}) => {
   const {theme} = useTheme();
-  const {user, isSubscribed} = useUser();
+  const {user, isSubscribed, subscribeToChannel, unsubscribeFromChannel} = useUser();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAllChannels, setShowAllChannels] = useState(false);
 
   // Don't render if no user
   if (!user) {
@@ -80,10 +83,21 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
     },
   ];
 
-  // Filter to show only subscribed channels
-  const subscribedChannels = allChannels.filter(
-    channel => channel.id === '1' || (user && isSubscribed(channel.id))
+  // Filter channels based on search query
+  const filteredChannels = allChannels.filter(channel => 
+    channel.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    channel.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Get subscribed and unsubscribed channels
+  const subscribedChannels = filteredChannels.filter(channel => 
+    user.subscribedChannels.includes(channel.id)
+  );
+  const unsubscribedChannels = filteredChannels.filter(channel => 
+    !user.subscribedChannels.includes(channel.id)
+  );
+
+  const displayChannels = showAllChannels ? filteredChannels : subscribedChannels;
 
   const handleChannelPress = (channelId: string) => {
     if (onChannelPress) {
@@ -91,14 +105,43 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
     }
   };
 
+  const handleSubscribe = (channelId: string) => {
+    subscribeToChannel(channelId);
+  };
+
+  const handleUnsubscribe = (channelId: string) => {
+    unsubscribeFromChannel(channelId);
+  };
+
   return (
     <View style={styles.container}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={[styles.searchInputContainer, {backgroundColor: theme.colors.surface}]}>
+          <Icon name="search" size={20} color={theme.colors.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, {color: theme.colors.text}]}
+            placeholder="Search channels..."
+            placeholderTextColor={theme.colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity
+          style={[styles.toggleButton, {backgroundColor: theme.colors.primary}]}
+          onPress={() => setShowAllChannels(!showAllChannels)}>
+          <Text style={styles.toggleButtonText}>
+            {showAllChannels ? 'Subscribed' : 'All'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}>
-        {subscribedChannels.map((channel, index) => (
+        {displayChannels.map((channel, index) => (
           <TouchableOpacity
             key={channel.id}
             style={styles.channelItem}
@@ -140,6 +183,26 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>Live</Text>
               </View>
+            )}
+            {channel.id !== '1' && (
+              <TouchableOpacity
+                style={[
+                  styles.subscribeButton,
+                  {
+                    backgroundColor: user.subscribedChannels.includes(channel.id) 
+                      ? theme.colors.error 
+                      : theme.colors.primary
+                  }
+                ]}
+                onPress={() => 
+                  user.subscribedChannels.includes(channel.id)
+                    ? handleUnsubscribe(channel.id)
+                    : handleSubscribe(channel.id)
+                }>
+                <Text style={styles.subscribeButtonText}>
+                  {user.subscribedChannels.includes(channel.id) ? 'Unfollow' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
             )}
           </TouchableOpacity>
         ))}
@@ -231,6 +294,47 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 8,
     fontWeight: 'bold',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    height: 36,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  toggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  toggleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  subscribeButton: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  subscribeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });
 
