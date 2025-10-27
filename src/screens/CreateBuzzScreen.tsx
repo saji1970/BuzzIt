@@ -19,12 +19,14 @@ import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
+import {useFeatures} from '../context/FeatureContext';
 
 type BuzzType = 'event' | 'gossip' | 'news' | 'buzz';
 
 const CreateBuzzScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, addBuzz, interests} = useUser();
+  const {features} = useFeatures();
   const [content, setContent] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
   const [buzzType, setBuzzType] = useState<BuzzType | null>(null);
@@ -125,6 +127,12 @@ const CreateBuzzScreen: React.FC = () => {
   };
 
   const handleCreateBuzz = () => {
+    // Check if buzz creation is enabled
+    if (!features.buzzCreation) {
+      Alert.alert('Feature Disabled', 'Buzz creation is currently disabled by admin.');
+      return;
+    }
+
     if (!buzzType) {
       Alert.alert('Error', 'Please select a buzz type');
       return;

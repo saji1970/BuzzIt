@@ -7,6 +7,7 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 import {ThemeProvider} from './src/context/ThemeContext';
 import {UserProvider} from './src/context/UserContext';
 import {AuthProvider, useAuth} from './src/context/AuthContext';
+import {FeatureProvider} from './src/context/FeatureContext';
 import {BuzzChannelProvider} from './src/context/BuzzChannelContext';
 import {RadioChannelProvider} from './src/context/RadioChannelContext';
 import HomeScreen from './src/screens/HomeScreen';
@@ -123,15 +124,17 @@ const AppContent = () => {
 const App = () => {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <UserProvider>
-          <BuzzChannelProvider>
-            <RadioChannelProvider>
-              <AppContent />
-            </RadioChannelProvider>
-          </BuzzChannelProvider>
-        </UserProvider>
-      </AuthProvider>
+      <FeatureProvider>
+        <AuthProvider>
+          <UserProvider>
+            <BuzzChannelProvider>
+              <RadioChannelProvider>
+                <AppContent />
+              </RadioChannelProvider>
+            </BuzzChannelProvider>
+          </UserProvider>
+        </AuthProvider>
+      </FeatureProvider>
     </ThemeProvider>
   );
 };

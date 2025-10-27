@@ -16,6 +16,7 @@ import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {Buzz} from '../context/UserContext';
+import {useFeatures} from '../context/FeatureContext';
 import SocialMediaShareModal from './SocialMediaShareModal';
 
 const {width} = Dimensions.get('window');
@@ -79,6 +80,7 @@ const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout
 
 const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFollowing = false, onFollow}) => {
   const {theme} = useTheme();
+  const {features} = useFeatures();
   const [showShareModal, setShowShareModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
 
@@ -221,16 +223,18 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
 
       {/* Actions */}
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={onLike}>
-          <Icon
-            name={buzz.isLiked ? 'favorite' : 'favorite-border'}
-            size={20}
-            color={buzz.isLiked ? theme.colors.error : theme.colors.textSecondary}
-          />
-          <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
-            {buzz.likes}
-          </Text>
-        </TouchableOpacity>
+        {features.buzzLikes && (
+          <TouchableOpacity style={styles.actionButton} onPress={onLike}>
+            <Icon
+              name={buzz.isLiked ? 'favorite' : 'favorite-border'}
+              size={20}
+              color={buzz.isLiked ? theme.colors.error : theme.colors.textSecondary}
+            />
+            <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
+              {buzz.likes}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.actionButton}>
           <Icon name="chat-bubble-outline" size={20} color={theme.colors.textSecondary} />
@@ -239,12 +243,14 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={handleShareClick}>
-          <Icon name="share" size={20} color={theme.colors.textSecondary} />
-          <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
-            {buzz.shares}
-          </Text>
-        </TouchableOpacity>
+        {features.buzzShares && (
+          <TouchableOpacity style={styles.actionButton} onPress={handleShareClick}>
+            <Icon name="share" size={20} color={theme.colors.textSecondary} />
+            <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
+              {buzz.shares}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.buzzButton}>
           <LinearGradient

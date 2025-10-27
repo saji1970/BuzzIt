@@ -15,6 +15,7 @@ import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
+import {useFeatures} from '../context/FeatureContext';
 import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
@@ -27,6 +28,7 @@ const {width} = Dimensions.get('window');
 const HomeScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
+  const {features} = useFeatures();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
