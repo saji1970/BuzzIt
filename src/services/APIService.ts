@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = __DEV__ ? 'http://10.0.0.211:3000' : 'https://buzzit-production.up.railway.app';
+const API_BASE_URL = __DEV__ ? 'http://127.0.0.1:3000' : 'https://buzzit-production.up.railway.app';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -71,6 +71,10 @@ class ApiService {
       const url = `${API_BASE_URL}${endpoint}`;
       const token = await AsyncStorage.getItem('authToken');
       
+      console.log('Making API request to:', url);
+      console.log('API_BASE_URL:', API_BASE_URL);
+      console.log('Endpoint:', endpoint);
+      
       const config: RequestInit = {
         headers: {
           'Content-Type': 'application/json',
@@ -80,8 +84,13 @@ class ApiService {
         ...options,
       };
 
+      console.log('Request config:', JSON.stringify(config, null, 2));
       const response = await fetch(url, config);
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (!response.ok) {
         return {

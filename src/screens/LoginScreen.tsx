@@ -17,6 +17,7 @@ import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
+import {testNetworkConnection, testExternalConnection} from '../utils/NetworkTest';
 
 const LoginScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -131,6 +132,24 @@ const LoginScreen: React.FC = () => {
           </TouchableOpacity>
         </Animatable.View>
 
+        {/* Network Test Button */}
+        <Animatable.View animation="fadeInUp" delay={350}>
+          <TouchableOpacity
+            style={[styles.testButton, {backgroundColor: theme.colors.surface}]}
+            onPress={async () => {
+              const localTest = await testNetworkConnection();
+              const externalTest = await testExternalConnection();
+              Alert.alert(
+                'Network Test Results',
+                `Local API (127.0.0.1:3000): ${localTest ? '✅ Working' : '❌ Failed'}\nExternal API: ${externalTest ? '✅ Working' : '❌ Failed'}`
+              );
+            }}>
+            <Text style={[styles.testButtonText, {color: theme.colors.text}]}>
+              Test Network Connection
+            </Text>
+          </TouchableOpacity>
+        </Animatable.View>
+
         {/* Register Link */}
         <Animatable.View animation="fadeInUp" delay={400}>
           <View style={styles.registerContainer}>
@@ -213,6 +232,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  testButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   registerContainer: {
     flexDirection: 'row',
