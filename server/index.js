@@ -29,6 +29,15 @@ let users = [];
 let buzzes = [];
 let socialAccounts = [];
 let verificationCodes = new Map(); // Store verification codes temporarily
+let adminUsers = [
+  {
+    id: 'admin-1',
+    username: 'admin',
+    email: 'admin@buzzit.app',
+    role: 'super_admin',
+    createdAt: new Date().toISOString(),
+  }
+];
 
 // Helper function to generate IDs
 const generateId = () => Date.now().toString();
@@ -49,6 +58,30 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Middleware to verify admin access
+const verifyAdmin = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const admin = adminUsers.find(a => a.id === decoded.userId);
+    
+    if (!admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    req.adminId = decoded.userId;
+    req.adminRole = admin.role;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid token' });
@@ -196,7 +229,21 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user by username
+    // Check if it's an admin login
+    const admin = adminUsers.find(a => a.username === username);
+    if (admin) {
+      // For demo purposes, accept any password for admin
+      // In production, you would hash and compare passwords
+      const token = generateToken(admin.id);
+      return res.json({
+        success: true,
+        user: admin,
+        token,
+        isAdmin: true,
+      });
+    }
+
+    // Regular user login
     const user = users.find(u => u.username === username);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -210,6 +257,7 @@ app.post('/api/auth/login', async (req, res) => {
       success: true,
       user,
       token,
+      isAdmin: false,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -411,6 +459,295 @@ app.delete('/api/social/:id', verifyToken, (req, res) => {
     res.json({ message: 'Social account deleted' });
   } else {
     res.status(404).json({ error: 'Social account not found' });
+  }
+});
+
+// Admin endpoints
+app.get('/api/admin/dashboard', verifyAdmin, (req, res) => {
+  try {
+    const now = new Date();
+    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // User statistics
+    const totalUsers = users.length;
+    const verifiedUsers = users.filter(u => u.isVerified).length;
+    const newUsers24h = users.filter(u => new Date(u.createdAt) > last24Hours).length;
+    const newUsers7d = users.filter(u => new Date(u.createdAt) > last7Days).length;
+    const newUsers30d = users.filter(u => new Date(u.createdAt) > last30Days).length;
+
+    // Buzz statistics
+    const totalBuzzes = buzzes.length;
+    const buzzes24h = buzzes.filter(b => new Date(b.createdAt) > last24Hours).length;
+    const buzzes7d = buzzes.filter(b => new Date(b.createdAt) > last7Days).length;
+    const buzzes30d = buzzes.filter(b => new Date(b.createdAt) > last30Days).length;
+
+    // Engagement statistics
+    const totalLikes = buzzes.reduce((sum, b) => sum + b.likes, 0);
+    const totalShares = buzzes.reduce((sum, b) => sum + b.shares, 0);
+    const totalComments = buzzes.reduce((sum, b) => sum + b.comments, 0);
+    const avgLikesPerBuzz = totalBuzzes > 0 ? (totalLikes / totalBuzzes).toFixed(2) : 0;
+    const avgSharesPerBuzz = totalBuzzes > 0 ? (totalShares / totalBuzzes).toFixed(2) : 0;
+
+    // Top users by buzz count
+    const topUsers = users
+      .map(u => ({
+        id: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        buzzCount: u.buzzCount,
+        followers: u.followers,
+        following: u.following,
+      }))
+      .sort((a, b) => b.buzzCount - a.buzzCount)
+      .slice(0, 10);
+
+    // Top buzzes by engagement
+    const topBuzzes = buzzes
+      .map(b => ({
+        id: b.id,
+        username: b.username,
+        content: b.content.substring(0, 100) + (b.content.length > 100 ? '...' : ''),
+        likes: b.likes,
+        shares: b.shares,
+        comments: b.comments,
+        createdAt: b.createdAt,
+        totalEngagement: b.likes + b.shares + b.comments,
+      }))
+      .sort((a, b) => b.totalEngagement - a.totalEngagement)
+      .slice(0, 10);
+
+    // Interest analytics
+    const interestCounts = {};
+    buzzes.forEach(buzz => {
+      buzz.interests.forEach(interest => {
+        interestCounts[interest.name] = (interestCounts[interest.name] || 0) + 1;
+      });
+    });
+    const topInterests = Object.entries(interestCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Daily activity for last 7 days
+    const dailyActivity = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+      
+      const dayBuzzes = buzzes.filter(b => {
+        const buzzDate = new Date(b.createdAt);
+        return buzzDate >= startOfDay && buzzDate < endOfDay;
+      });
+      
+      const dayUsers = users.filter(u => {
+        const userDate = new Date(u.createdAt);
+        return userDate >= startOfDay && userDate < endOfDay;
+      });
+
+      dailyActivity.push({
+        date: startOfDay.toISOString().split('T')[0],
+        buzzes: dayBuzzes.length,
+        users: dayUsers.length,
+        likes: dayBuzzes.reduce((sum, b) => sum + b.likes, 0),
+        shares: dayBuzzes.reduce((sum, b) => sum + b.shares, 0),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        overview: {
+          totalUsers,
+          verifiedUsers,
+          totalBuzzes,
+          totalLikes,
+          totalShares,
+          totalComments,
+          avgLikesPerBuzz,
+          avgSharesPerBuzz,
+        },
+        growth: {
+          users24h: newUsers24h,
+          users7d: newUsers7d,
+          users30d: newUsers30d,
+          buzzes24h: buzzes24h,
+          buzzes7d: buzzes7d,
+          buzzes30d: buzzes30d,
+        },
+        topUsers,
+        topBuzzes,
+        topInterests,
+        dailyActivity,
+        verificationCodes: verificationCodes.size,
+        socialAccounts: socialAccounts.length,
+      },
+    });
+  } catch (error) {
+    console.error('Admin dashboard error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+  }
+});
+
+app.get('/api/admin/users', verifyAdmin, (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    
+    let filteredUsers = users;
+    
+    // Search filter
+    if (search) {
+      filteredUsers = users.filter(u => 
+        u.username.toLowerCase().includes(search.toLowerCase()) ||
+        u.displayName.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    // Sort
+    filteredUsers.sort((a, b) => {
+      const aVal = a[sortBy];
+      const bVal = b[sortBy];
+      if (sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+    
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+    
+    res.json({
+      success: true,
+      data: {
+        users: paginatedUsers,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: filteredUsers.length,
+          pages: Math.ceil(filteredUsers.length / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Admin users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.get('/api/admin/buzzes', verifyAdmin, (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    
+    let filteredBuzzes = buzzes;
+    
+    // Search filter
+    if (search) {
+      filteredBuzzes = buzzes.filter(b => 
+        b.content.toLowerCase().includes(search.toLowerCase()) ||
+        b.username.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    // Sort
+    filteredBuzzes.sort((a, b) => {
+      const aVal = a[sortBy];
+      const bVal = b[sortBy];
+      if (sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+    
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedBuzzes = filteredBuzzes.slice(startIndex, endIndex);
+    
+    res.json({
+      success: true,
+      data: {
+        buzzes: paginatedBuzzes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: filteredBuzzes.length,
+          pages: Math.ceil(filteredBuzzes.length / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Admin buzzes error:', error);
+    res.status(500).json({ error: 'Failed to fetch buzzes' });
+  }
+});
+
+app.delete('/api/admin/users/:id', verifyAdmin, (req, res) => {
+  try {
+    const userId = req.params.id;
+    const userIndex = users.findIndex(u => u.id === userId);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Remove user and their buzzes
+    users.splice(userIndex, 1);
+    buzzes = buzzes.filter(b => b.userId !== userId);
+    socialAccounts = socialAccounts.filter(s => s.userId !== userId);
+    
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+app.delete('/api/admin/buzzes/:id', verifyAdmin, (req, res) => {
+  try {
+    const buzzId = req.params.id;
+    const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+    
+    if (buzzIndex === -1) {
+      return res.status(404).json({ error: 'Buzz not found' });
+    }
+    
+    buzzes.splice(buzzIndex, 1);
+    
+    res.json({ success: true, message: 'Buzz deleted successfully' });
+  } catch (error) {
+    console.error('Delete buzz error:', error);
+    res.status(500).json({ error: 'Failed to delete buzz' });
+  }
+});
+
+app.patch('/api/admin/users/:id/ban', verifyAdmin, (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { banned } = req.body;
+    
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    users[userIndex].banned = banned;
+    users[userIndex].bannedAt = banned ? new Date().toISOString() : null;
+    
+    res.json({ 
+      success: true, 
+      message: `User ${banned ? 'banned' : 'unbanned'} successfully`,
+      user: users[userIndex]
+    });
+  } catch (error) {
+    console.error('Ban user error:', error);
+    res.status(500).json({ error: 'Failed to update user status' });
   }
 });
 

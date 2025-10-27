@@ -5,6 +5,7 @@ import ApiService, {User} from '../services/ApiService';
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<{success: boolean; error?: string}>;
   register: (userData: RegisterData) => Promise<{success: boolean; error?: string}>;
@@ -34,6 +35,7 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -43,14 +45,18 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const checkAuthStatus = async () => {
     try {
       const token = await AsyncStorage.getItem('authToken');
+      const isAdminFlag = await AsyncStorage.getItem('isAdmin');
+      
       if (token) {
         const response = await ApiService.getCurrentUser();
         if (response.success && response.data) {
           setUser(response.data);
+          setIsAdmin(isAdminFlag === 'true');
         } else {
           // Token is invalid, clear it
           await AsyncStorage.removeItem('authToken');
           await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('isAdmin');
         }
       }
     } catch (error) {
@@ -66,10 +72,12 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
       const response = await ApiService.login(username, password);
       
       if (response.success && response.data) {
-        const {user: userData, token} = response.data;
+        const {user: userData, token, isAdmin: adminFlag} = response.data;
         await AsyncStorage.setItem('authToken', token);
         await AsyncStorage.setItem('user', JSON.stringify(userData));
+        await AsyncStorage.setItem('isAdmin', (adminFlag || false).toString());
         setUser(userData);
+        setIsAdmin(adminFlag || false);
         return {success: true};
       } else {
         return {success: false, error: response.error || 'Login failed'};
@@ -156,7 +164,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const logout = async () => {
     try {
       await ApiService.logout();
+      await AsyncStorage.removeItem('isAdmin');
       setUser(null);
+      setIsAdmin(false);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -184,6 +194,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
+    isAdmin,
     isLoading,
     login,
     register,

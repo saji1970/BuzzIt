@@ -19,7 +19,9 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
+import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import {useTheme} from './src/context/ThemeContext';
+import {useAuth} from './src/context/AuthContext';
 import {createStackNavigator} from '@react-navigation/stack';
 
 const Tab = createBottomTabNavigator();
@@ -27,6 +29,7 @@ const Stack = createStackNavigator();
 
 const MainTabs = () => {
   const {theme} = useTheme();
+  const {isAdmin} = useAuth();
 
   return (
     <Tab.Navigator
@@ -53,6 +56,9 @@ const MainTabs = () => {
             case 'Settings':
               iconName = 'settings';
               break;
+            case 'Admin':
+              iconName = 'admin-panel-settings';
+              break;
             default:
               iconName = 'home';
           }
@@ -78,6 +84,7 @@ const MainTabs = () => {
       <Tab.Screen name="Channel" component={BuzzChannelScreen} />
       <Tab.Screen name="Radio" component={RadioChannelScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+      {isAdmin && <Tab.Screen name="Admin" component={AdminDashboardScreen} />}
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
