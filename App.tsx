@@ -22,7 +22,6 @@ import LoginScreen from './src/screens/LoginScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import {useTheme} from './src/context/ThemeContext';
-import {useAuth} from './src/context/AuthContext';
 import {createStackNavigator} from '@react-navigation/stack';
 
 const Tab = createBottomTabNavigator();
