@@ -1,5 +1,6 @@
 import React, {createContext, useContext, useState, useEffect} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ApiService from '../services/ApiService';
 
 export interface Interest {
   id: string;
@@ -115,66 +116,96 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
 
   const loadBuzzes = async () => {
     try {
-      const savedBuzzes = await AsyncStorage.getItem('buzzes');
-      if (savedBuzzes) {
-        const buzzesData = JSON.parse(savedBuzzes);
+      // Try to load from API first
+      const response = await ApiService.getBuzzes();
+      
+      if (response.success && response.data) {
         // Convert createdAt strings back to Date objects
-        const buzzesWithDates = buzzesData.map((buzz: any) => ({
+        const buzzesWithDates = response.data.map((buzz: any) => ({
           ...buzz,
           createdAt: buzz.createdAt ? new Date(buzz.createdAt) : new Date(),
         }));
         setBuzzes(buzzesWithDates);
+        
+        // Also save to local storage as backup
+        await AsyncStorage.setItem('buzzes', JSON.stringify(buzzesWithDates));
       } else {
-        // Initialize with sample buzzes if no saved data
-        const sampleBuzzes: Buzz[] = [
-          {
-            id: '1',
-            userId: 'buzzuser',
-            username: 'buzzuser',
-            userAvatar: null,
-            content: 'Welcome to Buzzit! 🎉 Join the conversation and share what\'s buzzing!',
-            media: {type: null, url: null},
-            interests: [interests[0]],
-            likes: 42,
-            comments: 12,
-            shares: 8,
-            isLiked: false,
-            createdAt: new Date(Date.now() - 86400000), // 1 day ago
-          },
-          {
-            id: '2',
-            userId: 'techguru',
-            username: 'techguru',
-            userAvatar: null,
-            content: 'Tech update: New features coming soon! Stay tuned 🚀',
-            media: {type: null, url: null},
-            interests: [interests[0]],
-            likes: 89,
-            comments: 23,
-            shares: 15,
-            isLiked: false,
-            createdAt: new Date(Date.now() - 43200000), // 12 hours ago
-          },
-          {
-            id: '3',
-            userId: 'foodie',
-            username: 'foodie',
-            userAvatar: null,
-            content: 'Check out this amazing recipe! 🍕 Home made pizza is the best!',
-            media: {type: 'image', url: null},
-            interests: [interests[1]],
-            likes: 156,
-            comments: 45,
-            shares: 32,
-            isLiked: false,
-            createdAt: new Date(Date.now() - 3600000), // 1 hour ago
-          },
-        ];
-        setBuzzes(sampleBuzzes);
-        await AsyncStorage.setItem('buzzes', JSON.stringify(sampleBuzzes));
+        // Fallback to local storage if API fails
+        const savedBuzzes = await AsyncStorage.getItem('buzzes');
+        if (savedBuzzes) {
+          const buzzesData = JSON.parse(savedBuzzes);
+          const buzzesWithDates = buzzesData.map((buzz: any) => ({
+            ...buzz,
+            createdAt: buzz.createdAt ? new Date(buzz.createdAt) : new Date(),
+          }));
+          setBuzzes(buzzesWithDates);
+        } else {
+          // Initialize with sample buzzes if no saved data
+          const sampleBuzzes: Buzz[] = [
+            {
+              id: '1',
+              userId: 'buzzuser',
+              username: 'buzzuser',
+              userAvatar: null,
+              content: 'Welcome to Buzzit! 🎉 Join the conversation and share what\'s buzzing!',
+              media: {type: null, url: null},
+              interests: [interests[0]],
+              likes: 42,
+              comments: 12,
+              shares: 8,
+              isLiked: false,
+              createdAt: new Date(Date.now() - 86400000), // 1 day ago
+            },
+            {
+              id: '2',
+              userId: 'techguru',
+              username: 'techguru',
+              userAvatar: null,
+              content: 'Tech update: New features coming soon! Stay tuned 🚀',
+              media: {type: null, url: null},
+              interests: [interests[0]],
+              likes: 89,
+              comments: 23,
+              shares: 15,
+              isLiked: false,
+              createdAt: new Date(Date.now() - 43200000), // 12 hours ago
+            },
+            {
+              id: '3',
+              userId: 'foodie',
+              username: 'foodie',
+              userAvatar: null,
+              content: 'Check out this amazing recipe! 🍕 Home made pizza is the best!',
+              media: {type: 'image', url: null},
+              interests: [interests[1]],
+              likes: 156,
+              comments: 45,
+              shares: 32,
+              isLiked: false,
+              createdAt: new Date(Date.now() - 3600000), // 1 hour ago
+            },
+          ];
+          setBuzzes(sampleBuzzes);
+          await AsyncStorage.setItem('buzzes', JSON.stringify(sampleBuzzes));
+        }
+        console.log('API failed, loaded from local storage:', response.error);
       }
     } catch (error) {
       console.log('Error loading buzzes:', error);
+      // Fallback to local storage
+      try {
+        const savedBuzzes = await AsyncStorage.getItem('buzzes');
+        if (savedBuzzes) {
+          const buzzesData = JSON.parse(savedBuzzes);
+          const buzzesWithDates = buzzesData.map((buzz: any) => ({
+            ...buzz,
+            createdAt: buzz.createdAt ? new Date(buzz.createdAt) : new Date(),
+          }));
+          setBuzzes(buzzesWithDates);
+        }
+      } catch (localError) {
+        console.log('Error loading from local storage:', localError);
+      }
     }
   };
 
@@ -192,19 +223,47 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const addBuzz = async (buzzData: Omit<Buzz, 'id' | 'createdAt'>) => {
-    const newBuzz: Buzz = {
-      ...buzzData,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-    };
-    
-    const updatedBuzzes = [newBuzz, ...buzzes];
-    setBuzzes(updatedBuzzes);
-    
     try {
-      await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+      // Try to save to backend first
+      const response = await ApiService.createBuzz(buzzData);
+      
+      if (response.success && response.data) {
+        // Add to local state
+        const newBuzz = {
+          ...response.data,
+          createdAt: new Date(response.data.createdAt),
+        };
+        setBuzzes(prevBuzzes => [newBuzz, ...prevBuzzes]);
+        
+        // Also save to local storage as backup
+        const updatedBuzzes = [newBuzz, ...buzzes];
+        await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+      } else {
+        // Fallback to local storage if API fails
+        const newBuzz: Buzz = {
+          ...buzzData,
+          id: Date.now().toString(),
+          createdAt: new Date(),
+        };
+        
+        const updatedBuzzes = [newBuzz, ...buzzes];
+        setBuzzes(updatedBuzzes);
+        await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+        
+        console.log('API failed, saved locally:', response.error);
+      }
     } catch (error) {
       console.log('Error saving buzz:', error);
+      // Fallback to local storage
+      const newBuzz: Buzz = {
+        ...buzzData,
+        id: Date.now().toString(),
+        createdAt: new Date(),
+      };
+      
+      const updatedBuzzes = [newBuzz, ...buzzes];
+      setBuzzes(updatedBuzzes);
+      await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
     }
   };
 

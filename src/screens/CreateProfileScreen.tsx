@@ -17,10 +17,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
+import {useAuth} from '../context/AuthContext';
 
 const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();
   const {interests, updateUserInterests, setUser} = useUser();
+  const {sendVerificationCode, verifyCode, register, isLoading} = useAuth();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -50,30 +52,22 @@ const CreateProfileScreen: React.FC = () => {
       Alert.alert('Error', 'Please enter a valid mobile number');
       return;
     }
-
-    // Check if username already exists
-    try {
-      const existingUsers = await AsyncStorage.getItem('users');
-      if (existingUsers) {
-        const users = JSON.parse(existingUsers);
-        const isDuplicate = users.some((u: any) => u.username === username.trim());
-        if (isDuplicate) {
-          Alert.alert('Error', 'Username already exists. Please choose a different username.');
-          return;
-        }
-      }
-    } catch (error) {
-      console.log('Error checking username:', error);
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please enter a username');
+      return;
     }
 
-    // TODO: Send verification code via SMS
-    // For now, show alert with demo code
-    const demoCode = Math.floor(100000 + Math.random() * 900000).toString();
-    Alert.alert(
-      'Verification Code Sent',
-      `A verification code has been sent to ${mobileNumber}.\n\nDemo Code: ${demoCode}\n\nPlease enter this code to verify your account.`,
-      [{text: 'OK', onPress: () => setIsVerifying(true)}]
-    );
+    const result = await sendVerificationCode(mobileNumber.trim(), username.trim());
+    
+    if (result.success) {
+      Alert.alert(
+        'Verification Code Sent',
+        `A verification code has been sent to ${mobileNumber}.\n\n${result.message}`,
+        [{text: 'OK', onPress: () => setIsVerifying(true)}]
+      );
+    } else {
+      Alert.alert('Error', result.error || 'Failed to send verification code');
+    }
   };
 
   const handleVerifyAndCreate = async () => {
@@ -104,42 +98,18 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
-    // TODO: Verify code with backend
-    // For now, accept any 6-digit code
+    // For demo purposes, we'll use a mock verification ID
+    // In a real app, this would come from the sendVerificationCode response
+    const verificationId = 'demo-verification-id';
     
-    // Create new user
-    const newUser = {
-      id: Date.now().toString(),
-      username: username.trim(),
-      mobileNumber: mobileNumber.trim(),
-      displayName: buzzProfileName.trim(),
-      email: `${username.trim()}@buzzit.app`,
-      bio: '',
-      avatar: null,
-      interests: selectedInterests,
-      followers: 0,
-      following: 0,
-      buzzCount: 0,
-      createdAt: new Date(),
-      subscribedChannels: [],
-      blockedUsers: [],
-      isVerified: true,
-    };
-
-    // Save user to users list for duplicate checking
-    try {
-      const existingUsers = await AsyncStorage.getItem('users');
-      const users = existingUsers ? JSON.parse(existingUsers) : [];
-      users.push(newUser);
-      await AsyncStorage.setItem('users', JSON.stringify(users));
-    } catch (error) {
-      console.log('Error saving user:', error);
+    const result = await verifyCode(mobileNumber.trim(), verificationCode.trim(), verificationId);
+    
+    if (result.success) {
+      // User is now authenticated and profile is created
+      Alert.alert('Success', 'Profile created and verified successfully! 🎉');
+    } else {
+      Alert.alert('Verification Failed', result.error || 'Invalid verification code');
     }
-
-    setUser(newUser);
-    updateUserInterests(selectedInterests);
-    
-    Alert.alert('Success', 'Profile created and verified successfully! 🎉');
   };
 
   const handleCreateProfile = () => {
