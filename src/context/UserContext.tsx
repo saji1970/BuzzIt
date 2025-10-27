@@ -1,6 +1,6 @@
 import React, {createContext, useContext, useState, useEffect} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ApiService from '../services/ApiService';
+import ApiService from '../services/APIService';
 
 export interface Interest {
   id: string;

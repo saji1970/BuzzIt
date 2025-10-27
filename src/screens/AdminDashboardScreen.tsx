@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
-import ApiService from '../services/ApiService';
+import ApiService from '../services/APIService';
 
 const {width} = Dimensions.get('window');
 

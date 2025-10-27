@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useAuth} from '../context/AuthContext';
-import ApiService from '../services/ApiService';
+import ApiService from '../services/APIService';
 
 const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();

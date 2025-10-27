@@ -1,5 +1,5 @@
 import React, {createContext, useContext, useState, useEffect, ReactNode} from 'react';
-import ApiService from '../services/ApiService';
+import ApiService from '../services/APIService';
 
 interface FeatureContextType {
   features: Record<string, boolean>;
