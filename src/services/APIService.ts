@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = __DEV__ ? 'http://localhost:3000' : 'https://buzzit-production.up.railway.app';
+const API_BASE_URL = __DEV__ ? 'http://10.0.0.211:3000' : 'https://buzzit-production.up.railway.app';
 
 export interface ApiResponse<T> {
   success: boolean;
