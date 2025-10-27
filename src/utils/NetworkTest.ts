@@ -22,7 +22,32 @@ export const testNetworkConnection = async (): Promise<{success: boolean, url?: 
     }
   }
   
-  return { success: false, error: 'All connection attempts failed' };
+  return { success: false, error: 'All local connection attempts failed' };
+};
+
+export const testRailwayConnection = async (): Promise<{success: boolean, url?: string, error?: string}> => {
+  const railwayUrls = [
+    'https://buzzit-production.up.railway.app/api/features',
+    'https://buzzit-production.up.railway.app/api/buzzes',
+  ];
+
+  for (const url of railwayUrls) {
+    try {
+      console.log(`Testing Railway connection to: ${url}`);
+      const response = await fetch(url);
+      console.log(`Railway test response status for ${url}:`, response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Railway test response data for ${url}:`, data);
+        return { success: true, url };
+      }
+    } catch (error) {
+      console.error(`Railway test failed for ${url}:`, error);
+    }
+  }
+  
+  return { success: false, error: 'Railway connection failed' };
 };
 
 export const testExternalConnection = async (): Promise<boolean> => {

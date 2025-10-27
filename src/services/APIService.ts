@@ -1,22 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Dynamic API URL detection for development
-const getApiBaseUrl = () => {
-  if (__DEV__) {
-    // Try multiple possible URLs for iOS simulator
-    const possibleUrls = [
-      'http://127.0.0.1:3000',
-      'http://localhost:3000',
-      'http://10.0.0.211:3000',
-    ];
-    
-    // For now, return the first one and let the error handling deal with it
-    return possibleUrls[0];
-  }
-  return 'https://buzzit-production.up.railway.app';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Use local backend for development, Railway for production
+const API_BASE_URL = __DEV__ ? 'http://127.0.0.1:3000' : 'https://buzzit-production.up.railway.app';
 
 export interface ApiResponse<T> {
   success: boolean;

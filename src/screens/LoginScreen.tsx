@@ -17,7 +17,7 @@ import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
-import {testNetworkConnection, testExternalConnection} from '../utils/NetworkTest';
+import {testNetworkConnection, testRailwayConnection, testExternalConnection} from '../utils/NetworkTest';
 
 const LoginScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -138,10 +138,11 @@ const LoginScreen: React.FC = () => {
             style={[styles.testButton, {backgroundColor: theme.colors.surface}]}
             onPress={async () => {
               const localTest = await testNetworkConnection();
+              const railwayTest = await testRailwayConnection();
               const externalTest = await testExternalConnection();
               Alert.alert(
                 'Network Test Results',
-                `Local API: ${localTest.success ? `✅ Working (${localTest.url})` : `❌ Failed (${localTest.error})`}\nExternal API: ${externalTest ? '✅ Working' : '❌ Failed'}`
+                `Local API: ${localTest.success ? `✅ Working (${localTest.url})` : `❌ Failed (${localTest.error})`}\nRailway API: ${railwayTest.success ? `✅ Working (${railwayTest.url})` : `❌ Failed (${railwayTest.error})`}\nExternal API: ${externalTest ? '✅ Working' : '❌ Failed'}`
               );
             }}>
             <Text style={[styles.testButtonText, {color: theme.colors.text}]}>
