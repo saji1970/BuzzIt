@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useAuth} from '../context/AuthContext';
+import ApiService from '../services/ApiService';
 
 const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -32,6 +33,25 @@ const CreateProfileScreen: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [buzzProfileName, setBuzzProfileName] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
+  const [mobileVerificationEnabled, setMobileVerificationEnabled] = useState(false);
+  const [loadingFeatures, setLoadingFeatures] = useState(true);
+
+  useEffect(() => {
+    checkMobileVerificationFeature();
+  }, []);
+
+  const checkMobileVerificationFeature = async () => {
+    try {
+      const response = await ApiService.getFeatures();
+      if (response.success && response.data) {
+        setMobileVerificationEnabled(response.data.features.mobileVerification);
+      }
+    } catch (error) {
+      console.error('Error checking mobile verification feature:', error);
+    } finally {
+      setLoadingFeatures(false);
+    }
+  };
 
   const handleInterestToggle = (interest: Interest) => {
     if (selectedInterests.some(i => i.id === interest.id)) {
@@ -42,6 +62,12 @@ const CreateProfileScreen: React.FC = () => {
   };
 
   const handleSendVerificationCode = async () => {
+    // Check if mobile verification is enabled
+    if (!mobileVerificationEnabled) {
+      Alert.alert('Mobile Verification Disabled', 'Mobile verification is currently disabled by admin.');
+      return;
+    }
+
     // Basic mobile number validation
     const mobileRegex = /^[0-9]{10,15}$/;
     if (!mobileNumber.trim()) {
@@ -113,11 +139,71 @@ const CreateProfileScreen: React.FC = () => {
   };
 
   const handleCreateProfile = () => {
-    if (!isVerifying) {
-      handleSendVerificationCode();
+    if (mobileVerificationEnabled) {
+      if (!isVerifying) {
+        handleSendVerificationCode();
+      } else {
+        handleVerifyAndCreate();
+      }
     } else {
-      handleVerifyAndCreate();
+      // Skip verification and create profile directly
+      handleCreateProfileDirectly();
     }
+  };
+
+  const handleCreateProfileDirectly = async () => {
+    // Validate profile details
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please enter a username');
+      return;
+    }
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter a password');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+    if (!buzzProfileName.trim()) {
+      Alert.alert('Error', 'Please enter a profile name');
+      return;
+    }
+    if (selectedInterests.length === 0) {
+      Alert.alert('Error', 'Please select at least one interest');
+      return;
+    }
+
+    // Create user directly without verification
+    const newUser = {
+      id: Date.now().toString(),
+      username: username.trim(),
+      displayName: buzzProfileName.trim(),
+      email: `${username.trim()}@buzzit.app`,
+      bio: '',
+      avatar: null,
+      interests: selectedInterests,
+      followers: 0,
+      following: 0,
+      buzzCount: 0,
+      createdAt: new Date(),
+      subscribedChannels: [],
+      blockedUsers: [],
+      isVerified: false, // Not verified since mobile verification is disabled
+    };
+
+    try {
+      const existingUsers = await AsyncStorage.getItem('users');
+      const users = existingUsers ? JSON.parse(existingUsers) : [];
+      users.push(newUser);
+      await AsyncStorage.setItem('users', JSON.stringify(users));
+    } catch (error) {
+      console.log('Error saving user:', error);
+    }
+
+    setUser(newUser);
+    updateUserInterests(selectedInterests);
+    Alert.alert('Success', 'Profile created successfully! 🎉');
   };
 
   return (
@@ -186,24 +272,26 @@ const CreateProfileScreen: React.FC = () => {
           </View>
         </Animatable.View>
 
-        {/* Mobile Number */}
-        <Animatable.View animation="fadeInUp" delay={400}>
-          <Text style={[styles.label, {color: theme.colors.text}]}>Mobile Number</Text>
-          <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
-            <Icon name="phone" size={20} color={theme.colors.textSecondary} />
-            <TextInput
-              style={[styles.input, {color: theme.colors.text}]}
-              placeholder="Enter mobile number"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={mobileNumber}
-              onChangeText={setMobileNumber}
-              keyboardType="phone-pad"
-            />
-          </View>
-        </Animatable.View>
+        {/* Mobile Number - only show if mobile verification is enabled */}
+        {mobileVerificationEnabled && (
+          <Animatable.View animation="fadeInUp" delay={400}>
+            <Text style={[styles.label, {color: theme.colors.text}]}>Mobile Number</Text>
+            <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
+              <Icon name="phone" size={20} color={theme.colors.textSecondary} />
+              <TextInput
+                style={[styles.input, {color: theme.colors.text}]}
+                placeholder="Enter mobile number"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={mobileNumber}
+                onChangeText={setMobileNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+          </Animatable.View>
+        )}
 
-        {/* Verification Code (only show when isVerifying is true) */}
-        {isVerifying && (
+        {/* Verification Code (only show when isVerifying is true and mobile verification is enabled) */}
+        {mobileVerificationEnabled && isVerifying && (
           <Animatable.View animation="fadeInUp" delay={450}>
             <Text style={[styles.label, {color: theme.colors.text}]}>Verification Code</Text>
             <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
@@ -282,9 +370,12 @@ const CreateProfileScreen: React.FC = () => {
               end={{x: 1, y: 0}}
               style={styles.createButtonGradient}>
               <Icon name={isVerifying ? "check-circle" : "send"} size={24} color="#FFFFFF" />
-              <Text style={styles.createButtonText}>
-                {isVerifying ? 'Verify & Create Profile' : 'Send Verification Code'}
-              </Text>
+            <Text style={styles.createButtonText}>
+              {mobileVerificationEnabled 
+                ? (isVerifying ? 'Verify & Create Profile' : 'Send Verification Code')
+                : 'Create Profile'
+              }
+            </Text>
             </LinearGradient>
           </TouchableOpacity>
         </Animatable.View>

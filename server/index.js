@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
+const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
 require('dotenv').config();
 
 const app = express();
@@ -24,6 +25,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Serve static files
+app.use(express.static('public'));
+
 // In-memory database (replace with real database in production)
 let users = [];
 let buzzes = [];
@@ -38,6 +42,43 @@ let adminUsers = [
     createdAt: new Date().toISOString(),
   }
 ];
+
+// Feature configuration (stored in memory, in production use database)
+let appFeatures = { ...defaultFeatures };
+
+// Subscription plans
+let subscriptionPlans = [
+  {
+    id: 'basic',
+    name: 'Basic',
+    price: 0,
+    features: ['buzzCreation', 'buzzLikes', 'buzzComments', 'buzzShares'],
+    channelLimit: 0,
+    radioLimit: 0,
+    isActive: true
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    price: 9.99,
+    features: ['buzzCreation', 'buzzLikes', 'buzzComments', 'buzzShares', 'channelCreation', 'radioCreation', 'channelSubscription', 'radioSubscription'],
+    channelLimit: 5,
+    radioLimit: 3,
+    isActive: true
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 19.99,
+    features: ['buzzCreation', 'buzzLikes', 'buzzComments', 'buzzShares', 'channelCreation', 'radioCreation', 'channelSubscription', 'radioSubscription', 'channelLiveStreaming', 'radioStreaming'],
+    channelLimit: -1, // unlimited
+    radioLimit: -1, // unlimited
+    isActive: true
+  }
+];
+
+// User subscriptions
+let userSubscriptions = [];
 
 // Helper function to generate IDs
 const generateId = () => Date.now().toString();
@@ -748,6 +789,209 @@ app.patch('/api/admin/users/:id/ban', verifyAdmin, (req, res) => {
   } catch (error) {
     console.error('Ban user error:', error);
     res.status(500).json({ error: 'Failed to update user status' });
+  }
+});
+
+// Feature management endpoints
+app.get('/api/features', (req, res) => {
+  res.json({
+    success: true,
+    features: appFeatures,
+    categories: featureCategories,
+    descriptions: featureDescriptions
+  });
+});
+
+app.patch('/api/features', verifyAdmin, (req, res) => {
+  try {
+    const { features } = req.body;
+    
+    if (!features || typeof features !== 'object') {
+      return res.status(400).json({ error: 'Invalid features data' });
+    }
+    
+    // Update features
+    Object.keys(features).forEach(key => {
+      if (defaultFeatures.hasOwnProperty(key)) {
+        appFeatures[key] = features[key];
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Features updated successfully',
+      features: appFeatures
+    });
+  } catch (error) {
+    console.error('Update features error:', error);
+    res.status(500).json({ error: 'Failed to update features' });
+  }
+});
+
+// Subscription management endpoints
+app.get('/api/subscriptions/plans', (req, res) => {
+  res.json({
+    success: true,
+    plans: subscriptionPlans.filter(plan => plan.isActive)
+  });
+});
+
+app.get('/api/subscriptions/user/:userId', verifyToken, (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const userSub = userSubscriptions.find(sub => sub.userId === userId);
+    
+    if (!userSub) {
+      return res.json({
+        success: true,
+        subscription: null,
+        plan: subscriptionPlans.find(p => p.id === 'basic')
+      });
+    }
+    
+    const plan = subscriptionPlans.find(p => p.id === userSub.planId);
+    
+    res.json({
+      success: true,
+      subscription: userSub,
+      plan: plan
+    });
+  } catch (error) {
+    console.error('Get user subscription error:', error);
+    res.status(500).json({ error: 'Failed to get user subscription' });
+  }
+});
+
+app.post('/api/subscriptions/subscribe', verifyToken, (req, res) => {
+  try {
+    const { planId } = req.body;
+    const userId = req.userId;
+    
+    const plan = subscriptionPlans.find(p => p.id === planId && p.isActive);
+    if (!plan) {
+      return res.status(400).json({ error: 'Invalid subscription plan' });
+    }
+    
+    // Check if user already has a subscription
+    const existingSub = userSubscriptions.find(sub => sub.userId === userId);
+    
+    if (existingSub) {
+      // Update existing subscription
+      existingSub.planId = planId;
+      existingSub.subscribedAt = new Date().toISOString();
+      existingSub.status = 'active';
+    } else {
+      // Create new subscription
+      const newSubscription = {
+        id: generateId(),
+        userId: userId,
+        planId: planId,
+        subscribedAt: new Date().toISOString(),
+        status: 'active',
+        features: plan.features
+      };
+      userSubscriptions.push(newSubscription);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Subscription updated successfully',
+      subscription: userSubscriptions.find(sub => sub.userId === userId),
+      plan: plan
+    });
+  } catch (error) {
+    console.error('Subscribe error:', error);
+    res.status(500).json({ error: 'Failed to subscribe' });
+  }
+});
+
+app.delete('/api/subscriptions/unsubscribe', verifyToken, (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    const subIndex = userSubscriptions.findIndex(sub => sub.userId === userId);
+    if (subIndex !== -1) {
+      userSubscriptions.splice(subIndex, 1);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Unsubscribed successfully'
+    });
+  } catch (error) {
+    console.error('Unsubscribe error:', error);
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
+
+// Check if user has access to a feature
+app.get('/api/features/check/:feature', verifyToken, (req, res) => {
+  try {
+    const feature = req.params.feature;
+    const userId = req.userId;
+    
+    // Check if feature is globally enabled
+    if (!appFeatures[feature]) {
+      return res.json({
+        success: true,
+        hasAccess: false,
+        reason: 'Feature is disabled by admin'
+      });
+    }
+    
+    // Check if feature requires subscription
+    const userSub = userSubscriptions.find(sub => sub.userId === userId);
+    const userPlan = userSub ? subscriptionPlans.find(p => p.id === userSub.planId) : subscriptionPlans.find(p => p.id === 'basic');
+    
+    const hasAccess = userPlan.features.includes(feature);
+    
+    res.json({
+      success: true,
+      hasAccess: hasAccess,
+      reason: hasAccess ? 'Access granted' : 'Feature requires subscription upgrade',
+      userPlan: userPlan.name
+    });
+  } catch (error) {
+    console.error('Check feature access error:', error);
+    res.status(500).json({ error: 'Failed to check feature access' });
+  }
+});
+
+// Admin subscription management
+app.get('/api/admin/subscriptions', verifyAdmin, (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedSubscriptions = userSubscriptions.slice(startIndex, endIndex);
+    
+    // Add user and plan details
+    const subscriptionsWithDetails = paginatedSubscriptions.map(sub => {
+      const user = users.find(u => u.id === sub.userId);
+      const plan = subscriptionPlans.find(p => p.id === sub.planId);
+      return {
+        ...sub,
+        user: user ? { id: user.id, username: user.username, displayName: user.displayName } : null,
+        plan: plan ? { id: plan.id, name: plan.name, price: plan.price } : null
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        subscriptions: subscriptionsWithDetails,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: userSubscriptions.length,
+          pages: Math.ceil(userSubscriptions.length / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Admin subscriptions error:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriptions' });
   }
 });
 
