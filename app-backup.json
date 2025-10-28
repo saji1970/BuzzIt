@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Buzz it",
+    "slug": "buzzit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "🐱🔥",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#E4405F"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.buzzit.app",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to take photos and videos for your buzzes.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select photos and videos for your buzzes.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record videos for your buzzes.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to location when open."
+      }
+    },
+    "android": {
+      "package": "com.buzzit.app",
+      "versionCode": 1,
+      "compileSdkVersion": 33,
+      "targetSdkVersion": 33,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "splash": {
+        "backgroundColor": "#E4405F",
+        "resizeMode": "contain"
+      }
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-av",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "This app needs access to location to show nearby buzzes.",
+          "locationAlwaysPermission": "This app needs access to location to show nearby buzzes.",
+          "locationWhenInUsePermission": "This app needs access to location to show nearby buzzes.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8d899ef2-dbd7-4bdb-8dd7-223105a0a736"
+      }
+    }
+  }
+}
