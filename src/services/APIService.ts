@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Use Railway API for production
-const API_BASE_URL = 'https://buzzit-production.up.railway.app';
+// Use local backend until Railway is fixed
+const API_BASE_URL = 'http://127.0.0.1:3000';
 
 export interface ApiResponse<T> {
   success: boolean;
