@@ -5,8 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "icon": "🐱🔥",
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#E4405F"
     },
@@ -22,7 +23,11 @@
       "package": "com.buzzit.app",
       "versionCode": 1,
       "compileSdkVersion": 33,
-      "targetSdkVersion": 33
+      "targetSdkVersion": 33,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E4405F"
+      }
     },
     "plugins": [
       "expo-image-picker",
