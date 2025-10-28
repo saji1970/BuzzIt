@@ -1,9 +1,9 @@
 // Simple network test utility
 export const testNetworkConnection = async (): Promise<{success: boolean, url?: string, error?: string}> => {
   const possibleUrls = [
-    'http://127.0.0.1:3000/health',
-    'http://localhost:3000/health',
-    'http://10.0.0.211:3000/health',
+    'http://127.0.0.1:3000/api/features',
+    'http://localhost:3000/api/features',
+    'http://10.0.0.211:3000/api/features',
   ];
 
   for (const url of possibleUrls) {
