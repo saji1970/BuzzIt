@@ -12,6 +12,7 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
+import { useFocusEffect } from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
@@ -40,11 +41,20 @@ const HomeScreen: React.FC = () => {
     loadBuzzes();
   }, [user, buzzes]);
 
+  // Refresh buzzes when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadBuzzes();
+    }, [user, buzzes])
+  );
+
   const loadBuzzes = () => {
+    console.log('Loading buzzes, user:', user?.username, 'buzzes count:', buzzes?.length);
     if (!user || !buzzes) return;
     
     // First, filter out buzzes from blocked users
     let unblockedBuzzes = buzzes.filter(buzz => !isBlocked(buzz.userId));
+    console.log('Unblocked buzzes count:', unblockedBuzzes.length);
     
     // Ensure unblockedBuzzes is not undefined
     if (!unblockedBuzzes) {

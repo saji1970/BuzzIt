@@ -242,9 +242,11 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const addBuzz = async (buzzData: Omit<Buzz, 'id' | 'createdAt'>) => {
+    console.log('Adding buzz:', buzzData);
     try {
       // Try to save to backend first
       const response = await ApiService.createBuzz(buzzData);
+      console.log('API response:', response);
       
       if (response.success && response.data) {
         // Add to local state
@@ -252,11 +254,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           ...response.data,
           createdAt: new Date(response.data.createdAt),
         };
-        setBuzzes(prevBuzzes => [newBuzz, ...prevBuzzes]);
-        
-        // Also save to local storage as backup
-        const updatedBuzzes = [newBuzz, ...buzzes];
-        await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+        setBuzzes(prevBuzzes => {
+          const updatedBuzzes = [newBuzz, ...prevBuzzes];
+          // Also save to local storage as backup
+          AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+          return updatedBuzzes;
+        });
       } else {
         // Fallback to local storage if API fails
         const newBuzz: Buzz = {
@@ -265,9 +268,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           createdAt: new Date(),
         };
         
-        const updatedBuzzes = [newBuzz, ...buzzes];
-        setBuzzes(updatedBuzzes);
-        await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+        setBuzzes(prevBuzzes => {
+          const updatedBuzzes = [newBuzz, ...prevBuzzes];
+          // Save to AsyncStorage
+          AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+          return updatedBuzzes;
+        });
         
         console.log('API failed, saved locally:', response.error);
       }
@@ -280,9 +286,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         createdAt: new Date(),
       };
       
-      const updatedBuzzes = [newBuzz, ...buzzes];
-      setBuzzes(updatedBuzzes);
-      await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+      setBuzzes(prevBuzzes => {
+        const updatedBuzzes = [newBuzz, ...prevBuzzes];
+        // Save to AsyncStorage
+        AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+        return updatedBuzzes;
+      });
     }
   };
 
