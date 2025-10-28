@@ -213,6 +213,7 @@ const CreateBuzzScreen: React.FC = () => {
       content: buzzContent,
       media,
       interests: selectedInterests,
+      location: includeLocation && userLocation ? userLocation : undefined,
       buzzType,
       eventDate: buzzType === 'event' ? eventDate : undefined,
       pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,

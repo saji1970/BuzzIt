@@ -27,6 +27,11 @@ export interface User {
   createdAt: Date;
   subscribedChannels: string[]; // Array of user IDs
   blockedUsers: string[]; // Array of user IDs
+  locationSettings?: {
+    enabled: boolean;
+    priority: 'location' | 'interests' | 'mixed';
+    radius: number; // in kilometers
+  };
 }
 
 export interface Buzz {
@@ -40,6 +45,15 @@ export interface Buzz {
     url: string | null;
   };
   interests: Interest[];
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    country?: string;
+  };
+  buzzType?: 'event' | 'gossip' | 'thought' | 'poll';
+  eventDate?: string;
+  pollOptions?: Array<{id: string; text: string}>;
   likes: number;
   comments: number;
   shares: number;
@@ -57,6 +71,9 @@ interface UserContextType {
   shareBuzz: (buzzId: string) => void;
   updateUserInterests: (interests: Interest[]) => void;
   getBuzzesByInterests: (userInterests: Interest[]) => Buzz[];
+  getBuzzesByLocation: (userLocation: {latitude: number; longitude: number}, radius: number) => Buzz[];
+  getBuzzesByLocationAndInterests: (userLocation: {latitude: number; longitude: number}, userInterests: Interest[], radius: number) => Buzz[];
+  updateLocationSettings: (settings: {enabled: boolean; priority: 'location' | 'interests' | 'mixed'; radius: number}) => void;
   subscribeToChannel: (channelId: string) => Promise<void>;
   unsubscribeFromChannel: (channelId: string) => Promise<void>;
   blockUser: (userId: string) => Promise<void>;
@@ -331,6 +348,75 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     );
   };
 
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const getBuzzesByLocation = (userLocation: {latitude: number; longitude: number}, radius: number): Buzz[] => {
+    return buzzes.filter(buzz => {
+      if (!buzz.location) return false;
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        buzz.location.latitude,
+        buzz.location.longitude
+      );
+      return distance <= radius;
+    });
+  };
+
+  const getBuzzesByLocationAndInterests = (
+    userLocation: {latitude: number; longitude: number}, 
+    userInterests: Interest[], 
+    radius: number
+  ): Buzz[] => {
+    const userInterestIds = userInterests.map(interest => interest.id);
+    
+    return buzzes.filter(buzz => {
+      // Check if buzz has location and is within radius
+      const hasLocation = buzz.location && 
+        calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          buzz.location.latitude,
+          buzz.location.longitude
+        ) <= radius;
+      
+      // Check if buzz matches interests
+      const matchesInterests = userInterests.length === 0 || 
+        (buzz.interests && buzz.interests.some(interest => userInterestIds.includes(interest.id)));
+      
+      return hasLocation && matchesInterests;
+    });
+  };
+
+  const updateLocationSettings = (settings: {enabled: boolean; priority: 'location' | 'interests' | 'mixed'; radius: number}) => {
+    if (!user) return;
+    
+    const updatedUser = {
+      ...user,
+      locationSettings: settings
+    };
+    
+    setUser(updatedUser);
+    
+    // Save to AsyncStorage
+    try {
+      AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.log('Error saving location settings:', error);
+    }
+  };
+
   const subscribeToChannel = async (channelId: string) => {
     if (!user) return;
     
@@ -426,6 +512,9 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         shareBuzz,
         updateUserInterests,
         getBuzzesByInterests,
+        getBuzzesByLocation,
+        getBuzzesByLocationAndInterests,
+        updateLocationSettings,
         subscribeToChannel,
         unsubscribeFromChannel,
         blockUser,
