@@ -18,6 +18,7 @@ import {useNavigation} from '@react-navigation/native';
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
 import {testNetworkConnection, testRailwayConnection, testExternalConnection} from '../utils/NetworkTest';
+import ConnectionStatus from '../components/ConnectionStatus';
 
 const LoginScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -60,6 +61,9 @@ const LoginScreen: React.FC = () => {
         <Text style={styles.headerTitle}>Welcome Back</Text>
         <Text style={styles.headerSubtitle}>Sign in to continue buzzing</Text>
       </LinearGradient>
+
+      {/* Connection Status */}
+      <ConnectionStatus />
 
       <ScrollView
         style={styles.content}

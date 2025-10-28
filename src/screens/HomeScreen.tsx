@@ -23,6 +23,7 @@ import BuzzDetailScreen from './BuzzDetailScreen';
 import CreateProfileScreen from './CreateProfileScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
+import ConnectionStatus from '../components/ConnectionStatus';
 
 const {width} = Dimensions.get('window');
 
@@ -192,6 +193,9 @@ const HomeScreen: React.FC = () => {
           </View>
         </View>
       </LinearGradient>
+
+      {/* Connection Status */}
+      <ConnectionStatus />
 
       <SubscribedChannels onChannelPress={handleBuzzerPress} />
 
