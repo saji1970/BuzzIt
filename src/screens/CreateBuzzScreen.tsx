@@ -20,6 +20,7 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
+import * as Location from 'expo-location';
 
 type BuzzType = 'event' | 'gossip' | 'thought' | 'poll';
 
@@ -45,6 +46,8 @@ const CreateBuzzScreen: React.FC = () => {
     type: null,
     url: null,
   });
+  const [includeLocation, setIncludeLocation] = useState(false);
+  const [userLocation, setUserLocation] = useState<{latitude: number; longitude: number; city?: string; country?: string} | null>(null);
 
   const handleMediaPicker = () => {
     Alert.alert(
@@ -153,6 +156,60 @@ const CreateBuzzScreen: React.FC = () => {
     }
   };
 
+  const getCurrentLocation = async () => {
+    try {
+      // Check if location services are available
+      const isLocationEnabled = await Location.hasServicesEnabledAsync();
+      if (!isLocationEnabled) {
+        Alert.alert('Location Disabled', 'Please enable location services in your device settings');
+        return;
+      }
+
+      // Request location permission
+      const {status} = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to add location to your buzz');
+        return;
+      }
+
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeout: 10000,
+        maximumAge: 60000,
+      });
+
+      // Get reverse geocoding (city, country)
+      let city = user?.city || 'Unknown';
+      let country = user?.country || 'Unknown';
+      
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        
+        if (reverseGeocode && reverseGeocode.length > 0) {
+          city = reverseGeocode[0].city || city;
+          country = reverseGeocode[0].country || country;
+        }
+      } catch (geocodeError) {
+        console.log('Geocoding failed, using fallback:', geocodeError);
+        // Continue with fallback values
+      }
+
+      setUserLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        city,
+        country,
+      });
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Error', 'Failed to get current location. Please try again or create buzz without location.');
+    }
+  };
+
   const handleCreateBuzz = () => {
     // Check if buzz creation is enabled
     if (!features.buzzCreation) {
@@ -236,6 +293,8 @@ const CreateBuzzScreen: React.FC = () => {
       {id: '3', text: "Don't Know"},
     ]);
     setMedia({type: null, url: null});
+    setIncludeLocation(false);
+    setUserLocation(null);
     
     Alert.alert('Success', 'Your buzz has been created!');
   };
@@ -444,6 +503,46 @@ const CreateBuzzScreen: React.FC = () => {
           </View>
         </Animatable.View>
 
+        {/* Location Section */}
+        <Animatable.View animation="fadeInUp" delay={150} style={styles.section}>
+          <View style={styles.locationRow}>
+            <View style={styles.locationInfo}>
+              <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+                Add Location
+              </Text>
+              <Text style={[styles.locationDescription, {color: theme.colors.textSecondary}]}>
+                Include your current location with this buzz
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.locationToggle,
+                {
+                  backgroundColor: includeLocation ? theme.colors.primary : theme.colors.border,
+                },
+              ]}
+              onPress={() => {
+                if (!includeLocation) {
+                  getCurrentLocation();
+                }
+                setIncludeLocation(!includeLocation);
+              }}>
+              <Icon 
+                name={includeLocation ? "my-location" : "location-off"} 
+                size={20} 
+                color="#FFFFFF" 
+              />
+            </TouchableOpacity>
+          </View>
+          {includeLocation && userLocation && (
+            <View style={[styles.locationInfo, {backgroundColor: theme.colors.surface, padding: 12, borderRadius: 8, marginTop: 8}]}>
+              <Text style={[styles.locationText, {color: theme.colors.text}]}>
+                📍 {userLocation.city}, {userLocation.country}
+              </Text>
+            </View>
+          )}
+        </Animatable.View>
+
         {/* Interests Selection */}
         <Animatable.View animation="fadeInUp" delay={200} style={styles.section}>
           <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
@@ -636,6 +735,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  locationDescription: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  locationToggle: {
+    padding: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   mediaButton: {
     flexDirection: 'row',
