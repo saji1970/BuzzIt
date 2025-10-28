@@ -8,8 +8,5 @@
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10,
     "workingDirectory": "/app"
-  },
-  "railway": {
-    "token": "2a211ac2-6f2f-4720-947d-2f5ec3812ad3"
   }
 }
