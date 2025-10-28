@@ -27,8 +27,8 @@
     "android": {
       "package": "com.buzzit.app",
       "versionCode": 1,
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
+      "compileSdkVersion": 33,
+      "targetSdkVersion": 33,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
