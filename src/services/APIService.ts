@@ -1,7 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Use local backend until Railway is fixed
-const API_BASE_URL = 'http://127.0.0.1:3000';
+// API Configuration - supports multiple backends
+const getApiBaseUrl = () => {
+  // Check for OCI deployment first
+  if (__DEV__) {
+    // In development, try local first, then OCI
+    return 'http://127.0.0.1:3000';
+  } else {
+    // In production, use OCI or Railway
+    return 'https://buzzit-production.up.railway.app';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface ApiResponse<T> {
   success: boolean;
