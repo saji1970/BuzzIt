@@ -1084,9 +1084,9 @@ setInterval(() => {
 }, 60 * 60 * 1000); // 1 hour
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
-  console.log(`API URL: http://localhost:${PORT}`);
+  console.log(`API URL: http://0.0.0.0:${PORT}`);
   console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
 });
 
