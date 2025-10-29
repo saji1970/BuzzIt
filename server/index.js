@@ -28,6 +28,15 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Simple root endpoint for testing
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Buzz it Backend API is running!', 
+    timestamp: new Date().toISOString(),
+    port: PORT 
+  });
+});
+
 // Serve static files
 app.use(express.static('public'));
 
