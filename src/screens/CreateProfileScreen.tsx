@@ -14,6 +14,7 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
@@ -24,6 +25,7 @@ const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();
   const {interests, updateUserInterests, setUser} = useUser();
   const {sendVerificationCode, verifyCode, register, isLoading} = useAuth();
+  const navigation = useNavigation();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -132,7 +134,18 @@ const CreateProfileScreen: React.FC = () => {
     
     if (result.success) {
       // User is now authenticated and profile is created
-      Alert.alert('Success', 'Profile created and verified successfully! 🎉');
+      Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Navigate to MainTabs (Home) after profile creation
+            navigation.reset({
+              index: 0,
+              routes: [{name: 'MainTabs' as never}],
+            });
+          },
+        },
+      ]);
     } else {
       Alert.alert('Verification Failed', result.error || 'Invalid verification code');
     }
@@ -203,7 +216,26 @@ const CreateProfileScreen: React.FC = () => {
 
     setUser(newUser);
     updateUserInterests(selectedInterests);
-    Alert.alert('Success', 'Profile created successfully! 🎉');
+    
+    // Save a token so the app recognizes user as authenticated
+    // This allows navigation to MainTabs
+    const mockToken = 'local-user-token-' + Date.now();
+    await AsyncStorage.setItem('authToken', mockToken);
+    await AsyncStorage.setItem('user', JSON.stringify(newUser));
+    
+    Alert.alert('Success', 'Profile created successfully! 🎉', [
+      {
+        text: 'OK',
+        onPress: () => {
+          // Navigate to MainTabs (Home) after profile creation
+          // The app will detect authenticated state and show MainTabs
+          navigation.reset({
+            index: 0,
+            routes: [{name: 'MainTabs' as never}],
+          });
+        },
+      },
+    ]);
   };
 
   return (
