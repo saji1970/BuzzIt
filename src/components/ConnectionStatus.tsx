@@ -27,21 +27,21 @@ const ConnectionStatus: React.FC = () => {
       };
     }
 
-    if (connectionType === 'local') {
-      return {
-        icon: 'computer',
-        text: 'Local API',
-        color: theme.colors.success || '#4CAF50',
-        bgColor: (theme.colors.success || '#4CAF50') + '20',
-      };
-    }
-
     if (connectionType === 'railway') {
       return {
         icon: 'cloud',
         text: 'Railway API',
         color: theme.colors.primary,
         bgColor: theme.colors.primary + '20',
+      };
+    }
+
+    if (connectionType === 'local') {
+      return {
+        icon: 'computer',
+        text: 'Local API (Dev)',
+        color: theme.colors.warning || '#FF9800',
+        bgColor: (theme.colors.warning || '#FF9800') + '20',
       };
     }
 

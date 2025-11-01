@@ -146,7 +146,7 @@ const LoginScreen: React.FC = () => {
               const externalTest = await testExternalConnection();
               Alert.alert(
                 'Network Test Results',
-                `Local API: ${localTest.success ? `✅ Working (${localTest.url})` : `❌ Failed (${localTest.error})`}\nRailway API: ${railwayTest.success ? `✅ Working (${railwayTest.url})` : `❌ Failed (${railwayTest.error})`}\nExternal API: ${externalTest ? '✅ Working' : '❌ Failed'}`
+                `Railway API (Production): ${railwayTest.success ? `✅ Working (${railwayTest.url})` : `❌ Failed (${railwayTest.error})`}\nLocal API (Dev): ${localTest.success ? `✅ Working (${localTest.url})` : `❌ Failed (${localTest.error})`}\nExternal Connection: ${externalTest ? '✅ Working' : '❌ Failed'}`
               );
             }}>
             <Text style={[styles.testButtonText, {color: theme.colors.text}]}>

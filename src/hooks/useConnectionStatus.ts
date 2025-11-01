@@ -22,23 +22,23 @@ export const useConnectionStatus = (): ConnectionStatus => {
     setStatus(prev => ({ ...prev, isLoading: true }));
 
     try {
-      // Test local connection first
-      const localTest = await testNetworkConnection();
-      if (localTest.success) {
-        setStatus({
-          isConnected: true,
-          connectionType: 'local',
-          isLoading: false,
-        });
-        return;
-      }
-
-      // Test Railway connection
+      // Test Railway connection first (production)
       const railwayTest = await testRailwayConnection();
       if (railwayTest.success) {
         setStatus({
           isConnected: true,
           connectionType: 'railway',
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Fallback to local connection only if Railway fails
+      const localTest = await testNetworkConnection();
+      if (localTest.success) {
+        setStatus({
+          isConnected: true,
+          connectionType: 'local',
           isLoading: false,
         });
         return;

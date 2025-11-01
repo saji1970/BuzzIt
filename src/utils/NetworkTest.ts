@@ -1,28 +1,28 @@
 // Simple network test utility
+// Tests localhost as fallback (for development only)
 export const testNetworkConnection = async (): Promise<{success: boolean, url?: string, error?: string}> => {
   const possibleUrls = [
-    'https://buzzit-production.up.railway.app/api/features',
     'http://127.0.0.1:3000/api/features',
     'http://localhost:3000/api/features',
   ];
 
   for (const url of possibleUrls) {
     try {
-      console.log(`Testing network connection to: ${url}`);
+      console.log(`Testing local network connection to: ${url}`);
       const response = await fetch(url);
-      console.log(`Network test response status for ${url}:`, response.status);
+      console.log(`Local network test response status for ${url}:`, response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log(`Network test response data for ${url}:`, data);
+        console.log(`Local network test response data for ${url}:`, data);
         return { success: true, url };
       }
     } catch (error) {
-      console.error(`Network test failed for ${url}:`, error);
+      console.error(`Local network test failed for ${url}:`, error);
     }
   }
   
-  return { success: false, error: 'All local connection attempts failed' };
+  return { success: false, error: 'Local connection failed' };
 };
 
 export const testRailwayConnection = async (): Promise<{success: boolean, url?: string, error?: string}> => {
