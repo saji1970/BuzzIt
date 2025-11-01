@@ -2,12 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // API Configuration - supports multiple backends
 const getApiBaseUrl = () => {
-  // Check for OCI deployment first
+  // Use Railway deployment
   if (__DEV__) {
-    // In development, try local first, then OCI
+    // In development, use local
     return 'http://127.0.0.1:3000';
   } else {
-    // In production, use OCI or Railway
+    // In production, use Railway with HTTPS
     return 'https://buzzit-production.up.railway.app';
   }
 };

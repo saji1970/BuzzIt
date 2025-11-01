@@ -1,0 +1,30 @@
+# Ignore files that don't need to be deployed to Railway
+node_modules/
+.git/
+.gitignore
+*.md
+*.log
+*.tmp
+.env
+.env.local
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+.idea/
+*.bak
+ios/
+android/
+BuzzItDemo/
+*.sh
+*.xcodeproj
+*.xcworkspace
+Pods/
+*.pbxproj
+
+# Keep server directory and root config files
+!server/
+!nixpacks.toml
+!railway.json
+
