@@ -31,7 +31,7 @@ const {width} = Dimensions.get('window');
 const HomeScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
-  const {isAuthenticated} = useAuth();
+  const {isAuthenticated, isLoading: authLoading, user: authUser} = useAuth();
   const {features} = useFeatures();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,7 +53,28 @@ const HomeScreen: React.FC = () => {
 
   const loadBuzzes = () => {
     console.log('Loading buzzes, user:', user?.username, 'buzzes count:', buzzes?.length);
-    if (!user || !buzzes) return;
+    // Allow loading even if user is null - use empty interests array
+    if (!buzzes) {
+      console.log('No buzzes available yet');
+      return;
+    }
+    
+    // Use user if available, otherwise use fallback with empty interests
+    const currentUser = user || {
+      id: 'temp-user',
+      username: 'User',
+      displayName: 'User',
+      email: '',
+      bio: '',
+      avatar: null,
+      interests: [],
+      followers: 0,
+      following: 0,
+      buzzCount: 0,
+      createdAt: new Date(),
+      subscribedChannels: [],
+      blockedUsers: [],
+    };
     
     // First, filter out buzzes from blocked users
     let unblockedBuzzes = buzzes.filter(buzz => !isBlocked(buzz.userId));
@@ -68,14 +89,14 @@ const HomeScreen: React.FC = () => {
     let filtered: Buzz[];
     
     if (selectedInterests.length > 0) {
-      const interestObjects = user.interests.filter(i => 
+      const interestObjects = currentUser.interests.filter(i => 
         selectedInterests.includes(i.id)
       );
       filtered = getBuzzesByInterests(interestObjects).filter(buzz => 
         unblockedBuzzes.some(b => b.id === buzz.id)
       );
-    } else if (user.interests.length > 0) {
-      filtered = getBuzzesByInterests(user.interests).filter(buzz => 
+    } else if (currentUser.interests && currentUser.interests.length > 0) {
+      filtered = getBuzzesByInterests(currentUser.interests).filter(buzz => 
         unblockedBuzzes.some(b => b.id === buzz.id)
       );
     } else {
@@ -174,15 +195,41 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
+  // Wait for auth check to complete first
+  if (authLoading) {
+    return (
+      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
+        <Text style={{color: theme.colors.text}}>Loading...</Text>
+      </View>
+    );
+  }
+  
   // Show Create Profile screen ONLY if user is truly not authenticated
-  // If user is authenticated, always show the home feed (even if user data is still loading)
-  // Authenticated users with no interests can add them from their profile later
   if (!isAuthenticated) {
     return <CreateProfileScreen />;
   }
   
-  // If authenticated but user data hasn't loaded yet, show loading state
-  if (!user) {
+  // Create a minimal user object as fallback if user is null
+  // Try to use authUser from AuthContext as well
+  const displayUser = user || authUser || {
+    id: 'loading-user',
+    username: 'Loading...',
+    displayName: 'Loading...',
+    email: '',
+    bio: '',
+    avatar: null,
+    interests: [],
+    followers: 0,
+    following: 0,
+    buzzCount: 0,
+    createdAt: new Date(),
+    subscribedChannels: [],
+    blockedUsers: [],
+  };
+  
+  // Only show loading if we have absolutely no data at all
+  // Allow rendering with just buzzes even if user is null
+  if (!user && !authUser && !buzzes) {
     return (
       <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
         <Text style={{color: theme.colors.text}}>Loading...</Text>
