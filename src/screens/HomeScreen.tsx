@@ -16,6 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
+import {useAuth} from '../context/AuthContext';
 import {useFeatures} from '../context/FeatureContext';
 import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
@@ -30,6 +31,7 @@ const {width} = Dimensions.get('window');
 const HomeScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
+  const {isAuthenticated} = useAuth();
   const {features} = useFeatures();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,9 +174,20 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  // Show Create Profile screen for first-time users (no user or no interests)
-  if (!user || (user && user.interests.length === 0)) {
+  // Show Create Profile screen ONLY if user is truly not authenticated
+  // If user is authenticated, always show the home feed (even if user data is still loading)
+  // Authenticated users with no interests can add them from their profile later
+  if (!isAuthenticated) {
     return <CreateProfileScreen />;
+  }
+  
+  // If authenticated but user data hasn't loaded yet, show loading state
+  if (!user) {
+    return (
+      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
+        <Text style={{color: theme.colors.text}}>Loading...</Text>
+      </View>
+    );
   }
 
   return (
