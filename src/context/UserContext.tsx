@@ -1,4 +1,5 @@
 import React, {createContext, useContext, useState, useEffect} from 'react';
+import {Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../services/APIService';
 
@@ -244,15 +245,15 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const addBuzz = async (buzzData: Omit<Buzz, 'id' | 'createdAt'>) => {
     console.log('Adding buzz:', buzzData);
     try {
-      // Try to save to backend first
+      // Try to save to backend first - this is critical for other users to see the buzz
       const response = await ApiService.createBuzz(buzzData);
       console.log('API response:', response);
       
       if (response.success && response.data) {
-        // Add to local state
+        // API call successful - buzz is now on server
         const newBuzz = {
           ...response.data,
-          createdAt: new Date(response.data.createdAt),
+          createdAt: response.data.createdAt ? new Date(response.data.createdAt) : new Date(),
         };
         setBuzzes(prevBuzzes => {
           const updatedBuzzes = [newBuzz, ...prevBuzzes];
@@ -260,8 +261,15 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
           return updatedBuzzes;
         });
+        console.log('Buzz saved to server successfully');
+        
+        // Refresh buzzes from server to ensure all users see the new buzz
+        setTimeout(() => {
+          loadBuzzes();
+        }, 500);
       } else {
-        // Fallback to local storage if API fails
+        // API failed - show error but still save locally for this user
+        console.error('API failed to save buzz:', response.error);
         const newBuzz: Buzz = {
           ...buzzData,
           id: Date.now().toString(),
@@ -270,16 +278,21 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         
         setBuzzes(prevBuzzes => {
           const updatedBuzzes = [newBuzz, ...prevBuzzes];
-          // Save to AsyncStorage
+          // Save to AsyncStorage as fallback
           AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
           return updatedBuzzes;
         });
         
-        console.log('API failed, saved locally:', response.error);
+        // Show alert to user that buzz wasn't synced
+        Alert.alert(
+          'Warning',
+          'Your buzz was saved locally but may not be visible to other users. Please check your internet connection.',
+          [{text: 'OK'}]
+        );
       }
-    } catch (error) {
-      console.log('Error saving buzz:', error);
-      // Fallback to local storage
+    } catch (error: any) {
+      console.error('Error saving buzz:', error);
+      // Network or other error - save locally but warn user
       const newBuzz: Buzz = {
         ...buzzData,
         id: Date.now().toString(),
@@ -292,6 +305,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
         return updatedBuzzes;
       });
+      
+      Alert.alert(
+        'Network Error',
+        'Your buzz was saved locally but could not be synced to the server. Other users may not see it. Please check your connection and try again.',
+        [{text: 'OK'}]
+      );
     }
   };
 
