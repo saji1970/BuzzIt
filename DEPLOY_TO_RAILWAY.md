@@ -29,13 +29,15 @@ git push origin main
 3. **Click** "New Project"
 4. **Select** "Deploy from GitHub repo"
 5. **Choose** your Buzzit repository
-6. **Railway will automatically detect:**
-   - Root Directory: Detected from `nixpacks.toml` (server directory)
+6. **Configure Root Directory (IMPORTANT):**
+   - In the deployment settings, set **Root Directory** to: `server`
+   - Or Railway will auto-detect from the config files
+7. **Railway will automatically detect:**
    - Build Command: Auto-configured via Nixpacks
    - Start Command: Auto-configured via `Procfile` or `nixpacks.toml`
-7. **Click** "Deploy"
+8. **Click** "Deploy"
 
-**No manual configuration needed!** Railway will use the configuration files.
+**Note:** If you get build errors about `.nixpacks` files, clear the build cache in Railway dashboard → Settings → Clear Build Cache.
 
 ### Step 3: Get Your API URL
 
@@ -125,9 +127,11 @@ openssl rand -base64 32
 
 ### Build Failed
 - Check **Logs** tab in Railway dashboard
+- Ensure **Root Directory** is set to `server` in Railway settings
 - Ensure `package.json` is in `server/` directory
 - Verify `npm install` works locally: `cd server && npm install`
-- Check that `nixpacks.toml` exists in the root directory
+- Check that `nixpacks.toml` exists (root or server directory)
+- **If you see `.nixpacks` file copy errors:** Clear build cache (Settings → Clear Build Cache)
 
 ### App Won't Start
 - Check **Logs** for errors (most common issue!)

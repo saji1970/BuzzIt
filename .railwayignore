@@ -22,9 +22,11 @@ BuzzItDemo/
 *.xcworkspace
 Pods/
 *.pbxproj
+.nixpacks/
 
 # Keep server directory and root config files
 !server/
 !nixpacks.toml
 !railway.json
+!Procfile
 
