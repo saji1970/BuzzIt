@@ -18,8 +18,9 @@ git push origin main
 
 **Note:** The repository now includes Railway configuration files:
 - `railway.json` - Railway deployment configuration
-- `nixpacks.toml` - Build configuration
-- `Procfile` - Process definition
+- `Dockerfile` - Docker build configuration (primary method)
+- `railway.toml` - Alternative Railway configuration
+- `Procfile` - Process definition (fallback)
 - `.railwayignore` - Files to exclude from deployment
 
 ### Step 2: Deploy to Railway
@@ -29,15 +30,15 @@ git push origin main
 3. **Click** "New Project"
 4. **Select** "Deploy from GitHub repo"
 5. **Choose** your Buzzit repository
-6. **Configure Root Directory (IMPORTANT):**
-   - In the deployment settings, set **Root Directory** to: `server`
-   - Or Railway will auto-detect from the config files
-7. **Railway will automatically detect:**
-   - Build Command: Auto-configured via Nixpacks
-   - Start Command: Auto-configured via `Procfile` or `nixpacks.toml`
-8. **Click** "Deploy"
+6. **Railway will automatically detect:**
+   - Builder: Docker (using root `Dockerfile`)
+   - Build Command: Auto-configured from `Dockerfile`
+   - Start Command: Auto-configured from `Dockerfile`
+7. **Click** "Deploy"
 
-**Note:** If you get build errors about `.nixpacks` files, clear the build cache in Railway dashboard → Settings → Clear Build Cache.
+**No manual configuration needed!** Railway will use the Dockerfile for building and deployment.
+
+**Note:** The Dockerfile is configured to build from the `server/` directory automatically.
 
 ### Step 3: Get Your API URL
 
@@ -126,12 +127,13 @@ openssl rand -base64 32
 ## 🆘 Troubleshooting
 
 ### Build Failed
-- Check **Logs** tab in Railway dashboard
-- Ensure **Root Directory** is set to `server` in Railway settings
-- Ensure `package.json` is in `server/` directory
-- Verify `npm install` works locally: `cd server && npm install`
-- Check that `nixpacks.toml` exists (root or server directory)
-- **If you see `.nixpacks` file copy errors:** Clear build cache (Settings → Clear Build Cache)
+- Check **Logs** tab in Railway dashboard for specific error messages
+- Ensure `Dockerfile` exists in the root directory
+- Verify `server/package.json` exists and is valid
+- Test Docker build locally: `docker build -t buzzit-backend .`
+- Check that all dependencies are listed in `server/package.json`
+- **If Docker build fails:** Check logs for missing dependencies or syntax errors
+- **To rebuild:** Railway dashboard → Deployments → Redeploy or clear cache
 
 ### App Won't Start
 - Check **Logs** for errors (most common issue!)
