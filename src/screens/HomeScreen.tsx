@@ -59,8 +59,8 @@ const HomeScreen: React.FC = () => {
       return;
     }
     
-    // Use user if available, otherwise use fallback with empty interests
-    const currentUser = user || {
+    // Use user if available, otherwise use authUser, otherwise fallback
+    const currentUser = user || authUser || {
       id: 'temp-user',
       username: 'User',
       displayName: 'User',
