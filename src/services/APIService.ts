@@ -97,13 +97,32 @@ class ApiService {
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
       
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        console.log('Response text:', text);
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        return {
+          success: false,
+          error: 'Invalid response from server',
+        };
+      }
       console.log('Response data:', data);
 
       if (!response.ok) {
         return {
           success: false,
-          error: data.message || 'Request failed',
+          error: data.message || data.error || `Request failed with status ${response.status}`,
+        };
+      }
+
+      // Handle API responses that already have success field
+      if (data.success !== undefined && data.success === false) {
+        return {
+          success: false,
+          error: data.message || data.error || 'Request failed',
         };
       }
 
@@ -111,12 +130,30 @@ class ApiService {
         success: true,
         data,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('API Request Error:', error);
       console.error('API URL:', url);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = 'Network error. Please check your connection.';
+      if (error?.message) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
+          errorMessage = 'Cannot connect to server. Please check your internet connection.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timeout. Please try again.';
+        } else {
+          errorMessage = `Network error: ${error.message}`;
+        }
+      }
+      
       return {
         success: false,
-        error: `Network error: ${error.message || 'Please check your connection.'}`,
+        error: errorMessage,
       };
     }
   }
