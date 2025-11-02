@@ -880,6 +880,63 @@ app.delete('/api/admin/buzzes/:id', verifyAdmin, (req, res) => {
   }
 });
 
+// Remove duplicate users (admin only) - keeps the oldest user for each username
+app.post('/api/admin/users/remove-duplicates', verifyAdmin, (req, res) => {
+  try {
+    const usernameGroups = {};
+    const duplicatesToRemove = [];
+    
+    // Group users by username (case-insensitive)
+    users.forEach((user, index) => {
+      const usernameKey = user.username.toLowerCase();
+      if (!usernameGroups[usernameKey]) {
+        usernameGroups[usernameKey] = [];
+      }
+      usernameGroups[usernameKey].push({ index, user });
+    });
+    
+    // Find duplicates (keep first/oldest, mark others for deletion)
+    Object.keys(usernameGroups).forEach(usernameKey => {
+      const userGroup = usernameGroups[usernameKey];
+      if (userGroup.length > 1) {
+        // Sort by creation date (oldest first)
+        userGroup.sort((a, b) => {
+          const dateA = new Date(a.user.createdAt || 0).getTime();
+          const dateB = new Date(b.user.createdAt || 0).getTime();
+          return dateA - dateB;
+        });
+        
+        // Keep the first (oldest), mark rest as duplicates
+        userGroup.slice(1).forEach(({ index, user }) => {
+          duplicatesToRemove.push({ 
+            index, 
+            id: user.id, 
+            username: user.username, 
+            createdAt: user.createdAt 
+          });
+        });
+      }
+    });
+    
+    // Remove duplicates (in reverse order to maintain indices)
+    duplicatesToRemove.sort((a, b) => b.index - a.index);
+    const removed = [];
+    duplicatesToRemove.forEach(({ index, id, username, createdAt }) => {
+      removed.push({ id, username, createdAt });
+      users.splice(index, 1);
+    });
+    
+    res.json({
+      success: true,
+      message: `Removed ${removed.length} duplicate user(s)`,
+      duplicates: removed
+    });
+  } catch (error) {
+    console.error('Remove duplicates error:', error);
+    res.status(500).json({ error: 'Failed to remove duplicates' });
+  }
+});
+
 app.patch('/api/admin/users/:id/ban', verifyAdmin, (req, res) => {
   try {
     const userId = req.params.id;
