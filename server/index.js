@@ -859,7 +859,9 @@ app.get('/api/users/check-username/:username', async (req, res) => {
     // Check database first
     let dbUser = null;
     try {
-      dbUser = await User.findOne({ username }).lean();
+      if (db.isConnected()) {
+        dbUser = await getUserByUsername(username);
+      }
     } catch (dbError) {
       console.error('Database check error:', dbError);
       // Continue to check in-memory array as fallback
@@ -896,7 +898,7 @@ app.get('/api/buzzes', async (req, res) => {
     }
     
     // Get buzzes from database
-    let dbBuzzes = await Buzz.find(query).sort({ createdAt: -1 }).lean();
+    let dbBuzzes = await getAllBuzzes({ userId });
     
     // Merge with in-memory buzzes (for backwards compatibility)
     const memBuzzIds = new Set(buzzes.map(b => b.id));
@@ -1035,8 +1037,15 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
     buzzes.push(savedBuzz);
     
     // Update user buzz count
-    if (user) {
-      await User.updateOne({ id: req.userId }, { $inc: { buzzCount: 1 } });
+    if (db.isConnected() && user) {
+      try {
+        await db.query(
+          'UPDATE users SET buzz_count = buzz_count + 1 WHERE id = $1',
+          [req.userId]
+        );
+      } catch (error) {
+        console.error('Error updating user buzz count:', error);
+      }
     }
     
     res.status(201).json(savedBuzz.toObject());
@@ -1347,13 +1356,24 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
     const userId = req.params.id;
     
     // Delete from database
-    const deletedUser = await User.findOneAndDelete({ id: userId });
+    let deletedUser = null;
+    if (db.isConnected()) {
+      try {
+        const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [userId]);
+        if (result.rows.length > 0) {
+          deletedUser = convertDbUserToObject(result.rows[0]);
+          
+          // Delete related data
+          await db.query('DELETE FROM buzzes WHERE user_id = $1', [userId]);
+          await db.query('DELETE FROM user_interactions WHERE user_id = $1', [userId]);
+          await db.query('DELETE FROM live_streams WHERE user_id = $1', [userId]);
+        }
+      } catch (dbError) {
+        console.error('Database delete error:', dbError);
+      }
+    }
     
     if (deletedUser) {
-      // Delete related data
-      await Buzz.deleteMany({ userId });
-      await SocialAccount.deleteMany({ userId });
-      await Subscription.deleteMany({ userId });
       
       // Also remove from in-memory arrays
       const userIndex = users.findIndex(u => u.id === userId);
@@ -1383,11 +1403,33 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
 // Live Stream endpoints
 app.get('/api/live-streams', async (req, res) => {
   try {
-    // Get only active live streams
-    const liveStreams = await LiveStream.find({ isLive: true })
-      .sort({ viewers: -1, startedAt: -1 })
-      .limit(20)
-      .lean();
+    let liveStreams = [];
+    
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(
+          'SELECT * FROM live_streams WHERE is_live = true ORDER BY viewers DESC, started_at DESC LIMIT 20'
+        );
+        liveStreams = result.rows.map(row => ({
+          id: row.id,
+          userId: row.user_id,
+          username: row.username,
+          displayName: row.display_name,
+          title: row.title,
+          description: row.description,
+          streamUrl: row.stream_url,
+          thumbnailUrl: row.thumbnail_url,
+          isLive: row.is_live,
+          viewers: row.viewers,
+          category: row.category,
+          tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+        }));
+      } catch (dbError) {
+        console.error('Database live streams error:', dbError);
+      }
+    }
     
     res.json({
       success: true,
@@ -1401,7 +1443,35 @@ app.get('/api/live-streams', async (req, res) => {
 
 app.get('/api/live-streams/:id', async (req, res) => {
   try {
-    const stream = await LiveStream.findOne({ id: req.params.id }).lean();
+    let stream = null;
+    
+    if (db.isConnected()) {
+      try {
+        const result = await db.query('SELECT * FROM live_streams WHERE id = $1', [req.params.id]);
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          stream = {
+            id: row.id,
+            userId: row.user_id,
+            username: row.username,
+            displayName: row.display_name,
+            title: row.title,
+            description: row.description,
+            streamUrl: row.stream_url,
+            thumbnailUrl: row.thumbnail_url,
+            isLive: row.is_live,
+            viewers: row.viewers,
+            category: row.category,
+            tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+            startedAt: row.started_at,
+            endedAt: row.ended_at,
+          };
+        }
+      } catch (dbError) {
+        console.error('Database live stream error:', dbError);
+      }
+    }
+    
     if (stream) {
       res.json({
         success: true,
@@ -1418,16 +1488,26 @@ app.get('/api/live-streams/:id', async (req, res) => {
 
 app.post('/api/live-streams', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.userId }).lean();
+    const user = await getUserById(req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Check if user already has an active stream
-    const existingStream = await LiveStream.findOne({ 
-      userId: req.userId, 
-      isLive: true 
-    });
+    let existingStream = null;
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(
+          'SELECT * FROM live_streams WHERE user_id = $1 AND is_live = true',
+          [req.userId]
+        );
+        if (result.rows.length > 0) {
+          existingStream = result.rows[0];
+        }
+      } catch (dbError) {
+        console.error('Database check error:', dbError);
+      }
+    }
     
     if (existingStream) {
       return res.status(400).json({ 
@@ -1435,25 +1515,73 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       });
     }
 
-    const newStream = new LiveStream({
-      id: generateId(),
+    const streamId = generateId();
+    const newStreamData = {
+      id: streamId,
       userId: req.userId,
       username: user.username,
       displayName: user.displayName,
       title: req.body.title || `${user.displayName}'s Live Stream`,
       description: req.body.description || '',
-      streamUrl: req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`, // Placeholder
+      streamUrl: req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`,
       thumbnailUrl: req.body.thumbnailUrl || user.avatar,
       isLive: true,
       viewers: 0,
       category: req.body.category || 'general',
       tags: req.body.tags || [],
-    });
+    };
 
-    const savedStream = await newStream.save();
+    let savedStream;
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(`
+          INSERT INTO live_streams (
+            id, user_id, username, display_name, title, description, stream_url,
+            thumbnail_url, is_live, viewers, category, tags
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          RETURNING *
+        `, [
+          newStreamData.id,
+          newStreamData.userId,
+          newStreamData.username,
+          newStreamData.displayName,
+          newStreamData.title,
+          newStreamData.description,
+          newStreamData.streamUrl,
+          newStreamData.thumbnailUrl,
+          newStreamData.isLive,
+          newStreamData.viewers,
+          newStreamData.category,
+          JSON.stringify(newStreamData.tags),
+        ]);
+        
+        const row = result.rows[0];
+        savedStream = {
+          id: row.id,
+          userId: row.user_id,
+          username: row.username,
+          displayName: row.display_name,
+          title: row.title,
+          description: row.description,
+          streamUrl: row.stream_url,
+          thumbnailUrl: row.thumbnail_url,
+          isLive: row.is_live,
+          viewers: row.viewers,
+          category: row.category,
+          tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+          startedAt: row.started_at,
+        };
+      } catch (saveError) {
+        console.error('Error saving live stream:', saveError);
+        savedStream = { ...newStreamData, startedAt: new Date() };
+      }
+    } else {
+      savedStream = { ...newStreamData, startedAt: new Date() };
+    }
+    
     res.status(201).json({
       success: true,
-      data: savedStream.toObject(),
+      data: savedStream,
     });
   } catch (error) {
     console.error('Create live stream error:', error);
