@@ -1048,7 +1048,7 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
       }
     }
     
-    res.status(201).json(savedBuzz.toObject());
+    res.status(201).json(savedBuzz);
   } catch (error) {
     console.error('Create buzz error:', error);
     res.status(500).json({ error: 'Failed to create buzz' });
@@ -1621,27 +1621,41 @@ app.get('/api/recommendations/users', verifyToken, async (req, res) => {
     const userId = req.userId;
     
     // Get current user
-    const currentUser = await User.findOne({ id: userId }).lean();
+    const currentUser = await getUserById(userId);
     if (!currentUser) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Get all users (excluding current user)
-    const allUsers = await User.find({ id: { $ne: userId } })
-      .select('-password')
-      .lean();
+    let allUsers = await getAllUsers();
+    allUsers = allUsers.filter(u => u.id !== userId).map(u => {
+      const { password, ...userWithoutPassword } = u;
+      return userWithoutPassword;
+    });
 
     // Get user interactions for preference analysis
-    const interactions = await UserInteraction.find({ userId })
-      .sort({ timestamp: -1 })
-      .limit(100)
-      .lean();
+    let interactions = [];
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(
+          'SELECT * FROM user_interactions WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 100',
+          [userId]
+        );
+        interactions = result.rows.map(row => ({
+          id: row.id,
+          userId: row.user_id,
+          buzzId: row.buzz_id,
+          type: row.type,
+          timestamp: row.timestamp,
+          metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
+        }));
+      } catch (dbError) {
+        console.error('Database interactions error:', dbError);
+      }
+    }
 
     // Get user's buzzes for analysis
-    const userBuzzes = await Buzz.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const userBuzzes = await getAllBuzzes({ userId });
 
     // Analyze user preferences
     const preferences = RecommendationEngine.analyzeUserPreferences(
