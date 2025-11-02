@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +25,6 @@ import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
-import ConnectionStatus from '../components/ConnectionStatus';
 import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
 import UserRecommendationCard, {UserRecommendation} from '../components/UserRecommendationCard';
@@ -47,6 +48,10 @@ const HomeScreen: React.FC = () => {
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
   const [useSmartFeed, setUseSmartFeed] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
@@ -175,6 +180,30 @@ const HomeScreen: React.FC = () => {
   const handleFollow = (buzzId: string) => {
     // TODO: Implement follow functionality
     console.log('Follow buzz:', buzzId);
+  };
+
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const response = await ApiService.getAllUsers();
+      if (response.success && response.data) {
+        const filtered = response.data.filter((u: any) =>
+          u.username?.toLowerCase().includes(query.toLowerCase()) ||
+          u.displayName?.toLowerCase().includes(query.toLowerCase())
+        );
+        setSearchResults(filtered);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleBuzzerPress = (buzzerId: string) => {
@@ -411,8 +440,17 @@ const HomeScreen: React.FC = () => {
         </View>
       </LinearGradient>
 
-      {/* Connection Status */}
-      <ConnectionStatus />
+      {/* Search Button */}
+      <View style={styles.searchContainer}>
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={() => setShowSearch(true)}>
+          <Icon name="search" size={20} color={theme.colors.textSecondary} />
+          <Text style={[styles.searchButtonText, {color: theme.colors.textSecondary}]}>
+            Search users...
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Smart Feed Toggle */}
       <View style={styles.smartFeedContainer}>

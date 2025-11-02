@@ -336,6 +336,11 @@ class ApiService {
     return this.makeRequest<Buzz[]>('/api/buzzes');
   }
 
+  // Get all users (for search)
+  async getAllUsers(): Promise<ApiResponse<User[]>> {
+    return this.makeRequest<User[]>('/api/users');
+  }
+
   async createBuzz(buzz: Omit<Buzz, 'id' | 'createdAt' | 'isLiked'>): Promise<ApiResponse<Buzz>> {
     return this.makeRequest<Buzz>('/api/buzzes', {
       method: 'POST',
