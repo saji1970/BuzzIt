@@ -1,7 +1,7 @@
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {StatusBar} from 'react-native';
+import {StatusBar, View, Text} from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 import {ThemeProvider} from './src/context/ThemeContext';
