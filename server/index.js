@@ -25,6 +25,24 @@ if (fs.existsSync(serverEnvPath)) {
   require('dotenv').config(); // Still try default locations
 }
 
+// Debug: Log all environment variables that start with DATABASE, POSTGRES, or DB (for troubleshooting)
+if (process.env.NODE_ENV !== 'production' || process.argv.includes('--debug-env')) {
+  console.log('🔍 Environment variable debug (filtered):');
+  const dbVars = Object.keys(process.env)
+    .filter(key => key.includes('DATABASE') || key.includes('POSTGRES') || key.includes('DB_'))
+    .sort();
+  if (dbVars.length > 0) {
+    dbVars.forEach(key => {
+      const value = process.env[key];
+      const masked = value ? value.replace(/:([^:@]+)@/, ':****@') : '(empty)';
+      console.log(`  - ${key}: ${masked.substring(0, 80)}${masked.length > 80 ? '...' : ''}`);
+    });
+  } else {
+    console.log('  - No database-related environment variables found');
+  }
+  console.log(`📊 Total environment variables: ${Object.keys(process.env).length}`);
+}
+
 const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
 // Use PostgreSQL instead of MongoDB
 const { connectDB, query, getPool } = require('./db/postgres');
