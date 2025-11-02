@@ -678,14 +678,33 @@ app.patch('/api/users/:id', verifyToken, async (req, res) => {
 
 app.get('/api/users/check-username/:username', async (req, res) => {
   try {
-    const username = req.params.username.toLowerCase();
-    const dbUser = await User.findOne({ username });
-    const memUser = users.find(u => u.username.toLowerCase() === username);
+    const username = req.params.username.toLowerCase().trim();
+    
+    if (!username || username.length < 3) {
+      return res.json({ available: false });
+    }
+    
+    // Check database first
+    let dbUser = null;
+    try {
+      dbUser = await User.findOne({ username }).lean();
+    } catch (dbError) {
+      console.error('Database check error:', dbError);
+      // Continue to check in-memory array as fallback
+    }
+    
+    // Check in-memory array
+    const memUser = users.find(u => u.username && u.username.toLowerCase() === username);
+    
     const exists = !!(dbUser || memUser);
+    
+    console.log(`Username check: "${username}" - exists: ${exists}, dbUser: ${!!dbUser}, memUser: ${!!memUser}`);
+    
     res.json({ available: !exists });
   } catch (error) {
     console.error('Check username error:', error);
-    res.json({ available: false });
+    // On error, default to allowing username (better UX than blocking all)
+    res.json({ available: true });
   }
 });
 
