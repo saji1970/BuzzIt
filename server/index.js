@@ -20,6 +20,20 @@ const db = {
   }
 };
 
+// Import database helper functions
+const {
+  convertDbUserToObject,
+  convertDbBuzzToObject,
+  getUserById,
+  getUserByUsername,
+  getAllUsers,
+  getUserCount,
+  getUsersPaginated,
+  getBuzzById,
+  getAllBuzzes,
+  getBuzzesPaginated,
+} = require('./db/helpers');
+
 // Import services
 const RecommendationEngine = require('./services/RecommendationEngine');
 
@@ -252,7 +266,7 @@ const verifyAdmin = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Check in database first
-    const admin = await User.findOne({ id: decoded.userId });
+    const admin = await getUserById(decoded.userId);
     
     if (admin && (admin.role === 'admin' || admin.role === 'super_admin')) {
       req.adminId = decoded.userId;
@@ -912,7 +926,7 @@ app.get('/api/buzzes', async (req, res) => {
 
 app.get('/api/buzzes/:id', async (req, res) => {
   try {
-    const buzz = await Buzz.findOne({ id: req.params.id }).lean();
+    const buzz = await getBuzzById(req.params.id);
     if (buzz) {
       res.json(buzz);
     } else {
@@ -933,20 +947,25 @@ app.get('/api/buzzes/:id', async (req, res) => {
 app.post('/api/buzzes', verifyToken, async (req, res) => {
   try {
     // Get user info
-    const user = await User.findOne({ id: req.userId }).lean();
+    const user = await getUserById(req.userId);
     const username = user ? user.username : (req.body.username || 'anonymous');
     const displayName = user ? user.displayName : username;
     
-    const newBuzz = new Buzz({
-      id: generateId(),
+    const buzzId = generateId();
+    const newBuzzData = {
+      id: buzzId,
       userId: req.userId,
       username: username,
       displayName: displayName,
       content: req.body.content,
       type: req.body.type || 'text',
-      media: req.body.media || { type: null, url: null },
+      mediaType: req.body.media?.type || null,
+      mediaUrl: req.body.media?.url || null,
       interests: req.body.interests || [],
-      location: req.body.location || null,
+      locationLatitude: req.body.location?.latitude || null,
+      locationLongitude: req.body.location?.longitude || null,
+      locationCity: req.body.location?.city || null,
+      locationCountry: req.body.location?.country || null,
       buzzType: req.body.buzzType || 'thought',
       eventDate: req.body.eventDate || null,
       pollOptions: req.body.pollOptions || [],
@@ -954,12 +973,66 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
       comments: 0,
       shares: 0,
       isLiked: false,
-    });
+    };
     
-    const savedBuzz = await newBuzz.save();
+    let savedBuzz;
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(`
+          INSERT INTO buzzes (
+            id, user_id, username, display_name, content, type, media_type, media_url,
+            interests, location_latitude, location_longitude, location_city, location_country,
+            buzz_type, event_date, poll_options, likes, comments, shares, is_liked
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          RETURNING *
+        `, [
+          newBuzzData.id,
+          newBuzzData.userId,
+          newBuzzData.username,
+          newBuzzData.displayName,
+          newBuzzData.content,
+          newBuzzData.type,
+          newBuzzData.mediaType,
+          newBuzzData.mediaUrl,
+          JSON.stringify(newBuzzData.interests),
+          newBuzzData.locationLatitude,
+          newBuzzData.locationLongitude,
+          newBuzzData.locationCity,
+          newBuzzData.locationCountry,
+          newBuzzData.buzzType,
+          newBuzzData.eventDate,
+          JSON.stringify(newBuzzData.pollOptions),
+          newBuzzData.likes,
+          newBuzzData.comments,
+          newBuzzData.shares,
+          newBuzzData.isLiked,
+        ]);
+        
+        savedBuzz = convertDbBuzzToObject(result.rows[0]);
+      } catch (saveError) {
+        console.error('Error saving buzz to database:', saveError);
+        savedBuzz = {
+          ...newBuzzData,
+          createdAt: new Date(),
+          media: {
+            type: newBuzzData.mediaType,
+            url: newBuzzData.mediaUrl,
+          },
+        };
+      }
+    } else {
+      savedBuzz = {
+        ...newBuzzData,
+        createdAt: new Date(),
+        media: {
+          type: newBuzzData.mediaType,
+          url: newBuzzData.mediaUrl,
+        },
+      };
+    }
     
     // Also add to in-memory array for backwards compatibility
-    buzzes.push(savedBuzz.toObject());
+    buzzes.push(savedBuzz);
     
     // Update user buzz count
     if (user) {
@@ -1202,17 +1275,12 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
-    // Get total count
-    const total = await User.countDocuments(query);
-    
     // Get paginated users
-    const startIndex = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedUsers = await User.find(query)
-      .select('-password')
-      .sort(sortObj)
-      .skip(startIndex)
-      .limit(parseInt(limit))
-      .lean();
+    const { users: paginatedUsers, total } = await getUsersPaginated(
+      parseInt(page),
+      parseInt(limit),
+      { role: req.query.role }
+    );
     
     res.json({
       success: true,
@@ -1249,16 +1317,12 @@ app.get('/api/admin/buzzes', verifyAdmin, async (req, res) => {
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
-    // Get total count
-    const total = await Buzz.countDocuments(query);
-    
     // Get paginated buzzes
-    const startIndex = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedBuzzes = await Buzz.find(query)
-      .sort(sortObj)
-      .skip(startIndex)
-      .limit(parseInt(limit))
-      .lean();
+    const { buzzes: paginatedBuzzes, total } = await getBuzzesPaginated(
+      parseInt(page),
+      parseInt(limit),
+      { userId: req.query.userId }
+    );
     
     res.json({
       success: true,
@@ -1941,7 +2005,7 @@ setInterval(() => {
 // Initialize database and start server
 const startServer = async () => {
   try {
-    // Connect to MongoDB
+    // Connect to PostgreSQL
     await connectDB();
     
     // Migrate initial data to database (seed data)
