@@ -445,8 +445,22 @@ const CreateProfileScreen: React.FC = () => {
         start={{x: 0, y: 0}}
         end={{x: 1, y: 0}}
         style={styles.header}>
-        <Text style={styles.headerTitle}>Create Profile</Text>
-        <Text style={styles.headerSubtitle}>Set up your buzz profile</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => {
+            // Check if we can go back, otherwise navigate to Login
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Login' as never);
+            }
+          }}>
+          <Icon name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Create Profile</Text>
+          <Text style={styles.headerSubtitle}>Set up your buzz profile</Text>
+        </View>
       </LinearGradient>
 
       <ScrollView
@@ -647,25 +661,56 @@ const CreateProfileScreen: React.FC = () => {
           </View>
         </Animatable.View>
 
-        {/* Create Profile Button */}
+        {/* Action Buttons */}
         <Animatable.View animation="fadeInUp" delay={700}>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={handleCreateProfile}>
-            <LinearGradient
-              colors={[theme.colors.primary, theme.colors.accent]}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.createButtonGradient}>
-              <Icon name={isVerifying ? "check-circle" : "send"} size={24} color="#FFFFFF" />
-            <Text style={styles.createButtonText}>
-              {mobileVerificationEnabled 
-                ? (isVerifying ? 'Verify & Create Profile' : 'Send Verification Code')
-                : 'Create Profile'
-              }
-            </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.cancelButton, {borderColor: theme.colors.textSecondary, marginRight: 12}]}
+              onPress={() => {
+                Alert.alert(
+                  'Cancel',
+                  'Are you sure you want to cancel? Your progress will be lost.',
+                  [
+                    {text: 'Continue Creating', style: 'cancel'},
+                    {
+                      text: 'Cancel',
+                      style: 'destructive',
+                      onPress: () => {
+                        // Check if we can go back, otherwise navigate to Login
+                        if (navigation.canGoBack()) {
+                          navigation.goBack();
+                        } else {
+                          navigation.navigate('Login' as never);
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}>
+              <Icon name="close" size={20} color={theme.colors.textSecondary} />
+              <Text style={[styles.cancelButtonText, {color: theme.colors.textSecondary}]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.createButton, {flex: 1}]}
+              onPress={handleCreateProfile}>
+              <LinearGradient
+                colors={[theme.colors.primary, theme.colors.accent]}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.createButtonGradient}>
+                <Icon name={isVerifying ? "check-circle" : "send"} size={24} color="#FFFFFF" />
+                <Text style={styles.createButtonText}>
+                  {mobileVerificationEnabled 
+                    ? (isVerifying ? 'Verify & Create Profile' : 'Send Verification Code')
+                    : 'Create Profile'
+                  }
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </Animatable.View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -744,8 +789,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  createButton: {
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    top: '50%',
+    transform: [{translateY: -12}],
+    zIndex: 10,
+    padding: 8,
+  },
+  headerTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
     marginTop: 20,
+    justifyContent: 'space-between',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 15,
+    borderWidth: 2,
+    minWidth: 100,
+  },
+  cancelButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  createButton: {
+    marginTop: 0,
   },
   createButtonGradient: {
     flexDirection: 'row',
