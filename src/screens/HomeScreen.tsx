@@ -372,13 +372,10 @@ const HomeScreen: React.FC = () => {
   };
   
   // Only show loading if we have absolutely no data at all
-  // Allow rendering with just buzzes even if user is null
-  if (!user && !authUser && !buzzes) {
-    return (
-      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
-        <Text style={{color: theme.colors.text}}>Loading...</Text>
-      </View>
-    );
+  // Show loading state while user/buzzes are being loaded (but only if authenticated)
+  // Don't block rendering if we have buzzes or user data
+  if (!user && !authUser && (!buzzes || buzzes.length === 0)) {
+    // This is OK - we'll show an empty state in the render
   }
 
   return (

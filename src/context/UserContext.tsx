@@ -529,28 +529,30 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     return (user?.subscribedChannels?.includes(channelId)) || false;
   };
 
+  // Ensure context value is always defined, even if some values are null/empty
+  const contextValue: UserContextType = {
+    user,
+    buzzes,
+    interests,
+    setUser,
+    addBuzz,
+    likeBuzz,
+    shareBuzz,
+    updateUserInterests,
+    getBuzzesByInterests,
+    getBuzzesByLocation,
+    getBuzzesByLocationAndInterests,
+    updateLocationSettings,
+    subscribeToChannel,
+    unsubscribeFromChannel,
+    blockUser,
+    unblockUser,
+    isBlocked,
+    isSubscribed,
+  };
+
   return (
-    <UserContext.Provider
-      value={{
-        user,
-        buzzes,
-        interests,
-        setUser,
-        addBuzz,
-        likeBuzz,
-        shareBuzz,
-        updateUserInterests,
-        getBuzzesByInterests,
-        getBuzzesByLocation,
-        getBuzzesByLocationAndInterests,
-        updateLocationSettings,
-        subscribeToChannel,
-        unsubscribeFromChannel,
-        blockUser,
-        unblockUser,
-        isBlocked,
-        isSubscribed,
-      }}>
+    <UserContext.Provider value={contextValue}>
       {children}
     </UserContext.Provider>
   );
