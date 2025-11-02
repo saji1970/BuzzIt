@@ -17,7 +17,6 @@ COPY server/config ./config/
 
 # Copy models directory (MongoDB models)
 COPY server/models ./models/
-COPY server/models/LiveStream.js ./models/
 
 # Copy db directory (database connection)
 COPY server/db ./db/
