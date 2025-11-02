@@ -45,18 +45,46 @@ app.get('/', (req, res) => {
   }
   // Otherwise, serve the admin panel HTML
   const indexPath = path.join(publicPath, 'index.html');
-  // Check if file exists, otherwise return error
   const fs = require('fs');
+  
+  // Check if file exists
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    console.error(`Admin panel HTML not found at: ${indexPath}`);
-    res.status(404).json({ 
-      error: 'Admin panel not found',
-      path: indexPath,
-      __dirname: __dirname,
-      message: 'Make sure public/index.html exists in the server directory'
-    });
+    // Try alternative paths
+    const altPaths = [
+      path.join(__dirname, 'public', 'index.html'),
+      path.join(process.cwd(), 'public', 'index.html'),
+      '/app/public/index.html',
+    ];
+    
+    let found = false;
+    for (const altPath of altPaths) {
+      if (fs.existsSync(altPath)) {
+        console.log(`Found admin panel at: ${altPath}`);
+        res.sendFile(altPath);
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      console.error(`Admin panel HTML not found. Checked paths:`);
+      console.error(`  Primary: ${indexPath}`);
+      altPaths.forEach(p => console.error(`  Alternative: ${p}`));
+      console.error(`  __dirname: ${__dirname}`);
+      console.error(`  process.cwd(): ${process.cwd()}`);
+      console.error(`  Files in ${publicPath}:`, fs.existsSync(publicPath) ? fs.readdirSync(publicPath) : 'directory does not exist');
+      
+      res.status(404).json({ 
+        error: 'Admin panel not found',
+        checkedPaths: [indexPath, ...altPaths],
+        __dirname: __dirname,
+        processCwd: process.cwd(),
+        publicPathExists: fs.existsSync(publicPath),
+        message: 'Make sure public/index.html exists in the server directory'
+      });
+    }
   }
 });
 
