@@ -4,7 +4,7 @@ const userInteractionSchema = new mongoose.Schema({
   userId: {
     type: String,
     required: true,
-    index: true,
+    // Index is created by compound index below, so we skip individual index to avoid duplicate
   },
   buzzId: {
     type: String,

@@ -8,10 +8,11 @@ const userSchema = new mongoose.Schema({
   },
   username: {
     type: String,
-    unique: true,
+    unique: true, // unique: true automatically creates an index
     required: true,
     lowercase: true,
     trim: true,
+    // Don't add index: true here since unique already creates one
   },
   password: {
     type: String,
@@ -91,7 +92,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-userSchema.index({ username: 1 });
+// Note: username index is handled by unique: true above, so we skip it here to avoid duplicate
 userSchema.index({ email: 1 });
 userSchema.index({ createdAt: -1 });
 

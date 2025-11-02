@@ -9,7 +9,7 @@ const buzzSchema = new mongoose.Schema({
   userId: {
     type: String,
     required: true,
-    index: true,
+    // Index is created by compound index below, so we skip individual index to avoid duplicate
   },
   username: {
     type: String,
