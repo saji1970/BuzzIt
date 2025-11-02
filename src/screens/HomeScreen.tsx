@@ -52,6 +52,15 @@ const HomeScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+
+  // Mock channel data (same as in SubscribedChannels)
+  const mockChannels = [
+    {id: '1', username: 'buzzuser', name: 'Your Story', avatar: null, type: 'channel'},
+    {id: '2', username: 'techguru', name: 'Tech Guru', avatar: null, type: 'channel'},
+    {id: '3', username: 'foodie', name: 'Food Lover', avatar: null, type: 'channel'},
+    {id: '4', username: 'adventurer', name: 'Adventure', avatar: null, type: 'channel'},
+    {id: '5', username: 'fitnesspro', name: 'Fitness Pro', avatar: null, type: 'channel'},
+  ];
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
@@ -191,13 +200,25 @@ const HomeScreen: React.FC = () => {
     setSearching(true);
     try {
       const response = await ApiService.getAllUsers();
+      let results: any[] = [];
+      
+      // Add users from API
       if (response.success && response.data) {
-        const filtered = response.data.filter((u: any) =>
+        const filteredUsers = response.data.filter((u: any) =>
           u.username?.toLowerCase().includes(query.toLowerCase()) ||
           u.displayName?.toLowerCase().includes(query.toLowerCase())
-        );
-        setSearchResults(filtered);
+        ).map((u: any) => ({...u, type: 'user'}));
+        results.push(...filteredUsers);
       }
+      
+      // Add channels from mock data
+      const filteredChannels = mockChannels.filter((c: any) =>
+        c.username?.toLowerCase().includes(query.toLowerCase()) ||
+        c.name?.toLowerCase().includes(query.toLowerCase())
+      );
+      results.push(...filteredChannels);
+      
+      setSearchResults(results);
     } catch (error) {
       console.error('Search error:', error);
       setSearchResults([]);
@@ -425,6 +446,18 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+      {/* Buzz Banner - Instagram Style */}
+      <View style={[styles.buzzBanner, {backgroundColor: theme.colors.surface}]}>
+        <View style={styles.buzzBannerContent}>
+          <Text style={[styles.buzzText, {color: theme.colors.text}]}>Buzz</Text>
+          <TouchableOpacity
+            style={styles.searchIconButton}
+            onPress={() => setShowSearch(true)}>
+            <Icon name="search" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Following Section - Instagram Style */}
       <View style={styles.followingContainer}>
         <SubscribedChannels onChannelPress={handleBuzzerPress} />
@@ -598,9 +631,17 @@ const HomeScreen: React.FC = () => {
                     )}
                   </View>
                   <View style={styles.userResultInfo}>
-                    <Text style={[styles.userResultName, {color: theme.colors.text}]}>
-                      {item.displayName || item.username}
-                    </Text>
+                    <View style={styles.userResultHeader}>
+                      <Text style={[styles.userResultName, {color: theme.colors.text}]}>
+                        {item.displayName || item.name || item.username}
+                      </Text>
+                      {item.type === 'channel' && (
+                        <View style={[styles.channelBadge, {backgroundColor: theme.colors.primary + '20'}]}>
+                          <Icon name="video-library" size={12} color={theme.colors.primary} />
+                          <Text style={[styles.channelBadgeText, {color: theme.colors.primary}]}>Channel</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={[styles.userResultUsername, {color: theme.colors.textSecondary}]}>
                       @{item.username}
                     </Text>
@@ -629,6 +670,26 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  buzzBanner: {
+    paddingTop: 50,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0',
+  },
+  buzzBannerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  buzzText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    letterSpacing: -0.5,
+  },
+  searchIconButton: {
+    padding: 4,
   },
   followingContainer: {
     backgroundColor: '#F0F0F0',
@@ -815,10 +876,27 @@ const styles = StyleSheet.create({
   userResultInfo: {
     flex: 1,
   },
+  userResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
+  },
   userResultName: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+  },
+  channelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 4,
+  },
+  channelBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   userResultUsername: {
     fontSize: 14,
