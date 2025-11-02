@@ -439,11 +439,40 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Check if it's an admin login
-    const admin = adminUsers.find(a => a.username === username);
-    if (admin) {
-      // For demo purposes, accept any password for admin
-      // In production, you would hash and compare passwords
+    // Check if it's an admin login (check both database and in-memory)
+    let admin = null;
+    
+    // Check in-memory adminUsers first (for backwards compatibility)
+    admin = adminUsers.find(a => a.username === username);
+    
+    // Also check database for admin users
+    if (!admin) {
+      const dbAdmin = await User.findOne({ 
+        username: username.toLowerCase(),
+        role: { $in: ['admin', 'super_admin'] }
+      });
+      if (dbAdmin) {
+        admin = { id: dbAdmin.id, username: dbAdmin.username, role: dbAdmin.role };
+        
+        // Check database admin password
+        if (dbAdmin.password) {
+          const isPasswordValid = await bcrypt.compare(password, dbAdmin.password);
+          if (isPasswordValid) {
+            const token = generateToken(dbAdmin.id);
+            const { password: _, ...adminWithoutPassword } = dbAdmin.toObject();
+            return res.json({
+              success: true,
+              user: adminWithoutPassword,
+              token,
+              isAdmin: true,
+            });
+          }
+        }
+      }
+    }
+    
+    // Handle in-memory admin (default password: "admin")
+    if (admin && password === 'admin') {
       const token = generateToken(admin.id);
       return res.json({
         success: true,
@@ -453,21 +482,46 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Regular user login
-    const user = users.find(u => u.username === username);
+    // Try to find user in database first
+    let user = await User.findOne({ username: username.toLowerCase() });
+    
+    // Fallback to in-memory array if not in database
+    if (!user) {
+      const memUser = users.find(u => u.username === username);
+      if (memUser) {
+        user = { toObject: () => memUser, ...memUser };
+      }
+    }
+    
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // For demo purposes, accept any password
-    // In production, you would hash and compare passwords
-    const token = generateToken(user.id);
+    // Handle both database user and in-memory user
+    const userObj = user.toObject ? user.toObject() : user;
+    const userPassword = user.password || userObj.password;
+    
+    if (!userPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, userPassword);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateToken(userObj.id || userObj._id);
+    const isAdmin = adminUsers.some(a => a.id === (userObj.id || userObj._id)) || 
+                   userObj.role === 'admin' || userObj.role === 'super_admin';
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = userObj;
 
     res.json({
       success: true,
-      user,
+      user: userWithoutPassword,
       token,
-      isAdmin: false,
+      isAdmin,
     });
   } catch (error) {
     console.error('Login error:', error);
