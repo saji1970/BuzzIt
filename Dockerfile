@@ -12,14 +12,11 @@ RUN npm ci --only=production
 # Copy all .js files
 COPY server/*.js ./
 
-# Copy config directory if it exists
-COPY server/config ./config/ 2>/dev/null || true
+# Copy config directory
+COPY server/config ./config/
 
-# Copy public directory (admin panel)
-COPY server/public ./public/
-
-# Verify public directory was copied
-RUN ls -la public/ || echo "WARNING: public directory not found"
+# Copy public directory (admin panel) - copy contents to public/
+COPY server/public/. ./public/
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
