@@ -11,6 +11,9 @@ RUN npm ci --only=production
 # Copy server files
 COPY server/ ./
 
+# Ensure public directory exists (admin panel)
+RUN mkdir -p public
+
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
 

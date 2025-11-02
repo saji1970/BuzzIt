@@ -30,7 +30,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files (admin panel) BEFORE other routes
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
 
 // Simple root endpoint - serve admin panel HTML, or API info if requested as JSON
 app.get('/', (req, res) => {
@@ -43,7 +44,20 @@ app.get('/', (req, res) => {
     });
   }
   // Otherwise, serve the admin panel HTML
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const indexPath = path.join(publicPath, 'index.html');
+  // Check if file exists, otherwise return error
+  const fs = require('fs');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error(`Admin panel HTML not found at: ${indexPath}`);
+    res.status(404).json({ 
+      error: 'Admin panel not found',
+      path: indexPath,
+      __dirname: __dirname,
+      message: 'Make sure public/index.html exists in the server directory'
+    });
+  }
 });
 
 // In-memory database (replace with real database in production)
