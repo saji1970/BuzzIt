@@ -107,15 +107,11 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const [user, setUserState] = useState<User | null>(null);
   const [buzzes, setBuzzes] = useState<Buzz[]>([]);
   const [interests] = useState<Interest[]>(defaultInterests);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     // Load user and buzzes on app start
-    const initialize = async () => {
-      await Promise.all([loadUser(), loadBuzzes()]);
-      setIsInitialized(true);
-    };
-    initialize();
+    loadUser();
+    loadBuzzes();
   }, []);
 
   const loadUser = async () => {
