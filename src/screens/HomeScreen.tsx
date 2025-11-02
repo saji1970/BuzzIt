@@ -568,6 +568,84 @@ const HomeScreen: React.FC = () => {
           onClose={handleCloseBuzzerProfile}
         />
       )}
+
+      {/* Search Modal */}
+      <Modal
+        visible={showSearch}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSearch(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
+                Search Users
+              </Text>
+              <TouchableOpacity onPress={() => setShowSearch(false)}>
+                <Icon name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[styles.searchInputContainer, {backgroundColor: theme.colors.background}]}>
+              <Icon name="search" size={20} color={theme.colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, {color: theme.colors.text}]}
+                placeholder="Search by username or name..."
+                placeholderTextColor={theme.colors.textSecondary}
+                value={searchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                  handleSearch(text);
+                }}
+                autoFocus
+              />
+              {searching && <Icon name="sync" size={20} color={theme.colors.primary} />}
+            </View>
+
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({item}) => (
+                <TouchableOpacity
+                  style={[styles.userResultItem, {backgroundColor: theme.colors.background}]}
+                  onPress={() => {
+                    setSelectedBuzzerId(item.id);
+                    setShowSearch(false);
+                  }}>
+                  <View style={[styles.userAvatar, {backgroundColor: theme.colors.primary}]}>
+                    {item.avatar ? (
+                      <Image source={{uri: item.avatar}} style={styles.userAvatarImage} />
+                    ) : (
+                      <Text style={styles.userAvatarText}>
+                        {item.username?.charAt(0).toUpperCase() || '?'}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.userResultInfo}>
+                    <Text style={[styles.userResultName, {color: theme.colors.text}]}>
+                      {item.displayName || item.username}
+                    </Text>
+                    <Text style={[styles.userResultUsername, {color: theme.colors.textSecondary}]}>
+                      @{item.username}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={24} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                searchQuery.trim() && !searching ? (
+                  <View style={styles.emptySearch}>
+                    <Icon name="person-search" size={48} color={theme.colors.textSecondary} />
+                    <Text style={[styles.emptySearchText, {color: theme.colors.textSecondary}]}>
+                      No users found
+                    </Text>
+                  </View>
+                ) : null
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
