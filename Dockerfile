@@ -8,11 +8,10 @@ COPY server/package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy server files
-COPY server/ ./
-
-# Ensure public directory exists (admin panel)
-RUN mkdir -p public
+# Copy server files (excluding node_modules)
+COPY server/*.js ./
+COPY server/config/ ./config/
+COPY server/public/ ./public/
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
