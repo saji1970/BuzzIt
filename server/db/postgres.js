@@ -35,9 +35,16 @@ const connectDB = async () => {
     console.log('🔌 Connecting to PostgreSQL...');
     console.log('📍 Connection string:', connectionString.replace(/:[^:@]+@/, ':****@')); // Hide password in logs
     
-    // Railway PostgreSQL requires SSL for internal connections
-    const isRailway = connectionString.includes('railway') || connectionString.includes('railway.internal');
+    // Railway PostgreSQL requires SSL for both internal and public connections
+    const isRailway = connectionString.includes('railway') || 
+                     connectionString.includes('railway.internal') ||
+                     connectionString.includes('rlwy.net') ||
+                     connectionString.includes('proxy.rlwy.net');
     const useSSL = isRailway || process.env.NODE_ENV === 'production';
+    
+    if (isRailway) {
+      console.log('🔒 Detected Railway PostgreSQL - SSL will be enabled');
+    }
     
     pool = new Pool({
       connectionString,
