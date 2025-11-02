@@ -37,8 +37,9 @@ app.get('/', (req, res) => {
   });
 });
 
-// Serve static files
+// Serve static files (admin panel)
 app.use(express.static('public'));
+app.use(express.static(__dirname + '/public'));
 
 // In-memory database (replace with real database in production)
 let users = [
