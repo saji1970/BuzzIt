@@ -16,12 +16,18 @@ COPY server/*.js ./
 COPY server/config ./config/
 
 # Copy public directory (admin panel)
-# First ensure public directory exists, then copy files
 RUN mkdir -p public
-COPY server/public/index.html ./public/index.html
+COPY server/public ./public
 
-# Verify files were copied
-RUN ls -la public/ && echo "Public directory contents:" && cat public/index.html | head -5 || echo "ERROR: index.html not found"
+# Verify admin panel file was copied
+RUN if [ ! -f public/index.html ]; then \
+      echo "ERROR: index.html not found!" && \
+      ls -la public/ && \
+      exit 1; \
+    else \
+      echo "✅ Admin panel HTML found" && \
+      ls -lh public/index.html; \
+    fi
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
