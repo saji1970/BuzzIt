@@ -107,11 +107,15 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const [user, setUserState] = useState<User | null>(null);
   const [buzzes, setBuzzes] = useState<Buzz[]>([]);
   const [interests] = useState<Interest[]>(defaultInterests);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     // Load user and buzzes on app start
-    loadUser();
-    loadBuzzes();
+    const initialize = async () => {
+      await Promise.all([loadUser(), loadBuzzes()]);
+      setIsInitialized(true);
+    };
+    initialize();
   }, []);
 
   const loadUser = async () => {
@@ -530,7 +534,8 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   // Ensure context value is always defined, even if some values are null/empty
-  const contextValue: UserContextType = {
+  // Use useMemo to prevent recreating the object on every render
+  const contextValue: UserContextType = React.useMemo(() => ({
     user,
     buzzes,
     interests,
@@ -549,8 +554,10 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     unblockUser,
     isBlocked,
     isSubscribed,
-  };
+  }), [user, buzzes, interests]);
 
+  // Always provide context value, even during initialization
+  // This ensures useUser hook can be called without errors
   return (
     <UserContext.Provider value={contextValue}>
       {children}
