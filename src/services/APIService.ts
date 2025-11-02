@@ -134,6 +134,15 @@ class ApiService {
         };
       }
 
+      // Handle direct response (like {available: boolean})
+      // If data doesn't have success field but has expected fields, treat as success
+      if (!data.success && !data.error && (data.available !== undefined || Object.keys(data).length > 0)) {
+        return {
+          success: true,
+          data,
+        };
+      }
+
       return {
         success: true,
         data,
@@ -223,24 +232,45 @@ class ApiService {
   }
 
   async checkUsernameAvailability(username: string): Promise<ApiResponse<{ available: boolean }>> {
-    const response = await this.makeRequest<{ available: boolean }>(`/api/users/check-username/${username}`);
-    // Handle both formats: {available: boolean} and {success: true, available: boolean}
-    if (response.success && response.data) {
+    try {
+      const response = await this.makeRequest<{ available: boolean }>(`/api/users/check-username/${username}`);
+      
+      // Handle both formats: {available: boolean} and {success: true, available: boolean}
+      if (response.success && response.data) {
+        // Check if data has available field
+        if (typeof response.data === 'object' && response.data !== null) {
+          if ('available' in response.data) {
+            return {
+              success: true,
+              data: { available: response.data.available }
+            };
+          }
+        }
+        // If data is the available value directly
+        return {
+          success: true,
+          data: { available: response.data as any }
+        };
+      }
+      
+      // If response failed but has error, default to available (better UX)
+      if (!response.success) {
+        console.warn('Username check failed, defaulting to available:', response.error);
+        return {
+          success: true,
+          data: { available: true }
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Username availability check error:', error);
+      // On error, default to allowing username (better UX)
       return {
         success: true,
-        data: typeof response.data === 'object' && 'available' in response.data
-          ? response.data
-          : { available: response.data as any }
+        data: { available: true }
       };
     }
-    // Fallback for direct {available: boolean} response
-    if (!response.success && 'available' in response) {
-      return {
-        success: true,
-        data: { available: (response as any).available }
-      };
-    }
-    return response;
   }
 
   // Buzzes
