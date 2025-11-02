@@ -168,7 +168,8 @@ const CreateProfileScreen: React.FC = () => {
           // Save updated user
           await AsyncStorage.setItem('authToken', result.token);
           await AsyncStorage.setItem('user', JSON.stringify(updateResponse.data));
-          setUser(updateResponse.data);
+          setUser(updateResponse.data); // Update UserContext
+          setUserData(updateResponse.data); // Update AuthContext so isAuthenticated becomes true
           updateUserInterests(selectedInterests);
           
           Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
