@@ -819,11 +819,60 @@ app.patch('/api/users/:id', verifyToken, async (req, res) => {
   }
 
   try {
-    const updatedUser = await User.findOneAndUpdate(
-      { id: req.params.id },
-      { $set: req.body },
-      { new: true }
-    ).select('-password').lean();
+    let updatedUser = null;
+    
+    if (db.isConnected()) {
+      // Build update query dynamically based on provided fields
+      const updateFields = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (req.body.displayName !== undefined) {
+        updateFields.push(`display_name = $${paramIndex++}`);
+        values.push(req.body.displayName);
+      }
+      if (req.body.email !== undefined) {
+        updateFields.push(`email = $${paramIndex++}`);
+        values.push(req.body.email);
+      }
+      if (req.body.bio !== undefined) {
+        updateFields.push(`bio = $${paramIndex++}`);
+        values.push(req.body.bio);
+      }
+      if (req.body.avatar !== undefined) {
+        updateFields.push(`avatar = $${paramIndex++}`);
+        values.push(req.body.avatar);
+      }
+      if (req.body.interests !== undefined) {
+        updateFields.push(`interests = $${paramIndex++}`);
+        values.push(JSON.stringify(req.body.interests));
+      }
+      if (req.body.subscribedChannels !== undefined) {
+        updateFields.push(`subscribed_channels = $${paramIndex++}`);
+        values.push(JSON.stringify(req.body.subscribedChannels));
+      }
+      if (req.body.blockedUsers !== undefined) {
+        updateFields.push(`blocked_users = $${paramIndex++}`);
+        values.push(JSON.stringify(req.body.blockedUsers));
+      }
+
+      if (updateFields.length > 0) {
+        updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(req.params.id);
+        
+        const result = await db.query(
+          `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex++} RETURNING *`,
+          values
+        );
+        
+        if (result.rows.length > 0) {
+          updatedUser = convertDbUserToObject(result.rows[0]);
+        }
+      } else {
+        // No fields to update, just get current user
+        updatedUser = await getUserById(req.params.id);
+      }
+    }
     
     if (updatedUser) {
       // Also update in-memory array
@@ -831,7 +880,8 @@ app.patch('/api/users/:id', verifyToken, async (req, res) => {
       if (memIndex !== -1) {
         users[memIndex] = { ...users[memIndex], ...req.body };
       }
-      res.json(updatedUser);
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
     } else {
       // Fallback to in-memory array
       const userIndex = users.findIndex(u => u.id === req.params.id);
@@ -1592,22 +1642,51 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
 app.patch('/api/live-streams/:id/viewers', async (req, res) => {
   try {
     const { action } = req.body; // 'increment' or 'decrement'
-    const stream = await LiveStream.findOne({ id: req.params.id });
     
-    if (!stream) {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    let result;
+    if (action === 'increment') {
+      result = await db.query(
+        'UPDATE live_streams SET viewers = viewers + 1 WHERE id = $1 RETURNING *',
+        [req.params.id]
+      );
+    } else if (action === 'decrement') {
+      result = await db.query(
+        'UPDATE live_streams SET viewers = GREATEST(viewers - 1, 0) WHERE id = $1 RETURNING *',
+        [req.params.id]
+      );
+    } else {
+      return res.status(400).json({ error: 'Invalid action. Use "increment" or "decrement"' });
+    }
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Live stream not found' });
     }
-
-    if (action === 'increment') {
-      stream.viewers += 1;
-    } else if (action === 'decrement' && stream.viewers > 0) {
-      stream.viewers -= 1;
-    }
-
-    await stream.save();
+    
+    const row = result.rows[0];
+    const stream = {
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      title: row.title,
+      description: row.description,
+      streamUrl: row.stream_url,
+      thumbnailUrl: row.thumbnail_url,
+      isLive: row.is_live,
+      viewers: row.viewers,
+      category: row.category,
+      tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+    };
+    
     res.json({
       success: true,
-      data: { viewers: stream.viewers },
+      data: stream,
     });
   } catch (error) {
     console.error('Update viewers error:', error);
@@ -1701,28 +1780,39 @@ app.get('/api/recommendations/buzzes', verifyToken, async (req, res) => {
     const { limit = 50 } = req.query;
 
     // Get current user
-    const currentUser = await User.findOne({ id: userId }).lean();
+    const currentUser = await getUserById(userId);
     if (!currentUser) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Get user interactions
-    const interactions = await UserInteraction.find({ userId })
-      .sort({ timestamp: -1 })
-      .limit(100)
-      .lean();
+    let interactions = [];
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(
+          'SELECT * FROM user_interactions WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 100',
+          [userId]
+        );
+        interactions = result.rows.map(row => ({
+          id: row.id,
+          userId: row.user_id,
+          buzzId: row.buzz_id,
+          type: row.type,
+          timestamp: row.timestamp,
+          metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
+        }));
+      } catch (dbError) {
+        console.error('Database interactions error:', dbError);
+      }
+    }
 
     // Get user's buzzes
-    const userBuzzes = await Buzz.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    let userBuzzes = await getAllBuzzes({ userId });
+    userBuzzes = userBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50);
 
     // Get all buzzes
-    const allBuzzes = await Buzz.find({})
-      .sort({ createdAt: -1 })
-      .limit(500)
-      .lean();
+    let allBuzzes = await getAllBuzzes({});
+    allBuzzes = allBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 500);
 
     // Analyze preferences
     const preferences = RecommendationEngine.analyzeUserPreferences(
@@ -1763,19 +1853,40 @@ app.post('/api/interactions', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Buzz ID and type are required' });
     }
 
-    const interaction = new UserInteraction({
-      userId: req.userId,
-      buzzId,
-      type,
-      metadata: metadata || {},
-    });
-
-    await interaction.save();
-
-    res.json({
-      success: true,
-      data: interaction.toObject(),
-    });
+    if (db.isConnected()) {
+      try {
+        const result = await db.query(`
+          INSERT INTO user_interactions (user_id, buzz_id, type, metadata)
+          VALUES ($1, $2, $3, $4)
+          RETURNING *
+        `, [
+          req.userId,
+          buzzId,
+          type,
+          JSON.stringify(metadata || {}),
+        ]);
+        
+        const row = result.rows[0];
+        const interaction = {
+          id: row.id,
+          userId: row.user_id,
+          buzzId: row.buzz_id,
+          type: row.type,
+          timestamp: row.timestamp,
+          metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
+        };
+        
+        res.json({
+          success: true,
+          data: interaction,
+        });
+      } catch (saveError) {
+        console.error('Error saving interaction:', saveError);
+        res.status(500).json({ error: 'Failed to create interaction' });
+      }
+    } else {
+      res.status(503).json({ error: 'Database not available' });
+    }
   } catch (error) {
     console.error('Create interaction error:', error);
     res.status(500).json({ error: 'Failed to create interaction' });
@@ -1784,23 +1895,58 @@ app.post('/api/interactions', verifyToken, async (req, res) => {
 
 app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
   try {
-    const stream = await LiveStream.findOne({ id: req.params.id });
+    let stream = null;
     
-    if (!stream) {
-      return res.status(404).json({ error: 'Live stream not found' });
+    if (db.isConnected()) {
+      try {
+        // First check if stream exists and get user ID
+        const checkResult = await db.query('SELECT * FROM live_streams WHERE id = $1', [req.params.id]);
+        if (checkResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Live stream not found' });
+        }
+        
+        const row = checkResult.rows[0];
+        if (row.user_id !== req.userId) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        
+        // Update stream
+        const result = await db.query(
+          'UPDATE live_streams SET is_live = false, ended_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+          [req.params.id]
+        );
+        
+        if (result.rows.length > 0) {
+          const updatedRow = result.rows[0];
+          stream = {
+            id: updatedRow.id,
+            userId: updatedRow.user_id,
+            username: updatedRow.username,
+            displayName: updatedRow.display_name,
+            title: updatedRow.title,
+            description: updatedRow.description,
+            streamUrl: updatedRow.stream_url,
+            thumbnailUrl: updatedRow.thumbnail_url,
+            isLive: updatedRow.is_live,
+            viewers: updatedRow.viewers,
+            category: updatedRow.category,
+            tags: typeof updatedRow.tags === 'string' ? JSON.parse(updatedRow.tags) : (updatedRow.tags || []),
+            startedAt: updatedRow.started_at,
+            endedAt: updatedRow.ended_at,
+          };
+        }
+      } catch (dbError) {
+        console.error('Database stream end error:', dbError);
+        return res.status(500).json({ error: 'Failed to end live stream' });
+      }
+    } else {
+      return res.status(503).json({ error: 'Database not available' });
     }
-
-    if (stream.userId !== req.userId) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    stream.isLive = false;
-    stream.endedAt = new Date();
-    await stream.save();
 
     res.json({
       success: true,
-      message: 'Live stream ended',
+      data: stream,
+      message: 'Live stream ended successfully',
     });
   } catch (error) {
     console.error('End live stream error:', error);
@@ -2166,8 +2312,8 @@ const startServer = async () => {
     
     // If database connection fails, still start server in fallback mode
     // but log the error clearly
-    if (error.message && error.message.includes('Mongo')) {
-      console.error('⚠️ MongoDB connection failed, starting in fallback mode');
+    if (error.message && (error.message.includes('PostgreSQL') || error.message.includes('Database'))) {
+      console.error('⚠️ PostgreSQL connection failed, starting in fallback mode');
       app.listen(PORT, '0.0.0.0', () => {
         console.log(`⚠️ Server running in fallback mode (no database)`);
         console.log(`API URL: http://0.0.0.0:${PORT}`);
@@ -2187,75 +2333,139 @@ const startServer = async () => {
 // Migrate initial data from memory to database
 const migrateInitialData = async () => {
   try {
+    if (!db.isConnected()) {
+      console.log('⚠️ Database not connected, skipping migration');
+      return;
+    }
+
     console.log('🔄 Migrating initial data to database...');
     
     // Migrate users
-    const existingUsers = await User.countDocuments();
-    if (existingUsers === 0 && users.length > 0) {
-      console.log('📦 Migrating users to database...');
+    const userCountResult = await db.query('SELECT COUNT(*) as count FROM users');
+    const existingUsers = parseInt(userCountResult.rows[0].count) || 0;
+    
+    if (users.length > 0) {
+      console.log(`📦 Migrating ${users.length} users to database...`);
+      let migratedCount = 0;
       for (const user of users) {
         try {
-          const userDoc = new User({
-            ...user,
-            createdAt: new Date(user.createdAt || Date.now()),
-          });
-          await userDoc.save();
+          await db.query(`
+            INSERT INTO users (
+              id, username, display_name, email, mobile_number, bio, avatar,
+              date_of_birth, interests, followers, following, buzz_count,
+              subscribed_channels, blocked_users, is_verified, role, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            ON CONFLICT (id) DO NOTHING
+          `, [
+            user.id,
+            user.username?.toLowerCase() || '',
+            user.displayName || user.username,
+            user.email || `${user.username}@buzzit.app`,
+            user.mobileNumber || '',
+            user.bio || '',
+            user.avatar,
+            user.dateOfBirth,
+            JSON.stringify(user.interests || []),
+            user.followers || 0,
+            user.following || 0,
+            user.buzzCount || 0,
+            JSON.stringify(user.subscribedChannels || []),
+            JSON.stringify(user.blockedUsers || []),
+            user.isVerified || false,
+            user.role || 'user',
+            new Date(user.createdAt || Date.now()),
+          ]);
+          migratedCount++;
         } catch (err) {
-          if (err.code !== 11000) { // Ignore duplicate key errors
+          if (err.code !== '23505') { // Ignore duplicate key errors
             console.error('Error migrating user:', err);
           }
         }
       }
-      console.log(`✅ Migrated ${users.length} users`);
+      console.log(`✅ Migrated ${migratedCount} users (${users.length - migratedCount} already existed)`);
     }
     
     // Migrate buzzes
-    const existingBuzzes = await Buzz.countDocuments();
-    if (existingBuzzes === 0 && buzzes.length > 0) {
-      console.log('📦 Migrating buzzes to database...');
+    const buzzCountResult = await db.query('SELECT COUNT(*) as count FROM buzzes');
+    const existingBuzzes = parseInt(buzzCountResult.rows[0].count) || 0;
+    
+    if (buzzes.length > 0) {
+      console.log(`📦 Migrating ${buzzes.length} buzzes to database...`);
+      let migratedCount = 0;
       for (const buzz of buzzes) {
         try {
-          const buzzDoc = new Buzz({
-            ...buzz,
-            createdAt: new Date(buzz.createdAt || Date.now()),
-          });
-          await buzzDoc.save();
+          await db.query(`
+            INSERT INTO buzzes (
+              id, user_id, username, display_name, content, type, media_type, media_url,
+              interests, location_latitude, location_longitude, location_city, location_country,
+              buzz_type, event_date, poll_options, likes, comments, shares, is_liked, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            ON CONFLICT (id) DO NOTHING
+          `, [
+            buzz.id,
+            buzz.userId,
+            buzz.username || '',
+            buzz.displayName || buzz.username,
+            buzz.content || '',
+            buzz.type || 'text',
+            buzz.media?.type || null,
+            buzz.media?.url || null,
+            JSON.stringify(buzz.interests || []),
+            buzz.location?.latitude || null,
+            buzz.location?.longitude || null,
+            buzz.location?.city || null,
+            buzz.location?.country || null,
+            buzz.buzzType || 'thought',
+            buzz.eventDate || null,
+            JSON.stringify(buzz.pollOptions || []),
+            buzz.likes || 0,
+            buzz.comments || 0,
+            buzz.shares || 0,
+            buzz.isLiked || false,
+            new Date(buzz.createdAt || Date.now()),
+          ]);
+          migratedCount++;
         } catch (err) {
-          if (err.code !== 11000) {
+          if (err.code !== '23505') {
             console.error('Error migrating buzz:', err);
           }
         }
       }
-      console.log(`✅ Migrated ${buzzes.length} buzzes`);
+      console.log(`✅ Migrated ${migratedCount} buzzes (${buzzes.length - migratedCount} already existed)`);
     }
     
     // Create admin user if doesn't exist (with password)
-    const adminExists = await User.findOne({ username: 'admin' });
-    if (!adminExists) {
+    const adminResult = await db.query('SELECT * FROM users WHERE username = $1', ['admin']);
+    if (adminResult.rows.length === 0) {
       // Hash admin password (default: "admin")
       const hashedPassword = await bcrypt.hash('admin', 10);
-      const adminUser = new User({
-        id: 'admin-1',
-        username: 'admin',
-        email: 'admin@buzzit.app',
-        displayName: 'Admin',
-        password: hashedPassword,
-        role: 'super_admin',
-        isVerified: true,
-        createdAt: new Date(),
-      });
-      await adminUser.save();
+      await db.query(`
+        INSERT INTO users (
+          id, username, display_name, email, password, role, is_verified, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        'admin-1',
+        'admin',
+        'Admin',
+        'admin@buzzit.app',
+        hashedPassword,
+        'super_admin',
+        true,
+        new Date(),
+      ]);
       console.log('✅ Created admin user (username: admin, password: admin)');
-    } else if (!adminExists.password) {
-      // If admin exists but has no password, add it
+    } else if (!adminResult.rows[0].password) {
+      // If admin exists but has no password, add one
       const hashedPassword = await bcrypt.hash('admin', 10);
-      await User.updateOne({ username: 'admin' }, { password: hashedPassword });
-      console.log('✅ Added password to existing admin user');
+      await db.query('UPDATE users SET password = $1 WHERE username = $2', [hashedPassword, 'admin']);
+      console.log('✅ Updated admin user with password');
     }
     
-    console.log('✅ Migration complete');
+    console.log('✅ Migration completed');
   } catch (error) {
     console.error('❌ Migration error:', error);
+    console.error('Migration error stack:', error.stack);
+    // Don't throw - allow server to start even if migration fails
   }
 };
 
