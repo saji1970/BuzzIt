@@ -6,7 +6,15 @@ const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
 const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
+const { connectDB } = require('./db/connection');
 require('dotenv').config();
+
+// Import database models
+const User = require('./models/User');
+const Buzz = require('./models/Buzz');
+const VerificationCode = require('./models/VerificationCode');
+const SocialAccount = require('./models/SocialAccount');
+const Subscription = require('./models/Subscription');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -226,7 +234,7 @@ const verifyToken = (req, res, next) => {
 };
 
 // Middleware to verify admin access
-const verifyAdmin = (req, res, next) => {
+const verifyAdmin = async (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
@@ -235,15 +243,25 @@ const verifyAdmin = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const admin = adminUsers.find(a => a.id === decoded.userId);
     
-    if (!admin) {
-      return res.status(403).json({ error: 'Admin access required' });
+    // Check in database first
+    const admin = await User.findOne({ id: decoded.userId });
+    
+    if (admin && (admin.role === 'admin' || admin.role === 'super_admin')) {
+      req.adminId = decoded.userId;
+      req.adminRole = admin.role;
+      next();
+    } else {
+      // Fallback to in-memory adminUsers
+      const adminUser = adminUsers.find(a => a.id === decoded.userId);
+      if (adminUser) {
+        req.adminId = decoded.userId;
+        req.adminRole = adminUser.role;
+        next();
+      } else {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
     }
-    
-    req.adminId = decoded.userId;
-    req.adminRole = admin.role;
-    next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -333,26 +351,36 @@ app.post('/api/auth/verify-code', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Check verification code
-    const storedData = verificationCodes.get(verificationId);
+    // Check verification code in database
+    const storedData = await VerificationCode.findOne({ verificationId });
     
-    if (!storedData) {
+    // Fallback to in-memory Map
+    const memStoredData = verificationCodes.get(verificationId);
+    const finalStoredData = storedData || (memStoredData ? {
+      code: memStoredData.code,
+      mobileNumber: memStoredData.mobileNumber,
+      username: memStoredData.username,
+      expiresAt: new Date(memStoredData.expiresAt),
+    } : null);
+    
+    if (!finalStoredData) {
       return res.status(400).json({ error: 'Invalid verification ID' });
     }
 
-    if (storedData.expiresAt < Date.now()) {
-      verificationCodes.delete(verificationId);
+    if (new Date(finalStoredData.expiresAt) < new Date()) {
+      if (storedData) await VerificationCode.deleteOne({ verificationId });
+      if (memStoredData) verificationCodes.delete(verificationId);
       return res.status(400).json({ error: 'Verification code expired' });
     }
 
-    if (storedData.mobileNumber !== mobileNumber || storedData.code !== code) {
+    if (finalStoredData.mobileNumber !== mobileNumber || finalStoredData.code !== code) {
       return res.status(400).json({ error: 'Invalid verification code' });
     }
 
-    // Create new user
-    const newUser = {
+    // Create new user in database
+    const newUser = new User({
       id: generateId(),
-      username: storedData.username,
+      username: storedData.username.toLowerCase(),
       mobileNumber: mobileNumber,
       displayName: storedData.username,
       email: `${storedData.username}@buzzit.app`,
@@ -362,23 +390,28 @@ app.post('/api/auth/verify-code', async (req, res) => {
       followers: 0,
       following: 0,
       buzzCount: 0,
-      createdAt: new Date().toISOString(),
       subscribedChannels: [],
       blockedUsers: [],
       isVerified: true,
-    };
+    });
 
-    users.push(newUser);
+    const savedUser = await newUser.save();
+    
+    // Also add to in-memory array for backwards compatibility
+    users.push(savedUser.toObject());
 
     // Generate JWT token
-    const token = generateToken(newUser.id);
+    const token = generateToken(savedUser.id);
 
     // Clean up verification code
-    verificationCodes.delete(verificationId);
+    await VerificationCode.deleteOne({ verificationId });
 
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = savedUser.toObject();
+    
     res.json({
       success: true,
-      user: newUser,
+      user: userWithoutPassword,
       token,
     });
   } catch (error) {
@@ -432,63 +465,114 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // User endpoints
-app.get('/api/users', (req, res) => {
-  res.json(users);
-});
-
-app.get('/api/users/me', verifyToken, (req, res) => {
-  const user = users.find(u => u.id === req.userId);
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+app.get('/api/users', async (req, res) => {
+  try {
+    const allUsers = await User.find({}).select('-password').lean();
+    // Merge with in-memory users (for backwards compatibility)
+    const memUserIds = new Set(users.map(u => u.id));
+    const dbUserIds = new Set(allUsers.map(u => u.id));
+    const uniqueMemUsers = users.filter(u => !dbUserIds.has(u.id));
+    res.json([...allUsers, ...uniqueMemUsers]);
+  } catch (error) {
+    console.error('Get users error:', error);
+    // Fallback to in-memory array
+    res.json(users);
   }
 });
 
-app.get('/api/users/:id', (req, res) => {
-  const user = users.find(u => u.id === req.params.id);
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+app.get('/api/users/me', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.userId }).select('-password').lean();
+    if (user) {
+      res.json(user);
+    } else {
+      // Fallback to in-memory array
+      const memUser = users.find(u => u.id === req.userId);
+      if (memUser) {
+        res.json(memUser);
+      } else {
+        res.status(404).json({ error: 'User not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({ error: 'Failed to get user' });
   }
 });
 
-app.post('/api/users', (req, res) => {
-  // Validate required fields
-  if (!req.body.username) {
-    return res.status(400).json({ error: 'Username is required' });
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.params.id }).select('-password').lean();
+    if (user) {
+      res.json(user);
+    } else {
+      // Fallback to in-memory array
+      const memUser = users.find(u => u.id === req.params.id);
+      if (memUser) {
+        res.json(memUser);
+      } else {
+        res.status(404).json({ error: 'User not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to get user' });
   }
+});
 
-  // Check if username already exists
-  const existingUser = users.find(u => u.username.toLowerCase() === req.body.username.toLowerCase());
-  if (existingUser) {
-    return res.status(400).json({ 
-      error: 'Username already exists',
-      message: `The username "${req.body.username}" is already taken. Please choose another username.`
+app.post('/api/users', async (req, res) => {
+  try {
+    // Validate required fields
+    if (!req.body.username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    // Check if username already exists (case-insensitive)
+    const existingUser = await User.findOne({ 
+      username: req.body.username.toLowerCase() 
     });
-  }
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'Username already exists',
+        message: `The username "${req.body.username}" is already taken. Please choose another username.`
+      });
+    }
 
-  const newUser = {
-    id: generateId(),
-    username: req.body.username,
-    displayName: req.body.displayName || req.body.username,
-    email: req.body.email || `${req.body.username}@buzzit.app`,
-    mobileNumber: req.body.mobileNumber || '',
-    bio: req.body.bio || '',
-    avatar: req.body.avatar || null,
-    dateOfBirth: req.body.dateOfBirth || null,
-    interests: req.body.interests || [],
-    followers: 0,
-    following: 0,
-    buzzCount: 0,
-    createdAt: new Date().toISOString(),
-    subscribedChannels: [],
-    blockedUsers: [],
-    isVerified: false,
-  };
-  users.push(newUser);
-  res.status(201).json(newUser);
+    const newUser = new User({
+      id: generateId(),
+      username: req.body.username.toLowerCase(),
+      displayName: req.body.displayName || req.body.username,
+      email: req.body.email || `${req.body.username}@buzzit.app`,
+      mobileNumber: req.body.mobileNumber || '',
+      bio: req.body.bio || '',
+      avatar: req.body.avatar || null,
+      dateOfBirth: req.body.dateOfBirth || null,
+      interests: req.body.interests || [],
+      followers: 0,
+      following: 0,
+      buzzCount: 0,
+      subscribedChannels: [],
+      blockedUsers: [],
+      isVerified: false,
+    });
+    
+    const savedUser = await newUser.save();
+    
+    // Also add to in-memory array for backwards compatibility during transition
+    users.push(savedUser.toObject());
+    
+    res.status(201).json(savedUser.toObject());
+  } catch (error) {
+    console.error('Create user error:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        error: 'Username already exists',
+        message: `The username "${req.body.username}" is already taken.`
+      });
+    }
+    res.status(500).json({ error: 'Failed to create user' });
+  }
 });
 
 app.patch('/api/users/:id', verifyToken, (req, res) => {
@@ -533,12 +617,23 @@ app.get('/api/buzzes', (req, res) => {
   res.json(filteredBuzzes);
 });
 
-app.get('/api/buzzes/:id', (req, res) => {
-  const buzz = buzzes.find(b => b.id === req.params.id);
-  if (buzz) {
-    res.json(buzz);
-  } else {
-    res.status(404).json({ error: 'Buzz not found' });
+app.get('/api/buzzes/:id', async (req, res) => {
+  try {
+    const buzz = await Buzz.findOne({ id: req.params.id }).lean();
+    if (buzz) {
+      res.json(buzz);
+    } else {
+      // Fallback to in-memory array
+      const memBuzz = buzzes.find(b => b.id === req.params.id);
+      if (memBuzz) {
+        res.json(memBuzz);
+      } else {
+        res.status(404).json({ error: 'Buzz not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Get buzz error:', error);
+    res.status(500).json({ error: 'Failed to get buzz' });
   }
 });
 
@@ -772,36 +867,35 @@ app.get('/api/admin/dashboard', verifyAdmin, (req, res) => {
   }
 });
 
-app.get('/api/admin/users', verifyAdmin, (req, res) => {
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 20, search = '', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     
-    let filteredUsers = users;
-    
-    // Search filter
+    // Build query
+    let query = {};
     if (search) {
-      filteredUsers = users.filter(u => 
-        u.username.toLowerCase().includes(search.toLowerCase()) ||
-        u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase())
-      );
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { displayName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
     }
     
-    // Sort
-    filteredUsers.sort((a, b) => {
-      const aVal = a[sortBy];
-      const bVal = b[sortBy];
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
-    });
+    // Build sort object
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
-    // Pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+    // Get total count
+    const total = await User.countDocuments(query);
+    
+    // Get paginated users
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedUsers = await User.find(query)
+      .select('-password')
+      .sort(sortObj)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .lean();
     
     res.json({
       success: true,
@@ -810,8 +904,8 @@ app.get('/api/admin/users', verifyAdmin, (req, res) => {
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: filteredUsers.length,
-          pages: Math.ceil(filteredUsers.length / limit),
+          total: total,
+          pages: Math.ceil(total / parseInt(limit)),
         },
       },
     });
@@ -869,21 +963,38 @@ app.get('/api/admin/buzzes', verifyAdmin, (req, res) => {
   }
 });
 
-app.delete('/api/admin/users/:id', verifyAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
-    const userIndex = users.findIndex(u => u.id === userId);
     
-    if (userIndex === -1) {
-      return res.status(404).json({ error: 'User not found' });
+    // Delete from database
+    const deletedUser = await User.findOneAndDelete({ id: userId });
+    
+    if (deletedUser) {
+      // Delete related data
+      await Buzz.deleteMany({ userId });
+      await SocialAccount.deleteMany({ userId });
+      await Subscription.deleteMany({ userId });
+      
+      // Also remove from in-memory arrays
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex !== -1) users.splice(userIndex, 1);
+      buzzes = buzzes.filter(b => b.userId !== userId);
+      socialAccounts = socialAccounts.filter(s => s.userId !== userId);
+      
+      res.json({ success: true, message: 'User deleted successfully' });
+    } else {
+      // Fallback to in-memory array
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex !== -1) {
+        users.splice(userIndex, 1);
+        buzzes = buzzes.filter(b => b.userId !== userId);
+        socialAccounts = socialAccounts.filter(s => s.userId !== userId);
+        res.json({ success: true, message: 'User deleted successfully' });
+      } else {
+        res.status(404).json({ error: 'User not found' });
+      }
     }
-    
-    // Remove user and their buzzes
-    users.splice(userIndex, 1);
-    buzzes = buzzes.filter(b => b.userId !== userId);
-    socialAccounts = socialAccounts.filter(s => s.userId !== userId);
-    
-    res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
@@ -1212,12 +1323,101 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000); // 1 hour
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
-  console.log(`API URL: http://0.0.0.0:${PORT}`);
-  console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
-});
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Connect to MongoDB
+    await connectDB();
+    
+    // Migrate initial data to database (seed data)
+    await migrateInitialData();
+    
+    // Start server
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
+      console.log(`API URL: http://0.0.0.0:${PORT}`);
+      console.log(`💾 Database: MongoDB connected`);
+      console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    // Start server anyway (fallback mode)
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`⚠️ Server running in fallback mode (no database)`);
+      console.log(`API URL: http://0.0.0.0:${PORT}`);
+    });
+  }
+};
+
+// Migrate initial data from memory to database
+const migrateInitialData = async () => {
+  try {
+    console.log('🔄 Migrating initial data to database...');
+    
+    // Migrate users
+    const existingUsers = await User.countDocuments();
+    if (existingUsers === 0 && users.length > 0) {
+      console.log('📦 Migrating users to database...');
+      for (const user of users) {
+        try {
+          const userDoc = new User({
+            ...user,
+            createdAt: new Date(user.createdAt || Date.now()),
+          });
+          await userDoc.save();
+        } catch (err) {
+          if (err.code !== 11000) { // Ignore duplicate key errors
+            console.error('Error migrating user:', err);
+          }
+        }
+      }
+      console.log(`✅ Migrated ${users.length} users`);
+    }
+    
+    // Migrate buzzes
+    const existingBuzzes = await Buzz.countDocuments();
+    if (existingBuzzes === 0 && buzzes.length > 0) {
+      console.log('📦 Migrating buzzes to database...');
+      for (const buzz of buzzes) {
+        try {
+          const buzzDoc = new Buzz({
+            ...buzz,
+            createdAt: new Date(buzz.createdAt || Date.now()),
+          });
+          await buzzDoc.save();
+        } catch (err) {
+          if (err.code !== 11000) {
+            console.error('Error migrating buzz:', err);
+          }
+        }
+      }
+      console.log(`✅ Migrated ${buzzes.length} buzzes`);
+    }
+    
+    // Create admin user if doesn't exist
+    const adminExists = await User.findOne({ username: 'admin' });
+    if (!adminExists) {
+      const adminUser = new User({
+        id: 'admin-1',
+        username: 'admin',
+        email: 'admin@buzzit.app',
+        displayName: 'Admin',
+        role: 'super_admin',
+        isVerified: true,
+        createdAt: new Date(),
+      });
+      await adminUser.save();
+      console.log('✅ Created admin user');
+    }
+    
+    console.log('✅ Migration complete');
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+  }
+};
+
+// Start the server
+startServer();
 
 // Export for testing
 module.exports = app;

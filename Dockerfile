@@ -15,7 +15,7 @@ COPY server/*.js ./
 # Copy config directory
 COPY server/config ./config/
 
-# Copy public directory (admin panel) - copy the file explicitly
+# Copy public directory (admin panel)
 RUN mkdir -p public
 COPY server/public/index.html ./public/index.html
 
