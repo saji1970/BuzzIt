@@ -12,16 +12,12 @@ RUN npm ci --only=production
 # Copy all .js files
 COPY server/*.js ./
 
-# Copy config directory if it exists
-COPY server/config* ./config/ 2>/dev/null || true
-COPY server/config ./config/ 2>/dev/null || true
+# Copy config directory
+COPY server/config ./config/
 
-# Copy public directory (admin panel)
-# Check if public directory exists and copy it
+# Copy public directory (admin panel) - copy the file explicitly
 RUN mkdir -p public
-
-# Copy the index.html file - handle case where file might not exist
-COPY --chown=node:node server/public/index.html ./public/index.html
+COPY server/public/index.html ./public/index.html
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
