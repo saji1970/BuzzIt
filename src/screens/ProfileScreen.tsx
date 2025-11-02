@@ -48,7 +48,7 @@ const ProfileScreen: React.FC = () => {
     }
   }, [user]);
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!editForm.username.trim() || !editForm.displayName.trim()) {
       Alert.alert('Error', 'Username and display name are required');
       return;
@@ -59,21 +59,53 @@ const ProfileScreen: React.FC = () => {
       return;
     }
 
-    const updatedUser: User = {
-      ...user!,
-      username: editForm.username.trim(),
-      displayName: editForm.displayName.trim(),
-      email: editForm.email.trim(),
-      bio: editForm.bio.trim(),
-      city: editForm.city.trim(),
-      country: editForm.country.trim(),
-      interests: selectedInterests,
-    };
+    try {
+      // Update profile on backend
+      const response = await ApiService.updateUser(user!.id, {
+        displayName: editForm.displayName.trim(),
+        email: editForm.email.trim(),
+        bio: editForm.bio.trim(),
+        city: editForm.city.trim(),
+        country: editForm.country.trim(),
+        interests: selectedInterests,
+      });
 
-    setUser(updatedUser);
-    updateUserInterests(selectedInterests);
-    setIsEditing(false);
-    Alert.alert('Success', 'Profile updated successfully!');
+      if (response.success && response.data) {
+        const updatedUser: User = {
+          ...user!,
+          ...response.data,
+          interests: selectedInterests,
+        };
+
+        setUser(updatedUser);
+        updateUserInterests(selectedInterests);
+        setIsEditing(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      } else {
+        // Backend update failed, still save locally
+        const updatedUser: User = {
+          ...user!,
+          username: editForm.username.trim(),
+          displayName: editForm.displayName.trim(),
+          email: editForm.email.trim(),
+          bio: editForm.bio.trim(),
+          city: editForm.city.trim(),
+          country: editForm.country.trim(),
+          interests: selectedInterests,
+        };
+
+        setUser(updatedUser);
+        updateUserInterests(selectedInterests);
+        setIsEditing(false);
+        Alert.alert(
+          'Partial Success',
+          'Profile updated locally, but failed to sync with server. Some changes may not be visible to other users.'
+        );
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
   };
 
   const handleLogout = () => {
@@ -394,6 +426,7 @@ const ProfileScreen: React.FC = () => {
     </Animatable.View>
   );
 
+  // If no user, show message to create profile first
   if (!user) {
     return (
       <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
@@ -402,12 +435,20 @@ const ProfileScreen: React.FC = () => {
           start={{x: 0, y: 0}}
           end={{x: 1, y: 0}}
           style={styles.header}>
-          <Text style={styles.headerTitle}>Create Profile</Text>
-          <Text style={styles.headerSubtitle}>Let's get you started!</Text>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerSubtitle}>Please login or create a profile</Text>
         </LinearGradient>
 
         <ScrollView style={styles.content}>
-          {renderProfileForm()}
+          <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, minHeight: 400}}>
+            <Icon name="person" size={64} color={theme.colors.textSecondary} />
+            <Text style={[styles.sectionTitle, {color: theme.colors.text, marginTop: 20, textAlign: 'center'}]}>
+              No Profile Found
+            </Text>
+            <Text style={[styles.sectionSubtitle, {color: theme.colors.textSecondary, marginTop: 10, textAlign: 'center'}]}>
+              Please login or create a profile to view and edit your profile information.
+            </Text>
+          </View>
         </ScrollView>
       </View>
     );

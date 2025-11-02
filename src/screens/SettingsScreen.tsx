@@ -196,7 +196,10 @@ const SettingsScreen: React.FC = () => {
             'person',
             'Edit Profile',
             'Update your profile information',
-            () => {},
+            () => {
+              // Navigate to Profile tab
+              navigation.navigate('Profile' as never);
+            },
             0,
             true
           )}
