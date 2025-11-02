@@ -95,7 +95,15 @@ const AppContent = () => {
   const {isAuthenticated, isLoading} = useAuth();
 
   if (isLoading) {
-    return null; // You could add a loading screen here
+    return (
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background}}>
+        <StatusBar
+          barStyle={theme.dark ? 'light-content' : 'dark-content'}
+          backgroundColor={theme.colors.primary}
+        />
+        <Text style={{color: theme.colors.text, fontSize: 18}}>Loading...</Text>
+      </View>
+    );
   }
 
   return (

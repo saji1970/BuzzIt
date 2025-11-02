@@ -49,12 +49,20 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
       const isAdminFlag = await AsyncStorage.getItem('isAdmin');
       
       if (token) {
-        const response = await ApiService.getCurrentUser();
-        if (response.success && response.data) {
-          setUser(response.data);
-          setIsAdmin(isAdminFlag === 'true');
-        } else {
-          // Token is invalid, clear it
+        try {
+          const response = await ApiService.getCurrentUser();
+          if (response.success && response.data) {
+            setUser(response.data);
+            setIsAdmin(isAdminFlag === 'true');
+          } else {
+            // Token is invalid, clear it
+            await AsyncStorage.removeItem('authToken');
+            await AsyncStorage.removeItem('user');
+            await AsyncStorage.removeItem('isAdmin');
+          }
+        } catch (apiError) {
+          // API call failed, but continue anyway - user will need to login
+          console.warn('API call failed during auth check:', apiError);
           await AsyncStorage.removeItem('authToken');
           await AsyncStorage.removeItem('user');
           await AsyncStorage.removeItem('isAdmin');
@@ -62,6 +70,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
       }
     } catch (error) {
       console.error('Auth check error:', error);
+      // Don't block app startup on error
     } finally {
       setIsLoading(false);
     }
