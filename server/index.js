@@ -292,9 +292,10 @@ app.post('/api/auth/send-verification', async (req, res) => {
       return res.status(400).json({ error: 'Mobile number and username are required' });
     }
 
-    // Check if username already exists
-    const existingUser = users.find(u => u.username === username);
-    if (existingUser) {
+    // Check if username already exists (check both database and memory)
+    const dbUser = await User.findOne({ username: username.toLowerCase() });
+    const memUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+    if (dbUser || memUser) {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
@@ -302,12 +303,22 @@ app.post('/api/auth/send-verification', async (req, res) => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationId = uuidv4();
 
-    // Store verification code with expiration (5 minutes)
+    // Store verification code in database with expiration (5 minutes)
+    const verificationDoc = new VerificationCode({
+      verificationId,
+      code,
+      mobileNumber,
+      username,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+    });
+    await verificationDoc.save();
+    
+    // Also store in memory for backwards compatibility
     verificationCodes.set(verificationId, {
       code,
       mobileNumber,
       username,
-      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+      expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
     // Send SMS via Twilio (if available)
@@ -575,46 +586,96 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.patch('/api/users/:id', verifyToken, (req, res) => {
+app.patch('/api/users/:id', verifyToken, async (req, res) => {
   if (req.params.id !== req.userId) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const userIndex = users.findIndex(u => u.id === req.params.id);
-  if (userIndex !== -1) {
-    users[userIndex] = { ...users[userIndex], ...req.body };
-    res.json(users[userIndex]);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+  try {
+    const updatedUser = await User.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: req.body },
+      { new: true }
+    ).select('-password').lean();
+    
+    if (updatedUser) {
+      // Also update in-memory array
+      const memIndex = users.findIndex(u => u.id === req.params.id);
+      if (memIndex !== -1) {
+        users[memIndex] = { ...users[memIndex], ...req.body };
+      }
+      res.json(updatedUser);
+    } else {
+      // Fallback to in-memory array
+      const userIndex = users.findIndex(u => u.id === req.params.id);
+      if (userIndex !== -1) {
+        users[userIndex] = { ...users[userIndex], ...req.body };
+        res.json(users[userIndex]);
+      } else {
+        res.status(404).json({ error: 'User not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
-app.get('/api/users/check-username/:username', (req, res) => {
-  const username = req.params.username;
-  const exists = users.some(u => u.username === username);
-  res.json({ available: !exists });
+app.get('/api/users/check-username/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const dbUser = await User.findOne({ username });
+    const memUser = users.find(u => u.username.toLowerCase() === username);
+    const exists = !!(dbUser || memUser);
+    res.json({ available: !exists });
+  } catch (error) {
+    console.error('Check username error:', error);
+    res.json({ available: false });
+  }
 });
 
 // Buzz endpoints
-app.get('/api/buzzes', (req, res) => {
-  const { userId, interests } = req.query;
-  let filteredBuzzes = buzzes;
-
-  if (userId) {
-    filteredBuzzes = buzzes.filter(b => b.userId === userId);
+app.get('/api/buzzes', async (req, res) => {
+  try {
+    const { userId, interests } = req.query;
+    let query = {};
+    
+    if (userId) {
+      query.userId = userId;
+    }
+    
+    if (interests) {
+      const interestArray = interests.split(',');
+      query['interests.id'] = { $in: interestArray };
+    }
+    
+    // Get buzzes from database
+    let dbBuzzes = await Buzz.find(query).sort({ createdAt: -1 }).lean();
+    
+    // Merge with in-memory buzzes (for backwards compatibility)
+    const memBuzzIds = new Set(buzzes.map(b => b.id));
+    const dbBuzzIds = new Set(dbBuzzes.map(b => b.id));
+    let uniqueMemBuzzes = buzzes.filter(b => !dbBuzzIds.has(b.id));
+    
+    // Apply filters to in-memory buzzes
+    if (userId) {
+      uniqueMemBuzzes = uniqueMemBuzzes.filter(b => b.userId === userId);
+    }
+    if (interests) {
+      const interestArray = interests.split(',');
+      uniqueMemBuzzes = uniqueMemBuzzes.filter(b =>
+        b.interests && b.interests.some(i => interestArray.includes(typeof i === 'object' ? i.id : i))
+      );
+    }
+    
+    // Sort and combine
+    uniqueMemBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json([...dbBuzzes, ...uniqueMemBuzzes]);
+  } catch (error) {
+    console.error('Get buzzes error:', error);
+    // Fallback to in-memory array
+    res.json(buzzes);
   }
-
-  if (interests) {
-    const interestArray = interests.split(',');
-    filteredBuzzes = filteredBuzzes.filter(b =>
-      b.interests.some(i => interestArray.includes(i.id))
-    );
-  }
-
-  // Sort by newest first
-  filteredBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  res.json(filteredBuzzes);
 });
 
 app.get('/api/buzzes/:id', async (req, res) => {
@@ -915,35 +976,33 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/admin/buzzes', verifyAdmin, (req, res) => {
+app.get('/api/admin/buzzes', verifyAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 20, search = '', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     
-    let filteredBuzzes = buzzes;
-    
-    // Search filter
+    // Build query
+    let query = {};
     if (search) {
-      filteredBuzzes = buzzes.filter(b => 
-        b.content.toLowerCase().includes(search.toLowerCase()) ||
-        b.username.toLowerCase().includes(search.toLowerCase())
-      );
+      query.$or = [
+        { content: { $regex: search, $options: 'i' } },
+        { username: { $regex: search, $options: 'i' } },
+      ];
     }
     
-    // Sort
-    filteredBuzzes.sort((a, b) => {
-      const aVal = a[sortBy];
-      const bVal = b[sortBy];
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
-    });
+    // Build sort object
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
-    // Pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedBuzzes = filteredBuzzes.slice(startIndex, endIndex);
+    // Get total count
+    const total = await Buzz.countDocuments(query);
+    
+    // Get paginated buzzes
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedBuzzes = await Buzz.find(query)
+      .sort(sortObj)
+      .skip(startIndex)
+      .limit(parseInt(limit))
+      .lean();
     
     res.json({
       success: true,
@@ -952,8 +1011,8 @@ app.get('/api/admin/buzzes', verifyAdmin, (req, res) => {
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: filteredBuzzes.length,
-          pages: Math.ceil(filteredBuzzes.length / limit),
+          total: total,
+          pages: Math.ceil(total / parseInt(limit)),
         },
       },
     });
@@ -1001,18 +1060,32 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/buzzes/:id', verifyAdmin, (req, res) => {
+app.delete('/api/admin/buzzes/:id', verifyAdmin, async (req, res) => {
   try {
     const buzzId = req.params.id;
-    const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
     
-    if (buzzIndex === -1) {
-      return res.status(404).json({ error: 'Buzz not found' });
+    // Delete from database
+    const deletedBuzz = await Buzz.findOneAndDelete({ id: buzzId });
+    
+    if (deletedBuzz) {
+      // Also remove from in-memory array
+      const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+      if (buzzIndex !== -1) buzzes.splice(buzzIndex, 1);
+      
+      // Update user buzz count
+      await User.updateOne({ id: deletedBuzz.userId }, { $inc: { buzzCount: -1 } });
+      
+      res.json({ success: true, message: 'Buzz deleted successfully' });
+    } else {
+      // Fallback to in-memory array
+      const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+      if (buzzIndex !== -1) {
+        buzzes.splice(buzzIndex, 1);
+        res.json({ success: true, message: 'Buzz deleted successfully' });
+      } else {
+        res.status(404).json({ error: 'Buzz not found' });
+      }
     }
-    
-    buzzes.splice(buzzIndex, 1);
-    
-    res.json({ success: true, message: 'Buzz deleted successfully' });
   } catch (error) {
     console.error('Delete buzz error:', error);
     res.status(500).json({ error: 'Failed to delete buzz' });
