@@ -28,18 +28,23 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Simple root endpoint for testing
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Buzz it Backend API is running!', 
-    timestamp: new Date().toISOString(),
-    port: PORT 
-  });
-});
+// Serve static files (admin panel) BEFORE other routes
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve static files (admin panel)
-app.use(express.static('public'));
-app.use(express.static(__dirname + '/public'));
+// Simple root endpoint - serve admin panel HTML, or API info if requested as JSON
+app.get('/', (req, res) => {
+  // If client requests JSON, return API info
+  if (req.headers.accept && req.headers.accept.includes('application/json')) {
+    return res.json({ 
+      message: 'Buzz it Backend API is running!', 
+      timestamp: new Date().toISOString(),
+      port: PORT 
+    });
+  }
+  // Otherwise, serve the admin panel HTML
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // In-memory database (replace with real database in production)
 let users = [
