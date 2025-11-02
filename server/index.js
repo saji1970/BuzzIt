@@ -596,20 +596,60 @@ app.post('/api/auth/login', async (req, res) => {
     const userObj = user;
     const userPassword = userRow ? userRow.password : (userObj.password || null);
     
+    // Debug logging
+    console.log('🔍 Login attempt:', {
+      username,
+      userFound: !!user,
+      hasUserRow: !!userRow,
+      hasPasswordInRow: !!(userRow?.password),
+      hasPasswordInObj: !!(userObj.password),
+      passwordLength: userPassword ? userPassword.length : 0,
+      passwordStartsWith: userPassword ? userPassword.substring(0, 10) : 'none',
+    });
+    
     if (!userPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.error('❌ Login error: No password found for user:', username);
+      console.error('   User ID:', userObj.id);
+      console.error('   Database row:', userRow ? 'exists' : 'not found');
+      console.error('   Memory user:', userObj ? 'exists' : 'not found');
+      return res.status(401).json({ 
+        error: 'Invalid credentials',
+        message: 'User account has no password. Please contact support or create a new account.'
+      });
     }
 
     // Compare password
     let isPasswordValid = false;
     try {
+      // Check if password looks like a bcrypt hash (starts with $2a$, $2b$, or $2y$)
+      const isBcryptHash = userPassword && (
+        userPassword.startsWith('$2a$') || 
+        userPassword.startsWith('$2b$') || 
+        userPassword.startsWith('$2y$')
+      );
+      
+      if (!isBcryptHash) {
+        console.error('❌ Login error: Password is not a valid bcrypt hash for user:', username);
+        console.error('   Password format:', userPassword.substring(0, 20));
+        return res.status(401).json({ 
+          error: 'Invalid credentials',
+          message: 'Password format is invalid. Please reset your password or contact support.'
+        });
+      }
+      
       isPasswordValid = await bcrypt.compare(password, userPassword);
+      console.log('🔐 Password comparison result:', isPasswordValid ? '✅ Valid' : '❌ Invalid');
+      
       if (!isPasswordValid) {
-        console.error('Login error: Password does not match for user:', username);
+        console.error('❌ Login error: Password does not match for user:', username);
         return res.status(401).json({ error: 'Invalid credentials' });
       }
     } catch (compareError) {
-      console.error('Login error: Password comparison failed:', compareError);
+      console.error('❌ Login error: Password comparison failed:', compareError);
+      console.error('   Error details:', {
+        message: compareError.message,
+        stack: compareError.stack?.split('\n').slice(0, 3),
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
