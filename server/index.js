@@ -18,6 +18,9 @@ const Subscription = require('./models/Subscription');
 const LiveStream = require('./models/LiveStream');
 const UserInteraction = require('./models/UserInteraction');
 
+// Import mongoose to check connection status
+const mongoose = require('mongoose');
+
 // Import services
 const RecommendationEngine = require('./services/RecommendationEngine');
 
@@ -592,17 +595,51 @@ app.get('/api/users/:id', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
+    console.log('POST /api/users - Request received:', {
+      username: req.body.username,
+      displayName: req.body.displayName,
+      hasInterests: !!req.body.interests?.length,
+    });
+
     // Validate required fields
     if (!req.body.username) {
+      console.error('Create user error: Username is required');
       return res.status(400).json({ error: 'Username is required' });
     }
 
+    // Check if mongoose is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('⚠️ MongoDB not connected, attempting to reconnect...');
+      try {
+        await connectDB();
+      } catch (dbError) {
+        console.error('❌ Failed to connect to MongoDB:', dbError);
+        // Continue with in-memory fallback for username check
+      }
+    }
+
     // Check if username already exists (case-insensitive)
-    const existingUser = await User.findOne({ 
-      username: req.body.username.toLowerCase() 
-    });
+    let existingUser = null;
+    try {
+      if (mongoose.connection.readyState === 1) {
+        existingUser = await User.findOne({ 
+          username: req.body.username.toLowerCase() 
+        });
+      }
+      
+      // Also check in-memory array as fallback
+      if (!existingUser) {
+        existingUser = users.find(u => 
+          u.username?.toLowerCase() === req.body.username.toLowerCase()
+        );
+      }
+    } catch (findError) {
+      console.error('Error checking existing user:', findError);
+      // Continue - allow creation even if check fails (will fail on duplicate later)
+    }
     
     if (existingUser) {
+      console.error('Create user error: Username already exists:', req.body.username);
       return res.status(400).json({ 
         error: 'Username already exists',
         message: `The username "${req.body.username}" is already taken. Please choose another username.`
@@ -627,21 +664,63 @@ app.post('/api/users', async (req, res) => {
       isVerified: false,
     });
     
-    const savedUser = await newUser.save();
+    let savedUser;
+    try {
+      if (mongoose.connection.readyState === 1) {
+        savedUser = await newUser.save();
+        console.log('✅ User saved to database:', savedUser.username);
+      } else {
+        console.warn('⚠️ Database not connected, saving to memory only');
+        // Create a plain object for in-memory storage
+        savedUser = {
+          ...newUser.toObject(),
+          createdAt: new Date(),
+        };
+      }
+    } catch (saveError) {
+      console.error('Error saving user:', saveError);
+      if (saveError.code === 11000) {
+        return res.status(400).json({ 
+          error: 'Username already exists',
+          message: `The username "${req.body.username}" is already taken.`
+        });
+      }
+      // If database save fails, still add to memory
+      savedUser = {
+        ...newUser.toObject(),
+        createdAt: new Date(),
+      };
+      console.warn('⚠️ Saved user to memory only due to database error');
+    }
     
-    // Also add to in-memory array for backwards compatibility during transition
-    users.push(savedUser.toObject());
+    // Also add to in-memory array for backwards compatibility
+    users.push(savedUser);
     
-    res.status(201).json(savedUser.toObject());
+    console.log('✅ User created successfully:', savedUser.username);
+    
+    // Return user object directly (for compatibility with frontend)
+    res.status(201).json(savedUser);
   } catch (error) {
-    console.error('Create user error:', error);
+    console.error('❌ Create user error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
     if (error.code === 11000) {
       return res.status(400).json({ 
         error: 'Username already exists',
         message: `The username "${req.body.username}" is already taken.`
       });
     }
-    res.status(500).json({ error: 'Failed to create user' });
+    
+    // Provide more detailed error message
+    const errorMessage = error.message || 'Failed to create user';
+    console.error('Returning error response:', errorMessage);
+    res.status(500).json({ 
+      error: 'Failed to create user',
+      message: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

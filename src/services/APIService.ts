@@ -134,9 +134,40 @@ class ApiService {
         };
       }
 
+      // Handle direct response (like user object from POST /api/users)
+      // If response is ok (200-299) and has data (not an error object), treat as success
+      if (response.ok && !data.error && !data.message?.toLowerCase().includes('error')) {
+        // Check if it looks like a valid data object
+        // For user creation, we expect an object with id, username, etc.
+        if (typeof data === 'object' && data !== null) {
+          // If it has an id or username field, it's likely a valid response
+          if (data.id || data.username || data.available !== undefined) {
+            return {
+              success: true,
+              data,
+            };
+          }
+          // If it's an empty object but status is ok, still return success
+          if (Object.keys(data).length === 0 && response.status >= 200 && response.status < 300) {
+            return {
+              success: true,
+              data,
+            };
+          }
+        }
+      }
+
       // Handle direct response (like {available: boolean})
       // If data doesn't have success field but has expected fields, treat as success
       if (!data.success && !data.error && (data.available !== undefined || Object.keys(data).length > 0)) {
+        return {
+          success: true,
+          data,
+        };
+      }
+
+      // For successful responses (200-299), return the data
+      if (response.ok) {
         return {
           success: true,
           data,
