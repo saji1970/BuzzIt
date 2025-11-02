@@ -16,6 +16,9 @@ const connectDB = async () => {
     await mongoose.connect(mongoURI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+      connectTimeoutMS: 5000, // Give up initial connection after 5s
     });
 
     isConnected = true;
@@ -39,8 +42,11 @@ const connectDB = async () => {
 
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
+    console.error('MongoDB URI:', mongoURI ? 'Set (hidden)' : 'Not set');
     isConnected = false;
-    throw error;
+    // Don't throw - allow server to start in fallback mode
+    console.warn('⚠️ Server will continue without database connection');
+    // Optionally, you could retry connection here
   }
 };
 
