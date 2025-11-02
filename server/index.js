@@ -6,20 +6,19 @@ const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
 const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
-const { connectDB } = require('./db/connection');
+// Use PostgreSQL instead of MongoDB
+const { connectDB, query, getPool } = require('./db/postgres');
 require('dotenv').config();
 
-// Import database models
-const User = require('./models/User');
-const Buzz = require('./models/Buzz');
-const VerificationCode = require('./models/VerificationCode');
-const SocialAccount = require('./models/SocialAccount');
-const Subscription = require('./models/Subscription');
-const LiveStream = require('./models/LiveStream');
-const UserInteraction = require('./models/UserInteraction');
-
-// Import mongoose to check connection status
-const mongoose = require('mongoose');
+// PostgreSQL database functions
+const db = {
+  query,
+  getPool,
+  isConnected: () => {
+    const pool = getPool();
+    return pool !== null;
+  }
+};
 
 // Import services
 const RecommendationEngine = require('./services/RecommendationEngine');
@@ -455,28 +454,28 @@ app.post('/api/auth/login', async (req, res) => {
     
     // Also check database for admin users (only if connected)
     if (!admin) {
-      const dbConnected = mongoose.connection.readyState === 1;
-      if (dbConnected) {
+      if (db.isConnected()) {
         try {
-          const dbAdmin = await Promise.race([
-            User.findOne({ 
-              username: username.toLowerCase(),
-              role: { $in: ['admin', 'super_admin'] }
-            }),
+          const result = await Promise.race([
+            db.query(
+              'SELECT * FROM users WHERE LOWER(username) = $1 AND role IN ($2, $3)',
+              [username.toLowerCase(), 'admin', 'super_admin']
+            ),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Database query timeout')), 5000)
             )
           ]);
           
-          if (dbAdmin) {
+          if (result.rows.length > 0) {
+            const dbAdmin = convertDbUserToObject(result.rows[0]);
             admin = { id: dbAdmin.id, username: dbAdmin.username, role: dbAdmin.role };
             
             // Check database admin password
-            if (dbAdmin.password) {
-              const isPasswordValid = await bcrypt.compare(password, dbAdmin.password);
+            if (result.rows[0].password) {
+              const isPasswordValid = await bcrypt.compare(password, result.rows[0].password);
               if (isPasswordValid) {
                 const token = generateToken(dbAdmin.id);
-                const { password: _, ...adminWithoutPassword } = dbAdmin.toObject();
+                const { password: _, ...adminWithoutPassword } = dbAdmin;
                 return res.json({
                   success: true,
                   user: adminWithoutPassword,
@@ -506,17 +505,22 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Try to find user in database first (only if connected)
     let user = null;
-    const dbConnected = mongoose.connection.readyState === 1;
+    let userRow = null;
     
-    if (dbConnected) {
+    if (db.isConnected()) {
       try {
         // Add timeout protection for database queries
-        user = await Promise.race([
-          User.findOne({ username: username.toLowerCase() }),
+        const result = await Promise.race([
+          db.query('SELECT * FROM users WHERE LOWER(username) = $1', [username.toLowerCase()]),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Database query timeout')), 5000)
           )
         ]);
+        
+        if (result.rows.length > 0) {
+          userRow = result.rows[0];
+          user = convertDbUserToObject(userRow);
+        }
       } catch (dbError) {
         console.warn('⚠️ Database user query failed (non-critical):', dbError.message);
         // Continue to check in-memory users
@@ -529,7 +533,7 @@ app.post('/api/auth/login', async (req, res) => {
         u.username?.toLowerCase() === username.toLowerCase()
       );
       if (memUser) {
-        user = { toObject: () => memUser, ...memUser };
+        user = memUser;
         console.log('✅ Found user in memory:', username.toLowerCase());
       }
     }
@@ -539,8 +543,8 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Handle both database user and in-memory user
-    const userObj = user.toObject ? user.toObject() : user;
-    const userPassword = user.password || userObj.password;
+    const userObj = user;
+    const userPassword = userRow ? userRow.password : (userObj.password || null);
     
     if (!userPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -640,13 +644,15 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'Username is required' });
     }
 
-    // Check if mongoose is connected
-    if (mongoose.connection.readyState !== 1) {
-      console.warn('⚠️ MongoDB not connected, attempting to reconnect...');
+    // Check if database is connected
+    const dbConnected = db.isConnected();
+    
+    if (!dbConnected) {
+      console.warn('⚠️ PostgreSQL not connected, attempting to reconnect...');
       try {
         await connectDB();
       } catch (dbError) {
-        console.error('❌ Failed to connect to MongoDB:', dbError);
+        console.error('❌ Failed to connect to PostgreSQL:', dbError);
         // Continue with in-memory fallback for username check
       }
     }
@@ -654,10 +660,14 @@ app.post('/api/users', async (req, res) => {
     // Check if username already exists (case-insensitive)
     let existingUser = null;
     try {
-      if (mongoose.connection.readyState === 1) {
-        existingUser = await User.findOne({ 
-          username: req.body.username.toLowerCase() 
-        });
+      if (db.isConnected()) {
+        const result = await db.query(
+          'SELECT * FROM users WHERE LOWER(username) = $1',
+          [req.body.username.toLowerCase()]
+        );
+        if (result.rows.length > 0) {
+          existingUser = result.rows[0];
+        }
       }
       
       // Also check in-memory array as fallback
@@ -679,8 +689,9 @@ app.post('/api/users', async (req, res) => {
       });
     }
 
-    const newUser = new User({
-      id: generateId(),
+    const userId = generateId();
+    const newUserData = {
+      id: userId,
       username: req.body.username.toLowerCase(),
       displayName: req.body.displayName || req.body.username,
       email: req.body.email || `${req.body.username}@buzzit.app`,
@@ -695,24 +706,48 @@ app.post('/api/users', async (req, res) => {
       subscribedChannels: [],
       blockedUsers: [],
       isVerified: false,
-    });
+    };
     
     let savedUser;
     try {
-      if (mongoose.connection.readyState === 1) {
-        savedUser = await newUser.save();
+      if (db.isConnected()) {
+        const result = await db.query(`
+          INSERT INTO users (
+            id, username, display_name, email, mobile_number, bio, avatar,
+            date_of_birth, interests, followers, following, buzz_count,
+            subscribed_channels, blocked_users, is_verified
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          RETURNING *
+        `, [
+          newUserData.id,
+          newUserData.username,
+          newUserData.displayName,
+          newUserData.email,
+          newUserData.mobileNumber,
+          newUserData.bio,
+          newUserData.avatar,
+          newUserData.dateOfBirth,
+          JSON.stringify(newUserData.interests),
+          newUserData.followers,
+          newUserData.following,
+          newUserData.buzzCount,
+          JSON.stringify(newUserData.subscribedChannels),
+          JSON.stringify(newUserData.blockedUsers),
+          newUserData.isVerified
+        ]);
+        
+        savedUser = convertDbUserToObject(result.rows[0]);
         console.log('✅ User saved to database:', savedUser.username);
       } else {
         console.warn('⚠️ Database not connected, saving to memory only');
-        // Create a plain object for in-memory storage
         savedUser = {
-          ...newUser.toObject(),
+          ...newUserData,
           createdAt: new Date(),
         };
       }
     } catch (saveError) {
       console.error('Error saving user:', saveError);
-      if (saveError.code === 11000) {
+      if (saveError.code === '23505') { // PostgreSQL unique violation
         return res.status(400).json({ 
           error: 'Username already exists',
           message: `The username "${req.body.username}" is already taken.`
@@ -720,7 +755,7 @@ app.post('/api/users', async (req, res) => {
       }
       // If database save fails, still add to memory
       savedUser = {
-        ...newUser.toObject(),
+        ...newUserData,
         createdAt: new Date(),
       };
       console.warn('⚠️ Saved user to memory only due to database error');
@@ -1909,7 +1944,7 @@ const startServer = async () => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
       console.log(`API URL: http://0.0.0.0:${PORT}`);
-      console.log(`💾 Database: MongoDB connected`);
+      console.log(`💾 Database: PostgreSQL connected`);
       console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
     });
   } catch (error) {
