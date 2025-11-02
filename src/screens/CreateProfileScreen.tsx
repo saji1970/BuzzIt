@@ -24,7 +24,7 @@ import ApiService from '../services/APIService';
 const CreateProfileScreen: React.FC = () => {
   const {theme} = useTheme();
   const {interests, updateUserInterests, setUser} = useUser();
-  const {sendVerificationCode, verifyCode, register, isLoading} = useAuth();
+  const {sendVerificationCode, verifyCode, register, isLoading, setUserData} = useAuth();
   const navigation = useNavigation();
   
   const [username, setUsername] = useState('');
@@ -182,7 +182,8 @@ const CreateProfileScreen: React.FC = () => {
           // Still save user even if update fails
           await AsyncStorage.setItem('authToken', result.token);
           await AsyncStorage.setItem('user', JSON.stringify(userWithInterests));
-          setUser(userWithInterests);
+          setUser(userWithInterests); // Update UserContext
+          setUserData(userWithInterests); // Update AuthContext so isAuthenticated becomes true
           updateUserInterests(selectedInterests);
           
           Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
@@ -197,7 +198,8 @@ const CreateProfileScreen: React.FC = () => {
         // Still proceed with basic user
         await AsyncStorage.setItem('authToken', result.token);
         await AsyncStorage.setItem('user', JSON.stringify(userWithInterests));
-        setUser(userWithInterests);
+        setUser(userWithInterests); // Update UserContext
+        setUserData(userWithInterests); // Update AuthContext so isAuthenticated becomes true
         updateUserInterests(selectedInterests);
         
         Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
@@ -278,8 +280,9 @@ const CreateProfileScreen: React.FC = () => {
           await AsyncStorage.setItem('user', JSON.stringify(loggedInUser));
           await AsyncStorage.setItem('isAdmin', (loginResponse.data.isAdmin || false).toString());
 
-          // Update local state
-          setUser(loggedInUser);
+          // Update both UserContext and AuthContext
+          setUser(loggedInUser); // Update UserContext
+          setUserData(loggedInUser); // Update AuthContext so isAuthenticated becomes true
           updateUserInterests(selectedInterests);
 
           Alert.alert('Success', 'Profile created and logged in successfully! 🎉', [

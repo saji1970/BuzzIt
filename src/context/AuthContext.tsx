@@ -195,6 +195,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
     }
   };
 
+  const setUserData = (userData: User | null) => {
+    setUser(userData);
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -206,6 +210,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
     verifyCode,
     logout,
     updateUser,
+    setUserData,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
