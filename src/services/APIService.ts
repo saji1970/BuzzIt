@@ -190,6 +190,22 @@ class ApiService {
     return this.makeRequest<User>('/api/users/me');
   }
 
+  async createUser(userData: {
+    username: string;
+    displayName: string;
+    email?: string;
+    mobileNumber?: string;
+    password?: string;
+    interests?: any[];
+    bio?: string;
+    avatar?: string | null;
+  }): Promise<ApiResponse<User>> {
+    return this.makeRequest<User>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
   async updateUser(userId: string, updates: Partial<User>): Promise<ApiResponse<User>> {
     return this.makeRequest<User>(`/api/users/${userId}`, {
       method: 'PATCH',

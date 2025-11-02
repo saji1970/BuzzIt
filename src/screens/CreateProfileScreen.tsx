@@ -126,26 +126,95 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
-    // For demo purposes, we'll use a mock verification ID
-    // In a real app, this would come from the sendVerificationCode response
-    const verificationId = 'demo-verification-id';
+    // Get the verification ID from stored state or use the one from sendVerificationCode response
+    // In a real app, this would be stored from the sendVerificationCode response
+    const verificationId = verificationIdState || 'demo-verification-id';
     
     const result = await verifyCode(mobileNumber.trim(), verificationCode.trim(), verificationId);
     
     if (result.success) {
-      // User is now authenticated and profile is created
-      Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Navigate to MainTabs (Home) after profile creation
-            navigation.reset({
-              index: 0,
-              routes: [{name: 'MainTabs' as never}],
-            });
+      // verifyCode from AuthContext already saves user and token, but we need to get them
+      // Check if user was set in AuthContext
+      const savedUserJson = await AsyncStorage.getItem('user');
+      const savedToken = await AsyncStorage.getItem('authToken');
+      
+      if (!savedUserJson || !savedToken) {
+        Alert.alert('Error', 'Failed to save user data');
+        return;
+      }
+      
+      const savedUser = JSON.parse(savedUserJson);
+      // User is created on backend, now update with interests
+      const userWithInterests = {
+        ...result.user,
+        interests: selectedInterests,
+        displayName: buzzProfileName.trim(),
+      };
+      
+      // Update user with interests on backend
+      try {
+        const updateResponse = await ApiService.updateUser(result.user.id, {
+          interests: selectedInterests,
+          displayName: buzzProfileName.trim(),
+        });
+        
+        if (updateResponse.success && updateResponse.data) {
+          // Save updated user
+          await AsyncStorage.setItem('authToken', result.token);
+          await AsyncStorage.setItem('user', JSON.stringify(updateResponse.data));
+          setUser(updateResponse.data);
+          updateUserInterests(selectedInterests);
+          
+          Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{name: 'MainTabs' as never}],
+                });
+              },
+            },
+          ]);
+        } else {
+          // Still save user even if update fails
+          await AsyncStorage.setItem('authToken', result.token);
+          await AsyncStorage.setItem('user', JSON.stringify(userWithInterests));
+          setUser(userWithInterests);
+          updateUserInterests(selectedInterests);
+          
+          Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{name: 'MainTabs' as never}],
+                });
+              },
+            },
+          ]);
+        }
+      } catch (error: any) {
+        console.error('Error updating user interests:', error);
+        // Still proceed with basic user
+        await AsyncStorage.setItem('authToken', result.token);
+        await AsyncStorage.setItem('user', JSON.stringify(userWithInterests));
+        setUser(userWithInterests);
+        updateUserInterests(selectedInterests);
+        
+        Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.reset({
+                index: 0,
+                routes: [{name: 'MainTabs' as never}],
+              });
+            },
           },
-        },
-      ]);
+        ]);
+      }
     } else {
       Alert.alert('Verification Failed', result.error || 'Invalid verification code');
     }
@@ -187,55 +256,88 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
-    // Create user directly without verification
-    const newUser = {
-      id: Date.now().toString(),
-      username: username.trim(),
-      displayName: buzzProfileName.trim(),
-      email: `${username.trim()}@buzzit.app`,
-      bio: '',
-      avatar: null,
-      interests: selectedInterests,
-      followers: 0,
-      following: 0,
-      buzzCount: 0,
-      createdAt: new Date(),
-      subscribedChannels: [],
-      blockedUsers: [],
-      isVerified: false, // Not verified since mobile verification is disabled
-    };
-
     try {
-      const existingUsers = await AsyncStorage.getItem('users');
-      const users = existingUsers ? JSON.parse(existingUsers) : [];
-      users.push(newUser);
-      await AsyncStorage.setItem('users', JSON.stringify(users));
-    } catch (error) {
-      console.log('Error saving user:', error);
-    }
+      // First, create user on the backend via API
+      console.log('Creating user on backend...');
+      const createUserResponse = await ApiService.createUser({
+        username: username.trim(),
+        displayName: buzzProfileName.trim(),
+        email: `${username.trim()}@buzzit.app`,
+        mobileNumber: mobileNumber.trim() || undefined,
+        password: password.trim(),
+        interests: selectedInterests,
+        bio: '',
+        avatar: null,
+      });
 
-    setUser(newUser);
-    updateUserInterests(selectedInterests);
-    
-    // Save a token so the app recognizes user as authenticated
-    // This allows navigation to MainTabs
-    const mockToken = 'local-user-token-' + Date.now();
-    await AsyncStorage.setItem('authToken', mockToken);
-    await AsyncStorage.setItem('user', JSON.stringify(newUser));
-    
-    Alert.alert('Success', 'Profile created successfully! 🎉', [
-      {
-        text: 'OK',
-        onPress: () => {
-          // Navigate to MainTabs (Home) after profile creation
-          // The app will detect authenticated state and show MainTabs
-          navigation.reset({
-            index: 0,
-            routes: [{name: 'MainTabs' as never}],
-          });
-        },
-      },
-    ]);
+      if (createUserResponse.success && createUserResponse.data) {
+        const backendUser = createUserResponse.data;
+        console.log('User created on backend:', backendUser);
+
+        // Now login to get auth token
+        console.log('Logging in to get auth token...');
+        const loginResponse = await ApiService.login(username.trim(), password.trim());
+
+        if (loginResponse.success && loginResponse.data) {
+          const {user: loggedInUser, token} = loginResponse.data;
+          
+          // Save token and user data
+          await AsyncStorage.setItem('authToken', token);
+          await AsyncStorage.setItem('user', JSON.stringify(loggedInUser));
+          await AsyncStorage.setItem('isAdmin', (loginResponse.data.isAdmin || false).toString());
+
+          // Update local state
+          setUser(loggedInUser);
+          updateUserInterests(selectedInterests);
+
+          Alert.alert('Success', 'Profile created and logged in successfully! 🎉', [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate to MainTabs (Home) after profile creation
+                navigation.reset({
+                  index: 0,
+                  routes: [{name: 'MainTabs' as never}],
+                });
+              },
+            },
+          ]);
+        } else {
+          // User created but login failed - still save user locally
+          console.warn('User created but login failed:', loginResponse.error);
+          setUser(backendUser);
+          updateUserInterests(selectedInterests);
+          await AsyncStorage.setItem('user', JSON.stringify(backendUser));
+          
+          Alert.alert('Partial Success', 'Profile created on server, but automatic login failed. Please login manually.', [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{name: 'Login' as never}],
+                });
+              },
+            },
+          ]);
+        }
+      } else {
+        // API creation failed - show error
+        console.error('Failed to create user on backend:', createUserResponse.error);
+        Alert.alert(
+          'Error',
+          `Failed to create profile on server: ${createUserResponse.error || 'Unknown error'}\n\nPlease check your internet connection and try again.`,
+          [{text: 'OK'}]
+        );
+      }
+    } catch (error: any) {
+      console.error('Error creating profile:', error);
+      Alert.alert(
+        'Network Error',
+        `Could not create profile: ${error.message || 'Network error'}\n\nPlease check your connection and try again.`,
+        [{text: 'OK'}]
+      );
+    }
   };
 
   return (
