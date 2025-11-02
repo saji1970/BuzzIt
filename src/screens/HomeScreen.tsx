@@ -425,31 +425,9 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.secondary]}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 0}}
-        style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.headerTitle}>🐱🔥 Buzz Feed</Text>
-            <Text style={styles.headerSubtitle}>
-              Many cats buzzing together! 🐱
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Search Button */}
-      <View style={styles.searchContainer}>
-        <TouchableOpacity
-          style={styles.searchButton}
-          onPress={() => setShowSearch(true)}>
-          <Icon name="search" size={20} color={theme.colors.textSecondary} />
-          <Text style={[styles.searchButtonText, {color: theme.colors.textSecondary}]}>
-            Search users...
-          </Text>
-        </TouchableOpacity>
+      {/* Following Section - Instagram Style */}
+      <View style={styles.followingContainer}>
+        <SubscribedChannels onChannelPress={handleBuzzerPress} />
       </View>
 
       {/* Smart Feed Toggle */}
@@ -505,8 +483,6 @@ const HomeScreen: React.FC = () => {
           />
         </View>
       )}
-
-      <SubscribedChannels onChannelPress={handleBuzzerPress} />
 
       <InterestFilter
         onFilterChange={handleInterestFilter}
@@ -579,7 +555,7 @@ const HomeScreen: React.FC = () => {
           <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
-                Search Users
+                Search Users & Channels
               </Text>
               <TouchableOpacity onPress={() => setShowSearch(false)}>
                 <Icon name="close" size={24} color={theme.colors.text} />
@@ -590,7 +566,7 @@ const HomeScreen: React.FC = () => {
               <Icon name="search" size={20} color={theme.colors.textSecondary} />
               <TextInput
                 style={[styles.searchInput, {color: theme.colors.text}]}
-                placeholder="Search by username or name..."
+                placeholder="Search users or channels..."
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
                 onChangeText={(text) => {
@@ -653,6 +629,9 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  followingContainer: {
+    backgroundColor: '#F0F0F0',
   },
   header: {
     padding: 20,
