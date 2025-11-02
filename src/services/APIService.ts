@@ -126,6 +126,14 @@ class ApiService {
         };
       }
 
+      // If response has success: true and data field, extract data
+      if (data.success === true && data.data !== undefined) {
+        return {
+          success: true,
+          data: data.data,
+        };
+      }
+
       return {
         success: true,
         data,
@@ -367,6 +375,42 @@ class ApiService {
     });
     
     return this.makeRequest<any>(`/api/admin/subscriptions?${queryParams.toString()}`);
+  }
+
+  // Live Streams
+  async getLiveStreams(): Promise<ApiResponse<any[]>> {
+    return this.makeRequest<any[]>('/api/live-streams');
+  }
+
+  async getLiveStream(streamId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/live-streams/${streamId}`);
+  }
+
+  async createLiveStream(streamData: {
+    title: string;
+    description?: string;
+    streamUrl?: string;
+    thumbnailUrl?: string;
+    category?: string;
+    tags?: string[];
+  }): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/live-streams', {
+      method: 'POST',
+      body: JSON.stringify(streamData),
+    });
+  }
+
+  async updateViewers(streamId: string, action: 'increment' | 'decrement'): Promise<ApiResponse<{ viewers: number }>> {
+    return this.makeRequest<{ viewers: number }>(`/api/live-streams/${streamId}/viewers`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action }),
+    });
+  }
+
+  async endLiveStream(streamId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeRequest<{ message: string }>(`/api/live-streams/${streamId}/end`, {
+      method: 'PATCH',
+    });
   }
 }
 

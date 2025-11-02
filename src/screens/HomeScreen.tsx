@@ -25,6 +25,8 @@ import CreateProfileScreen from './CreateProfileScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
 import ConnectionStatus from '../components/ConnectionStatus';
+import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
+import ApiService from '../services/APIService';
 
 const {width} = Dimensions.get('window');
 
@@ -38,11 +40,23 @@ const HomeScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
   const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
+  const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
+  const [loadingLiveStreams, setLoadingLiveStreams] = useState(false);
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
     loadBuzzes();
+    loadLiveStreams();
   }, [user, buzzes]);
+
+  // Refresh live streams periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadLiveStreams();
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Refresh buzzes when screen comes into focus
   useFocusEffect(
@@ -165,6 +179,39 @@ const HomeScreen: React.FC = () => {
     setSelectedBuzzerId(null);
   };
 
+  const loadLiveStreams = async () => {
+    try {
+      setLoadingLiveStreams(true);
+      const response = await ApiService.getLiveStreams();
+      if (response.success && response.data) {
+        setLiveStreams(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading live streams:', error);
+    } finally {
+      setLoadingLiveStreams(false);
+    }
+  };
+
+  const handleStreamPress = (stream: LiveStream) => {
+    // Increment viewer count when stream is opened
+    ApiService.updateViewers(stream.id, 'increment');
+    // TODO: Navigate to full-screen stream view
+    console.log('Stream pressed:', stream.id);
+  };
+
+  const handleStreamUserPress = (userId: string) => {
+    setSelectedBuzzerId(userId);
+  };
+
+  const renderLiveStream = ({item}: {item: LiveStream}) => (
+    <LiveStreamCard
+      stream={item}
+      onPress={handleStreamPress}
+      onUserPress={handleStreamUserPress}
+    />
+  );
+
   const renderBuzz = ({item, index}: {item: Buzz; index: number}) => (
     <Animatable.View
       animation="fadeInUp"
@@ -264,6 +311,28 @@ const HomeScreen: React.FC = () => {
         selectedInterests={selectedInterests}
       />
 
+      {/* Live Streams Section */}
+      {liveStreams.length > 0 && (
+        <View style={styles.liveStreamsSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="videocam" size={20} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              Live Now
+            </Text>
+          </View>
+          <FlatList
+            data={liveStreams}
+            renderItem={renderLiveStream}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.liveStreamsList}
+            refreshing={loadingLiveStreams}
+            onRefresh={loadLiveStreams}
+          />
+        </View>
+      )}
+
       <FlatList
         data={filteredBuzzes}
         renderItem={renderBuzz}
@@ -355,6 +424,23 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  liveStreamsSection: {
+    marginBottom: 16,
+    paddingHorizontal: 15,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  liveStreamsList: {
+    paddingRight: 15,
   },
 });
 

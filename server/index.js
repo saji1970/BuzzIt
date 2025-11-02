@@ -15,6 +15,7 @@ const Buzz = require('./models/Buzz');
 const VerificationCode = require('./models/VerificationCode');
 const SocialAccount = require('./models/SocialAccount');
 const Subscription = require('./models/Subscription');
+const LiveStream = require('./models/LiveStream');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1135,6 +1136,139 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Live Stream endpoints
+app.get('/api/live-streams', async (req, res) => {
+  try {
+    // Get only active live streams
+    const liveStreams = await LiveStream.find({ isLive: true })
+      .sort({ viewers: -1, startedAt: -1 })
+      .limit(20)
+      .lean();
+    
+    res.json({
+      success: true,
+      data: liveStreams,
+    });
+  } catch (error) {
+    console.error('Get live streams error:', error);
+    res.status(500).json({ error: 'Failed to fetch live streams' });
+  }
+});
+
+app.get('/api/live-streams/:id', async (req, res) => {
+  try {
+    const stream = await LiveStream.findOne({ id: req.params.id }).lean();
+    if (stream) {
+      res.json({
+        success: true,
+        data: stream,
+      });
+    } else {
+      res.status(404).json({ error: 'Live stream not found' });
+    }
+  } catch (error) {
+    console.error('Get live stream error:', error);
+    res.status(500).json({ error: 'Failed to fetch live stream' });
+  }
+});
+
+app.post('/api/live-streams', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.userId }).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user already has an active stream
+    const existingStream = await LiveStream.findOne({ 
+      userId: req.userId, 
+      isLive: true 
+    });
+    
+    if (existingStream) {
+      return res.status(400).json({ 
+        error: 'You already have an active live stream. Please end it first.' 
+      });
+    }
+
+    const newStream = new LiveStream({
+      id: generateId(),
+      userId: req.userId,
+      username: user.username,
+      displayName: user.displayName,
+      title: req.body.title || `${user.displayName}'s Live Stream`,
+      description: req.body.description || '',
+      streamUrl: req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`, // Placeholder
+      thumbnailUrl: req.body.thumbnailUrl || user.avatar,
+      isLive: true,
+      viewers: 0,
+      category: req.body.category || 'general',
+      tags: req.body.tags || [],
+    });
+
+    const savedStream = await newStream.save();
+    res.status(201).json({
+      success: true,
+      data: savedStream.toObject(),
+    });
+  } catch (error) {
+    console.error('Create live stream error:', error);
+    res.status(500).json({ error: 'Failed to create live stream' });
+  }
+});
+
+app.patch('/api/live-streams/:id/viewers', async (req, res) => {
+  try {
+    const { action } = req.body; // 'increment' or 'decrement'
+    const stream = await LiveStream.findOne({ id: req.params.id });
+    
+    if (!stream) {
+      return res.status(404).json({ error: 'Live stream not found' });
+    }
+
+    if (action === 'increment') {
+      stream.viewers += 1;
+    } else if (action === 'decrement' && stream.viewers > 0) {
+      stream.viewers -= 1;
+    }
+
+    await stream.save();
+    res.json({
+      success: true,
+      data: { viewers: stream.viewers },
+    });
+  } catch (error) {
+    console.error('Update viewers error:', error);
+    res.status(500).json({ error: 'Failed to update viewers' });
+  }
+});
+
+app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
+  try {
+    const stream = await LiveStream.findOne({ id: req.params.id });
+    
+    if (!stream) {
+      return res.status(404).json({ error: 'Live stream not found' });
+    }
+
+    if (stream.userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    stream.isLive = false;
+    stream.endedAt = new Date();
+    await stream.save();
+
+    res.json({
+      success: true,
+      message: 'Live stream ended',
+    });
+  } catch (error) {
+    console.error('End live stream error:', error);
+    res.status(500).json({ error: 'Failed to end live stream' });
   }
 });
 
