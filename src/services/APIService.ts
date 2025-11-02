@@ -218,10 +218,37 @@ class ApiService {
     bio?: string;
     avatar?: string | null;
   }): Promise<ApiResponse<User>> {
-    return this.makeRequest<User>('/api/users', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
+    try {
+      console.log('Creating user with data:', {
+        username: userData.username,
+        displayName: userData.displayName,
+        email: userData.email,
+        hasInterests: !!userData.interests?.length,
+      });
+      
+      const response = await this.makeRequest<User>('/api/users', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      });
+      
+      console.log('Create user response:', {
+        success: response.success,
+        hasData: !!response.data,
+        error: response.error,
+      });
+      
+      if (!response.success) {
+        console.error('Create user failed:', response.error);
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Create user exception:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to create user. Please check your internet connection.',
+      };
+    }
   }
 
   async updateUser(userId: string, updates: Partial<User>): Promise<ApiResponse<User>> {

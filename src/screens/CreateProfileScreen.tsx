@@ -346,6 +346,12 @@ const CreateProfileScreen: React.FC = () => {
         avatar: null,
       });
 
+      console.log('Create user response:', {
+        success: createUserResponse.success,
+        hasData: !!createUserResponse.data,
+        error: createUserResponse.error,
+      });
+
       if (createUserResponse.success && createUserResponse.data) {
         const backendUser = createUserResponse.data;
         console.log('User created on backend:', backendUser);
