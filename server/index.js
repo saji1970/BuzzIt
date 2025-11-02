@@ -600,8 +600,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, userPassword);
-    if (!isPasswordValid) {
+    // Compare password
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await bcrypt.compare(password, userPassword);
+      if (!isPasswordValid) {
+        console.error('Login error: Password does not match for user:', username);
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    } catch (compareError) {
+      console.error('Login error: Password comparison failed:', compareError);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -832,18 +840,24 @@ app.post('/api/users', async (req, res) => {
       // If database save fails, still add to memory
       savedUser = {
         ...newUserData,
+        password: hashedPassword, // Store hashed password in memory too
         createdAt: new Date(),
       };
       console.warn('⚠️ Saved user to memory only due to database error');
     }
     
-    // Also add to in-memory array for backwards compatibility
-    users.push(savedUser);
+    // Also add to in-memory array for backwards compatibility (with hashed password)
+    const userForMemory = {
+      ...savedUser,
+      password: hashedPassword, // Ensure password is stored in memory for fallback login
+    };
+    users.push(userForMemory);
     
     console.log('✅ User created successfully:', savedUser.username);
     
-    // Return user object directly (for compatibility with frontend)
-    res.status(201).json(savedUser);
+    // Return user object without password (for security)
+    const { password: _, ...userWithoutPassword } = savedUser;
+    res.status(201).json(userWithoutPassword);
   } catch (error) {
     console.error('❌ Create user error:', error);
     console.error('Error stack:', error.stack);
