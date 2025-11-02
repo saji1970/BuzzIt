@@ -98,6 +98,7 @@ const defaultInterests: Interest[] = [
   {id: '10', name: 'Movies', category: 'Entertainment', emoji: '🎬'},
   {id: '11', name: 'Books', category: 'Culture', emoji: '📚'},
   {id: '12', name: 'Photography', category: 'Creative', emoji: '📸'},
+  {id: '13', name: 'Politics', category: 'Society', emoji: '🏛️'},
 ];
 
 export const UserProvider: React.FC<{children: React.ReactNode}> = ({
