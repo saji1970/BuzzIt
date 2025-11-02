@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser} from '../context/UserContext';
+import ApiService from '../services/APIService';
 
 const {width} = Dimensions.get('window');
 
@@ -30,71 +31,59 @@ interface SubscribedChannelsProps {
 
 const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress}) => {
   const {theme} = useTheme();
-  const {user, isSubscribed, subscribeToChannel, unsubscribeFromChannel} = useUser();
+  const {user} = useUser();
+  const [followedUsers, setFollowedUsers] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadFollowedUsers();
+  }, [user?.subscribedChannels]);
+
+  const loadFollowedUsers = async () => {
+    if (!user || !user.subscribedChannels || user.subscribedChannels.length === 0) {
+      setFollowedUsers([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get all users from API
+      const response = await ApiService.getAllUsers();
+      
+      if (response.success && response.data) {
+        // Filter to only show followed users
+        const followed = response.data
+          .filter((u: any) => user.subscribedChannels.includes(u.id))
+          .map((u: any) => ({
+            id: u.id,
+            username: u.username,
+            name: u.displayName || u.username,
+            avatar: u.avatar,
+            isLive: false, // TODO: Check if user is live
+          } as Channel));
+        
+        setFollowedUsers(followed);
+      }
+    } catch (error) {
+      console.error('Error loading followed users:', error);
+      setFollowedUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Don't render if no user
   if (!user) {
     return null;
   }
 
-  // All available channels
-  const allChannels: Channel[] = [
-    {
-      id: '1',
-      username: 'buzzuser',
-      name: 'Your Story',
-      avatar: null,
-    },
-    {
-      id: '2',
-      username: 'techguru',
-      name: 'Tech Guru',
-      avatar: null,
-      isLive: true,
-    },
-    {
-      id: '3',
-      username: 'foodie',
-      name: 'Food Lover',
-      avatar: null,
-    },
-    {
-      id: '4',
-      username: 'adventurer',
-      name: 'Adventure',
-      avatar: null,
-      isLive: true,
-    },
-    {
-      id: '5',
-      username: 'fitnesspro',
-      name: 'Fitness Pro',
-      avatar: null,
-    },
-    {
-      id: 'hannahmarblesx',
-      username: 'hannahmarblesx',
-      name: 'Hannah',
-      avatar: null,
-      isLive: true,
-    },
-  ];
-
-  // Show all channels (Instagram-style following list)
-  const displayChannels = allChannels;
+  // Show only followed users from database
+  const displayChannels = followedUsers;
 
   const handleChannelPress = (channelId: string) => {
     if (onChannelPress) {
       onChannelPress(channelId);
     }
-  };
-
-  const handleSubscribe = (channelId: string) => {
-    subscribeToChannel(channelId);
-  };
-
-  const handleUnsubscribe = (channelId: string) => {
-    unsubscribeFromChannel(channelId);
   };
 
   return (
@@ -127,11 +116,6 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
                   </Text>
                 )}
               </View>
-              {channel.id === '1' && (
-                <View style={styles.addIcon}>
-                  <Icon name="add" size={16} color="#FFFFFF" />
-                </View>
-              )}
             </View>
             <Text
               style={[
@@ -146,26 +130,6 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>Live</Text>
               </View>
-            )}
-            {channel.id !== '1' && (
-              <TouchableOpacity
-                style={[
-                  styles.subscribeButton,
-                  {
-                    backgroundColor: user.subscribedChannels.includes(channel.id) 
-                      ? theme.colors.error 
-                      : theme.colors.primary
-                  }
-                ]}
-                onPress={() => 
-                  user.subscribedChannels.includes(channel.id)
-                    ? handleUnsubscribe(channel.id)
-                    : handleSubscribe(channel.id)
-                }>
-                <Text style={styles.subscribeButtonText}>
-                  {user.subscribedChannels.includes(channel.id) ? 'Unfollow' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
             )}
           </TouchableOpacity>
         ))}
