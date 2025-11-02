@@ -747,6 +747,22 @@ app.post('/api/users', async (req, res) => {
     }
 
     const userId = generateId();
+    
+    // Hash password if provided
+    let hashedPassword = null;
+    if (req.body.password) {
+      try {
+        hashedPassword = await bcrypt.hash(req.body.password, 10);
+        console.log('✅ Password hashed successfully');
+      } catch (hashError) {
+        console.error('❌ Error hashing password:', hashError);
+        return res.status(500).json({ 
+          error: 'Failed to process password',
+          message: 'Unable to secure password. Please try again.'
+        });
+      }
+    }
+    
     const newUserData = {
       id: userId,
       username: req.body.username.toLowerCase(),
@@ -763,6 +779,7 @@ app.post('/api/users', async (req, res) => {
       subscribedChannels: [],
       blockedUsers: [],
       isVerified: false,
+      password: hashedPassword,
     };
     
     let savedUser;
@@ -770,14 +787,15 @@ app.post('/api/users', async (req, res) => {
       if (db.isConnected()) {
         const result = await db.query(`
           INSERT INTO users (
-            id, username, display_name, email, mobile_number, bio, avatar,
+            id, username, password, display_name, email, mobile_number, bio, avatar,
             date_of_birth, interests, followers, following, buzz_count,
             subscribed_channels, blocked_users, is_verified
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           RETURNING *
         `, [
           newUserData.id,
           newUserData.username,
+          newUserData.password,
           newUserData.displayName,
           newUserData.email,
           newUserData.mobileNumber,
@@ -799,6 +817,7 @@ app.post('/api/users', async (req, res) => {
         console.warn('⚠️ Database not connected, saving to memory only');
         savedUser = {
           ...newUserData,
+          password: hashedPassword, // Store hashed password in memory too
           createdAt: new Date(),
         };
       }
