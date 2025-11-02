@@ -395,11 +395,34 @@ const CreateProfileScreen: React.FC = () => {
           ]);
     }
       } else {
-        // API creation failed - show error
-        console.error('Failed to create user on backend:', createUserResponse.error);
+        // API creation failed
+        console.error('Failed to create user on backend:', {
+          error: createUserResponse.error,
+          response: createUserResponse,
+        });
+        
+        let errorMessage = 'Failed to create user';
+        if (createUserResponse.error) {
+          if (createUserResponse.error.includes('already exists') || 
+              createUserResponse.error.includes('Username already') ||
+              createUserResponse.error.includes('already taken')) {
+            errorMessage = `Username "${username.trim()}" is already taken. Please choose another username.`;
+          } else if (createUserResponse.error.includes('Username is required')) {
+            errorMessage = 'Username is required. Please enter a username.';
+          } else if (createUserResponse.error.includes('Cannot connect') ||
+                     createUserResponse.error.includes('Network') ||
+                     createUserResponse.error.includes('timeout')) {
+            errorMessage = `Cannot connect to server.\n\n${createUserResponse.error}\n\nPlease check:\n• Your internet connection\n• The server is running\n• Try again in a moment`;
+          } else {
+            errorMessage = createUserResponse.error;
+          }
+        } else {
+          errorMessage = 'Unable to connect to server. Please check your internet connection and ensure the server is running.';
+        }
+        
         Alert.alert(
-          'Error',
-          `Failed to create profile on server: ${createUserResponse.error || 'Unknown error'}\n\nPlease check your internet connection and try again.`,
+          'Error Creating Profile',
+          errorMessage,
           [{text: 'OK'}]
         );
       }
