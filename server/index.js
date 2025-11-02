@@ -453,28 +453,42 @@ app.post('/api/auth/login', async (req, res) => {
     // Check in-memory adminUsers first (for backwards compatibility)
     admin = adminUsers.find(a => a.username === username);
     
-    // Also check database for admin users
+    // Also check database for admin users (only if connected)
     if (!admin) {
-      const dbAdmin = await User.findOne({ 
-        username: username.toLowerCase(),
-        role: { $in: ['admin', 'super_admin'] }
-      });
-      if (dbAdmin) {
-        admin = { id: dbAdmin.id, username: dbAdmin.username, role: dbAdmin.role };
-        
-        // Check database admin password
-        if (dbAdmin.password) {
-          const isPasswordValid = await bcrypt.compare(password, dbAdmin.password);
-          if (isPasswordValid) {
-            const token = generateToken(dbAdmin.id);
-            const { password: _, ...adminWithoutPassword } = dbAdmin.toObject();
-            return res.json({
-              success: true,
-              user: adminWithoutPassword,
-              token,
-              isAdmin: true,
-            });
+      const dbConnected = mongoose.connection.readyState === 1;
+      if (dbConnected) {
+        try {
+          const dbAdmin = await Promise.race([
+            User.findOne({ 
+              username: username.toLowerCase(),
+              role: { $in: ['admin', 'super_admin'] }
+            }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Database query timeout')), 5000)
+            )
+          ]);
+          
+          if (dbAdmin) {
+            admin = { id: dbAdmin.id, username: dbAdmin.username, role: dbAdmin.role };
+            
+            // Check database admin password
+            if (dbAdmin.password) {
+              const isPasswordValid = await bcrypt.compare(password, dbAdmin.password);
+              if (isPasswordValid) {
+                const token = generateToken(dbAdmin.id);
+                const { password: _, ...adminWithoutPassword } = dbAdmin.toObject();
+                return res.json({
+                  success: true,
+                  user: adminWithoutPassword,
+                  token,
+                  isAdmin: true,
+                });
+              }
+            }
           }
+        } catch (dbError) {
+          console.warn('⚠️ Admin database query failed (non-critical):', dbError.message);
+          // Continue to check in-memory admin
         }
       }
     }
@@ -490,14 +504,33 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Try to find user in database first
-    let user = await User.findOne({ username: username.toLowerCase() });
+    // Try to find user in database first (only if connected)
+    let user = null;
+    const dbConnected = mongoose.connection.readyState === 1;
     
-    // Fallback to in-memory array if not in database
+    if (dbConnected) {
+      try {
+        // Add timeout protection for database queries
+        user = await Promise.race([
+          User.findOne({ username: username.toLowerCase() }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database query timeout')), 5000)
+          )
+        ]);
+      } catch (dbError) {
+        console.warn('⚠️ Database user query failed (non-critical):', dbError.message);
+        // Continue to check in-memory users
+      }
+    }
+    
+    // Fallback to in-memory array if not in database or DB is disconnected
     if (!user) {
-      const memUser = users.find(u => u.username === username);
+      const memUser = users.find(u => 
+        u.username?.toLowerCase() === username.toLowerCase()
+      );
       if (memUser) {
         user = { toObject: () => memUser, ...memUser };
+        console.log('✅ Found user in memory:', username.toLowerCase());
       }
     }
     
