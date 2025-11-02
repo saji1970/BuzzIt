@@ -16,6 +16,10 @@ const VerificationCode = require('./models/VerificationCode');
 const SocialAccount = require('./models/SocialAccount');
 const Subscription = require('./models/Subscription');
 const LiveStream = require('./models/LiveStream');
+const UserInteraction = require('./models/UserInteraction');
+
+// Import services
+const RecommendationEngine = require('./services/RecommendationEngine');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1262,6 +1266,159 @@ app.patch('/api/live-streams/:id/viewers', async (req, res) => {
   } catch (error) {
     console.error('Update viewers error:', error);
     res.status(500).json({ error: 'Failed to update viewers' });
+  }
+});
+
+// AI Recommendation endpoints
+app.get('/api/recommendations/users', verifyToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    // Get current user
+    const currentUser = await User.findOne({ id: userId }).lean();
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all users (excluding current user)
+    const allUsers = await User.find({ id: { $ne: userId } })
+      .select('-password')
+      .lean();
+
+    // Get user interactions for preference analysis
+    const interactions = await UserInteraction.find({ userId })
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .lean();
+
+    // Get user's buzzes for analysis
+    const userBuzzes = await Buzz.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Analyze user preferences
+    const preferences = RecommendationEngine.analyzeUserPreferences(
+      currentUser,
+      userBuzzes,
+      interactions
+    );
+
+    // Get contacts and social connections from request (passed from frontend)
+    const contacts = req.query.contacts ? JSON.parse(req.query.contacts) : [];
+    const socialConnections = req.query.socialConnections 
+      ? JSON.parse(req.query.socialConnections) 
+      : [];
+
+    // Get recommendations
+    const recommendations = RecommendationEngine.recommendUsers(
+      currentUser,
+      allUsers,
+      contacts,
+      socialConnections
+    );
+
+    res.json({
+      success: true,
+      data: {
+        recommendations: recommendations.map(rec => ({
+          user: rec.user,
+          score: rec.score,
+          reasons: rec.reasons,
+        })),
+        preferences,
+      },
+    });
+  } catch (error) {
+    console.error('Recommendations error:', error);
+    res.status(500).json({ error: 'Failed to get recommendations' });
+  }
+});
+
+app.get('/api/recommendations/buzzes', verifyToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { limit = 50 } = req.query;
+
+    // Get current user
+    const currentUser = await User.findOne({ id: userId }).lean();
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get user interactions
+    const interactions = await UserInteraction.find({ userId })
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .lean();
+
+    // Get user's buzzes
+    const userBuzzes = await Buzz.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Get all buzzes
+    const allBuzzes = await Buzz.find({})
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    // Analyze preferences
+    const preferences = RecommendationEngine.analyzeUserPreferences(
+      currentUser,
+      userBuzzes,
+      interactions
+    );
+
+    // Get user location if available
+    const userLocation = currentUser.location || null;
+
+    // Get smart feed
+    const smartFeed = RecommendationEngine.getSmartFeed(
+      allBuzzes,
+      preferences,
+      userLocation,
+      parseInt(limit)
+    );
+
+    res.json({
+      success: true,
+      data: {
+        buzzes: smartFeed,
+        preferences,
+      },
+    });
+  } catch (error) {
+    console.error('Smart feed error:', error);
+    res.status(500).json({ error: 'Failed to get smart feed' });
+  }
+});
+
+app.post('/api/interactions', verifyToken, async (req, res) => {
+  try {
+    const { buzzId, type, metadata } = req.body;
+
+    if (!buzzId || !type) {
+      return res.status(400).json({ error: 'Buzz ID and type are required' });
+    }
+
+    const interaction = new UserInteraction({
+      userId: req.userId,
+      buzzId,
+      type,
+      metadata: metadata || {},
+    });
+
+    await interaction.save();
+
+    res.json({
+      success: true,
+      data: interaction.toObject(),
+    });
+  } catch (error) {
+    console.error('Create interaction error:', error);
+    res.status(500).json({ error: 'Failed to create interaction' });
   }
 });
 

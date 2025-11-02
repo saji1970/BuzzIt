@@ -459,6 +459,54 @@ class ApiService {
       method: 'PATCH',
     });
   }
+
+  // AI Recommendations
+  async getUserRecommendations(params: {
+    contacts?: Array<{name: string; email?: string; phone?: string}>;
+    socialConnections?: Array<{platform: string; userId?: string; username?: string}>;
+  } = {}): Promise<ApiResponse<{
+    recommendations: Array<{
+      user: any;
+      score: number;
+      reasons: string[];
+    }>;
+    preferences: any;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params.contacts) {
+      queryParams.append('contacts', JSON.stringify(params.contacts));
+    }
+    if (params.socialConnections) {
+      queryParams.append('socialConnections', JSON.stringify(params.socialConnections));
+    }
+    
+    const query = queryParams.toString();
+    return this.makeRequest<{
+      recommendations: Array<{
+        user: any;
+        score: number;
+        reasons: string[];
+      }>;
+      preferences: any;
+    }>(`/api/recommendations/users${query ? `?${query}` : ''}`);
+  }
+
+  async getSmartFeed(limit: number = 50): Promise<ApiResponse<{
+    buzzes: any[];
+    preferences: any;
+  }>> {
+    return this.makeRequest<{
+      buzzes: any[];
+      preferences: any;
+    }>(`/api/recommendations/buzzes?limit=${limit}`);
+  }
+
+  async recordInteraction(buzzId: string, type: 'like' | 'comment' | 'share' | 'view', metadata?: any): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/api/interactions', {
+      method: 'POST',
+      body: JSON.stringify({ buzzId, type, metadata }),
+    });
+  }
 }
 
 export default new ApiService();

@@ -29,7 +29,13 @@
     "plugins": [
       "expo-image-picker",
       "expo-av",
-      "expo-location"
+      "expo-location",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Buzz it to access your contacts to find friends and suggest people you may know."
+        }
+      ]
     ],
     "extra": {
       "eas": {

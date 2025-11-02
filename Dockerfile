@@ -18,6 +18,9 @@ COPY server/config ./config/
 # Copy models directory (MongoDB models)
 COPY server/models ./models/
 
+# Copy services directory (AI Recommendation Engine)
+COPY server/services ./services/
+
 # Copy db directory (database connection)
 COPY server/db ./db/
 

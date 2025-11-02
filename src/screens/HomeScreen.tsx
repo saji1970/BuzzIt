@@ -27,6 +27,8 @@ import SubscribedChannels from '../components/SubscribedChannels';
 import ConnectionStatus from '../components/ConnectionStatus';
 import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
+import UserRecommendationCard, {UserRecommendation} from '../components/UserRecommendationCard';
+import ContactSyncService from '../components/ContactSyncService';
 
 const {width} = Dimensions.get('window');
 
@@ -42,11 +44,16 @@ const HomeScreen: React.FC = () => {
   const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [loadingLiveStreams, setLoadingLiveStreams] = useState(false);
+  const [userRecommendations, setUserRecommendations] = useState<UserRecommendation[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [showRecommendations, setShowRecommendations] = useState(true);
+  const [useSmartFeed, setUseSmartFeed] = useState(false);
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
     loadBuzzes();
     loadLiveStreams();
+    loadUserRecommendations();
   }, [user, buzzes]);
 
   // Refresh live streams periodically
@@ -204,6 +211,84 @@ const HomeScreen: React.FC = () => {
     setSelectedBuzzerId(userId);
   };
 
+  const loadUserRecommendations = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingRecommendations(true);
+      
+      // Sync contacts
+      const {contacts, socialConnections} = await ContactSyncService.syncContacts();
+      
+      // Get recommendations
+      const response = await ApiService.getUserRecommendations({
+        contacts,
+        socialConnections,
+      });
+      
+      if (response.success && response.data) {
+        setUserRecommendations(response.data.recommendations || []);
+      }
+    } catch (error) {
+      console.error('Error loading recommendations:', error);
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  const handleSubscribeUser = async (userId: string) => {
+    try {
+      const isSubscribed = user?.subscribedChannels?.includes(userId) || false;
+      
+      if (isSubscribed) {
+        unsubscribeFromChannel(userId);
+      } else {
+        subscribeToChannel(userId);
+      }
+      
+      // Remove from recommendations after subscribe
+      setUserRecommendations(prev => 
+        prev.filter(rec => rec.user.id !== userId)
+      );
+    } catch (error) {
+      console.error('Error subscribing to user:', error);
+    }
+  };
+
+  const handleToggleSmartFeed = () => {
+    setUseSmartFeed(!useSmartFeed);
+    if (!useSmartFeed) {
+      loadSmartFeed();
+    } else {
+      loadBuzzes();
+    }
+  };
+
+  const loadSmartFeed = async () => {
+    try {
+      setRefreshing(true);
+      const response = await ApiService.getSmartFeed(50);
+      if (response.success && response.data) {
+        setFilteredBuzzes(response.data.buzzes || []);
+      }
+    } catch (error) {
+      console.error('Error loading smart feed:', error);
+      // Fallback to regular feed
+      loadBuzzes();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const renderRecommendation = ({item}: {item: UserRecommendation}) => (
+    <UserRecommendationCard
+      recommendation={item}
+      onSubscribe={handleSubscribeUser}
+      onPress={handleBuzzerPress}
+      isSubscribed={user?.subscribedChannels?.includes(item.user.id) || false}
+    />
+  );
+
   const renderLiveStream = ({item}: {item: LiveStream}) => (
     <LiveStreamCard
       stream={item}
@@ -219,9 +304,21 @@ const HomeScreen: React.FC = () => {
       style={styles.buzzContainer}>
       <BuzzCard
         buzz={item}
-        onLike={() => likeBuzz(item.id)}
-        onShare={() => shareBuzz(item.id)}
-        onPress={() => handleBuzzPress(item)}
+        onLike={async () => {
+          likeBuzz(item.id);
+          // Record interaction for AI learning
+          await ApiService.recordInteraction(item.id, 'like');
+        }}
+        onShare={async () => {
+          shareBuzz(item.id);
+          // Record interaction for AI learning
+          await ApiService.recordInteraction(item.id, 'share');
+        }}
+        onPress={async () => {
+          handleBuzzPress(item);
+          // Record view interaction
+          await ApiService.recordInteraction(item.id, 'view');
+        }}
         isFollowing={false}
         onFollow={handleFollow}
       />
@@ -303,6 +400,60 @@ const HomeScreen: React.FC = () => {
 
       {/* Connection Status */}
       <ConnectionStatus />
+
+      {/* Smart Feed Toggle */}
+      <View style={styles.smartFeedContainer}>
+        <TouchableOpacity
+          style={[
+            styles.smartFeedButton,
+            {
+              backgroundColor: useSmartFeed 
+                ? theme.colors.primary 
+                : theme.colors.surface,
+            },
+          ]}
+          onPress={handleToggleSmartFeed}>
+          <Icon 
+            name="auto-awesome" 
+            size={18} 
+            color={useSmartFeed ? '#FFFFFF' : theme.colors.text} 
+          />
+          <Text
+            style={[
+              styles.smartFeedText,
+              {
+                color: useSmartFeed ? '#FFFFFF' : theme.colors.text,
+              },
+            ]}>
+            {useSmartFeed ? 'Smart Feed' : 'Normal Feed'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* User Recommendations */}
+      {showRecommendations && userRecommendations.length > 0 && (
+        <View style={styles.recommendationsSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="people" size={20} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              People You May Know
+            </Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowRecommendations(false)}>
+              <Icon name="close" size={18} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={userRecommendations.slice(0, 5)}
+            renderItem={renderRecommendation}
+            keyExtractor={(item) => item.user.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recommendationsList}
+          />
+        </View>
+      )}
 
       <SubscribedChannels onChannelPress={handleBuzzerPress} />
 
@@ -441,6 +592,39 @@ const styles = StyleSheet.create({
   },
   liveStreamsList: {
     paddingRight: 15,
+  },
+  smartFeedContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    alignItems: 'flex-end',
+  },
+  smartFeedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  smartFeedText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recommendationsSection: {
+    marginBottom: 16,
+    paddingHorizontal: 15,
+  },
+  recommendationsList: {
+    paddingRight: 15,
+  },
+  closeButton: {
+    marginLeft: 'auto',
+    padding: 4,
   },
 });
 
