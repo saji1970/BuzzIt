@@ -17,6 +17,7 @@ import {useTheme} from '../context/ThemeContext';
 import {useUser, User, Interest} from '../context/UserContext';
 import {useAuth} from '../context/AuthContext';
 import {useNavigation} from '@react-navigation/native';
+import ApiService from '../services/APIService';
 
 const ProfileScreen: React.FC = () => {
   const {theme} = useTheme();
