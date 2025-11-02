@@ -458,8 +458,8 @@ app.post('/api/auth/login', async (req, res) => {
         try {
           const result = await Promise.race([
             db.query(
-              'SELECT * FROM users WHERE LOWER(username) = $1 AND role IN ($2, $3)',
-              [username.toLowerCase(), 'admin', 'super_admin']
+              'SELECT * FROM users WHERE LOWER(username) = $1 AND role IN (\'admin\', \'super_admin\')',
+              [username.toLowerCase()]
             ),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Database query timeout')), 5000)
@@ -577,12 +577,17 @@ app.post('/api/auth/login', async (req, res) => {
 // User endpoints
 app.get('/api/users', async (req, res) => {
   try {
-    const allUsers = await User.find({}).select('-password').lean();
+    const allUsers = await getAllUsers();
     // Merge with in-memory users (for backwards compatibility)
     const memUserIds = new Set(users.map(u => u.id));
     const dbUserIds = new Set(allUsers.map(u => u.id));
     const uniqueMemUsers = users.filter(u => !dbUserIds.has(u.id));
-    res.json([...allUsers, ...uniqueMemUsers]);
+    // Remove passwords from response
+    const usersWithoutPasswords = [...allUsers, ...uniqueMemUsers].map(u => {
+      const { password, ...userWithoutPassword } = u;
+      return userWithoutPassword;
+    });
+    res.json(usersWithoutPasswords);
   } catch (error) {
     console.error('Get users error:', error);
     // Fallback to in-memory array
@@ -592,9 +597,10 @@ app.get('/api/users', async (req, res) => {
 
 app.get('/api/users/me', verifyToken, async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.userId }).select('-password').lean();
+    const user = await getUserById(req.userId);
     if (user) {
-      res.json(user);
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } else {
       // Fallback to in-memory array
       const memUser = users.find(u => u.id === req.userId);
@@ -612,9 +618,10 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
 
 app.get('/api/users/:id', async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.params.id }).select('-password').lean();
+    const user = await getUserById(req.params.id);
     if (user) {
-      res.json(user);
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } else {
       // Fallback to in-memory array
       const memUser = users.find(u => u.id === req.params.id);
