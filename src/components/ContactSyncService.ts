@@ -12,10 +12,11 @@ class ContactSyncService {
    */
   async requestContactsPermission(): Promise<boolean> {
     try {
-      if (!Contacts) {
-        Contacts = require('expo-contacts');
+      const ContactsModule = loadContactsModule();
+      if (!ContactsModule) {
+        return false;
       }
-      const { status } = await Contacts.requestPermissionsAsync();
+      const { status } = await ContactsModule.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
@@ -32,7 +33,8 @@ class ContactSyncService {
     phone?: string;
   }>> {
     try {
-      if (!Contacts) {
+      const ContactsModule = loadContactsModule();
+      if (!ContactsModule) {
         console.warn('expo-contacts not available');
         return [];
       }
@@ -43,11 +45,11 @@ class ContactSyncService {
         return [];
       }
 
-      const { data } = await Contacts.getContactsAsync({
+      const { data } = await ContactsModule.getContactsAsync({
         fields: [
-          Contacts.Fields.Name,
-          Contacts.Fields.Emails,
-          Contacts.Fields.PhoneNumbers,
+          ContactsModule.Fields.Name,
+          ContactsModule.Fields.Emails,
+          ContactsModule.Fields.PhoneNumbers,
         ],
       });
 
