@@ -15,10 +15,14 @@ import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, User, Interest} from '../context/UserContext';
+import {useAuth} from '../context/AuthContext';
+import {useNavigation} from '@react-navigation/native';
 
 const ProfileScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, setUser, interests, updateUserInterests} = useUser();
+  const {logout} = useAuth();
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     username: '',
@@ -81,9 +85,21 @@ const ProfileScreen: React.FC = () => {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => {
-            setUser(null);
-            Alert.alert('Success', 'Logged out successfully!');
+          onPress: async () => {
+            try {
+              // Call logout from AuthContext to clear auth state
+              await logout();
+              // Clear user from UserContext
+              setUser(null);
+              // Navigate to login screen and reset navigation stack
+              navigation.reset({
+                index: 0,
+                routes: [{name: 'Login' as never}],
+              });
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           },
         },
       ]
