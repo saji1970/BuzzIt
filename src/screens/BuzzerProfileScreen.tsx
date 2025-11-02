@@ -18,6 +18,7 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
 import BuzzCard from '../components/BuzzCard';
+import ApiService from '../services/APIService';
 
 const {width, height} = Dimensions.get('window');
 
@@ -59,24 +60,36 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     }
   }, [visible, buzzerId]);
 
-  const loadBuzzerData = () => {
-    // Mock buzzer data - in real app, this would come from API
-    const mockBuzzer: Buzzer = {
-      id: buzzerId,
-      username: 'hannahmarblesx',
-      displayName: 'Hannah',
-      avatar: null,
-      bio: 'Digital creator\nViva las Vegas ✨',
-      followers: 106000,
-      following: 242,
-      buzzCount: 190,
-      isVerified: true,
-      isFollowing: isSubscribed(buzzerId), // Check real subscription status
-      isLive: true,
-      website: 'link.me/hannahmarblesxx',
-    };
-
-    setBuzzer(mockBuzzer);
+  const loadBuzzerData = async () => {
+    try {
+      // Fetch real user data from API
+      const response = await ApiService.getUserById(buzzerId);
+      
+      if (response.success && response.data) {
+        const userData = response.data;
+        const buzzerData: Buzzer = {
+          id: userData.id,
+          username: userData.username,
+          displayName: userData.displayName,
+          avatar: userData.avatar,
+          bio: userData.bio || '',
+          followers: userData.followers || 0,
+          following: userData.following || 0,
+          buzzCount: userData.buzzCount || 0,
+          isVerified: userData.isVerified || false,
+          isFollowing: isSubscribed(buzzerId),
+          isLive: false, // TODO: Check live stream status
+          website: userData.website || undefined,
+        };
+        
+        setBuzzer(buzzerData);
+      } else {
+        console.error('Failed to load buzzer data:', response.error);
+        // Show error or fallback
+      }
+    } catch (error) {
+      console.error('Error loading buzzer data:', error);
+    }
 
     // Filter buzzes for this buzzer
     const userBuzzes = buzzes.filter(buzz => buzz.userId === buzzerId);

@@ -75,8 +75,8 @@ class ApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
+    const url = `${API_BASE_URL}${endpoint}`;
     try {
-      const url = `${API_BASE_URL}${endpoint}`;
       const token = await AsyncStorage.getItem('authToken');
       
       console.log('Making API request to:', url);
@@ -236,6 +236,10 @@ class ApiService {
   // Users
   async getCurrentUser(): Promise<ApiResponse<User>> {
     return this.makeRequest<User>('/api/users/me');
+  }
+
+  async getUserById(userId: string): Promise<ApiResponse<User>> {
+    return this.makeRequest<User>(`/api/users/${userId}`);
   }
 
   async createUser(userData: {
