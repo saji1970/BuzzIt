@@ -28,6 +28,7 @@ const CreateProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   
   const [username, setUsername] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
@@ -38,6 +39,12 @@ const CreateProfileScreen: React.FC = () => {
   const [mobileVerificationEnabled, setMobileVerificationEnabled] = useState(false);
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [verificationIdState, setVerificationIdState] = useState<string | null>(null);
+  
+  // Username validation state
+  const [usernameChecked, setUsernameChecked] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     checkMobileVerificationFeature();
@@ -55,6 +62,79 @@ const CreateProfileScreen: React.FC = () => {
       setLoadingFeatures(false);
     }
   };
+
+  // Check username availability in real-time
+  const checkUsernameAvailability = async (usernameToCheck: string) => {
+    if (!usernameToCheck || usernameToCheck.trim().length < 3) {
+      setUsernameChecked(false);
+      setUsernameAvailable(null);
+      setUsernameSuggestions([]);
+      return;
+    }
+
+    setCheckingUsername(true);
+    try {
+      const response = await ApiService.checkUsernameAvailability(usernameToCheck.trim());
+      if (response.success && response.data) {
+        const available = response.data.available;
+        setUsernameAvailable(available);
+        setUsernameChecked(true);
+        
+        if (!available) {
+          // Generate suggestions if username is taken
+          const suggestions = generateUsernameSuggestions(usernameToCheck.trim());
+          setUsernameSuggestions(suggestions);
+        } else {
+          setUsernameSuggestions([]);
+        }
+      } else {
+        setUsernameChecked(false);
+        setUsernameAvailable(null);
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+      setUsernameChecked(false);
+      setUsernameAvailable(null);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
+  // Generate username suggestions
+  const generateUsernameSuggestions = (baseUsername: string): string[] => {
+    const suggestions: string[] = [];
+    const variations = [
+      `${baseUsername}${Math.floor(Math.random() * 1000)}`,
+      `${baseUsername}_${Math.floor(Math.random() * 100)}`,
+      `${baseUsername}${Date.now().toString().slice(-4)}`,
+      `the_${baseUsername}`,
+      `${baseUsername}${new Date().getFullYear()}`,
+    ];
+    return suggestions.concat(variations).slice(0, 3);
+  };
+
+  // Handle username change with debounced checking
+  const handleUsernameChange = (text: string) => {
+    setUsername(text);
+    setUsernameChecked(false);
+    setUsernameAvailable(null);
+    setUsernameSuggestions([]);
+  };
+
+  // Debounce username checking
+  useEffect(() => {
+    if (username.trim().length >= 3) {
+      const timeoutId = setTimeout(() => {
+        checkUsernameAvailability(username);
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setUsernameChecked(false);
+      setUsernameAvailable(null);
+      setUsernameSuggestions([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
 
   const handleInterestToggle = (interest: Interest) => {
     if (selectedInterests.some(i => i.id === interest.id)) {
@@ -260,6 +340,7 @@ const CreateProfileScreen: React.FC = () => {
         email: `${username.trim()}@buzzit.app`,
         mobileNumber: mobileNumber.trim() || undefined,
         password: password.trim(),
+        dateOfBirth: dateOfBirth.trim(),
         interests: selectedInterests,
         bio: '',
         avatar: null,
@@ -306,7 +387,7 @@ const CreateProfileScreen: React.FC = () => {
               // Navigation will happen automatically - user stays on CreateProfile/Login
             },
           ]);
-        }
+    }
       } else {
         // API creation failed - show error
         console.error('Failed to create user on backend:', createUserResponse.error);
@@ -344,18 +425,76 @@ const CreateProfileScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         
-        {/* Username */}
+        {/* Username - FIRST FIELD */}
         <Animatable.View animation="fadeInUp" delay={100}>
-          <Text style={[styles.label, {color: theme.colors.text}]}>Username</Text>
+          <Text style={[styles.label, {color: theme.colors.text}]}>Username *</Text>
           <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
             <Icon name="person" size={20} color={theme.colors.textSecondary} />
             <TextInput
               style={[styles.input, {color: theme.colors.text}]}
-              placeholder="Enter username"
+              placeholder="Enter username (min 3 characters)"
               placeholderTextColor={theme.colors.textSecondary}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={handleUsernameChange}
               autoCapitalize="none"
+            />
+            {checkingUsername && (
+              <Text style={{color: theme.colors.textSecondary, fontSize: 12, marginTop: 4}}>Checking...</Text>
+            )}
+            {usernameChecked && usernameAvailable && (
+              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4}}>
+                <Icon name="check-circle" size={16} color="#4CAF50" />
+                <Text style={{color: '#4CAF50', fontSize: 12, marginLeft: 4}}>Username available!</Text>
+              </View>
+            )}
+            {usernameChecked && !usernameAvailable && (
+              <View style={{marginTop: 4}}>
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                  <Icon name="error" size={16} color={theme.colors.error || '#F44336'} />
+                  <Text style={{color: theme.colors.error || '#F44336', fontSize: 12, marginLeft: 4}}>
+                    Username already taken
+                  </Text>
+                </View>
+                {usernameSuggestions.length > 0 && (
+                  <View style={{marginTop: 8}}>
+                    <Text style={{color: theme.colors.textSecondary, fontSize: 12, marginBottom: 4}}>Suggestions:</Text>
+                    {usernameSuggestions.map((suggestion, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => {
+                          setUsername(suggestion);
+                          checkUsernameAvailability(suggestion);
+                        }}
+                        style={{
+                          backgroundColor: theme.colors.surface,
+                          padding: 8,
+                          borderRadius: 8,
+                          marginTop: 4,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                        }}>
+                        <Text style={{color: theme.colors.primary, fontSize: 12}}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </Animatable.View>
+
+        {/* Date of Birth - SECOND FIELD */}
+        <Animatable.View animation="fadeInUp" delay={150}>
+          <Text style={[styles.label, {color: theme.colors.text}]}>Date of Birth *</Text>
+          <View style={[styles.inputContainer, {backgroundColor: theme.colors.surface}]}>
+            <Icon name="calendar-today" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, {color: theme.colors.text}]}
+              placeholder="YYYY-MM-DD (e.g., 1990-01-15)"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={dateOfBirth}
+              onChangeText={setDateOfBirth}
+              keyboardType="default"
             />
           </View>
         </Animatable.View>

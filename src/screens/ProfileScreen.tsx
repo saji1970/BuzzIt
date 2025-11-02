@@ -90,7 +90,7 @@ const ProfileScreen: React.FC = () => {
               // Call logout from AuthContext to clear auth state
               await logout();
               // Clear user from UserContext
-              setUser(null);
+            setUser(null);
               // Navigate to login screen and reset navigation stack
               navigation.reset({
                 index: 0,

@@ -5,7 +5,7 @@ import { API_CONFIG } from '../config/API_CONFIG';
 
 const getApiBaseUrl = () => {
   // Always use Railway production backend
-  return 'https://buzzit-production.up.railway.app';
+    return 'https://buzzit-production.up.railway.app';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -196,6 +196,7 @@ class ApiService {
     email?: string;
     mobileNumber?: string;
     password?: string;
+    dateOfBirth?: string;
     interests?: any[];
     bio?: string;
     avatar?: string | null;

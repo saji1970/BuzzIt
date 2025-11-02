@@ -38,10 +38,10 @@ app.get('/', (req, res) => {
   // If client requests JSON, return API info
   if (req.headers.accept && req.headers.accept.includes('application/json')) {
     return res.json({ 
-      message: 'Buzz it Backend API is running!', 
-      timestamp: new Date().toISOString(),
-      port: PORT 
-    });
+    message: 'Buzz it Backend API is running!', 
+    timestamp: new Date().toISOString(),
+    port: PORT 
+  });
   }
   // Otherwise, serve the admin panel HTML
   const indexPath = path.join(publicPath, 'index.html');
@@ -427,14 +427,29 @@ app.get('/api/users/:id', (req, res) => {
 });
 
 app.post('/api/users', (req, res) => {
+  // Validate required fields
+  if (!req.body.username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  // Check if username already exists
+  const existingUser = users.find(u => u.username.toLowerCase() === req.body.username.toLowerCase());
+  if (existingUser) {
+    return res.status(400).json({ 
+      error: 'Username already exists',
+      message: `The username "${req.body.username}" is already taken. Please choose another username.`
+    });
+  }
+
   const newUser = {
     id: generateId(),
     username: req.body.username,
-    displayName: req.body.displayName,
-    email: req.body.email,
+    displayName: req.body.displayName || req.body.username,
+    email: req.body.email || `${req.body.username}@buzzit.app`,
     mobileNumber: req.body.mobileNumber || '',
     bio: req.body.bio || '',
     avatar: req.body.avatar || null,
+    dateOfBirth: req.body.dateOfBirth || null,
     interests: req.body.interests || [],
     followers: 0,
     following: 0,
