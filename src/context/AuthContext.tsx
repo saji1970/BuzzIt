@@ -13,6 +13,7 @@ interface AuthContextType {
   verifyCode: (mobileNumber: string, code: string, verificationId: string) => Promise<{success: boolean; error?: string}>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<{success: boolean; error?: string}>;
+  setUserData: (userData: User | null) => void; // Set user directly (for profile creation)
 }
 
 interface RegisterData {
