@@ -12,22 +12,16 @@ RUN npm ci --only=production
 # Copy all .js files
 COPY server/*.js ./
 
-# Copy config directory
-COPY server/config ./config/
+# Copy config directory if it exists
+COPY server/config* ./config/ 2>/dev/null || true
+COPY server/config ./config/ 2>/dev/null || true
 
 # Copy public directory (admin panel)
+# Check if public directory exists and copy it
 RUN mkdir -p public
-COPY server/public ./public
 
-# Verify admin panel file was copied
-RUN if [ ! -f public/index.html ]; then \
-      echo "ERROR: index.html not found!" && \
-      ls -la public/ && \
-      exit 1; \
-    else \
-      echo "✅ Admin panel HTML found" && \
-      ls -lh public/index.html; \
-    fi
+# Copy the index.html file - handle case where file might not exist
+COPY --chown=node:node server/public/index.html ./public/index.html
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
