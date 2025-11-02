@@ -2303,7 +2303,7 @@ const startServer = async () => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
       console.log(`API URL: http://0.0.0.0:${PORT}`);
-      console.log(`💾 Database: PostgreSQL connected`);
+      console.log(`💾 Database: ${db.isConnected() ? 'PostgreSQL connected ✅' : 'Not connected ⚠️ (in-memory mode)'}`);
       console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
     });
   } catch (error) {
