@@ -37,6 +37,7 @@ const CreateProfileScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
   const [mobileVerificationEnabled, setMobileVerificationEnabled] = useState(false);
   const [loadingFeatures, setLoadingFeatures] = useState(true);
+  const [verificationIdState, setVerificationIdState] = useState<string | null>(null);
 
   useEffect(() => {
     checkMobileVerificationFeature();
@@ -88,6 +89,11 @@ const CreateProfileScreen: React.FC = () => {
     const result = await sendVerificationCode(mobileNumber.trim(), username.trim());
     
     if (result.success) {
+      // Try to extract verificationId from result if available
+      // The sendVerificationCode response should include verificationId
+      if (result.verificationId) {
+        setVerificationIdState(result.verificationId);
+      }
       Alert.alert(
         'Verification Code Sent',
         `A verification code has been sent to ${mobileNumber}.\n\n${result.message}`,
@@ -146,14 +152,14 @@ const CreateProfileScreen: React.FC = () => {
       const savedUser = JSON.parse(savedUserJson);
       // User is created on backend, now update with interests
       const userWithInterests = {
-        ...result.user,
+        ...savedUser,
         interests: selectedInterests,
         displayName: buzzProfileName.trim(),
       };
       
       // Update user with interests on backend
       try {
-        const updateResponse = await ApiService.updateUser(result.user.id, {
+        const updateResponse = await ApiService.updateUser(savedUser.id, {
           interests: selectedInterests,
           displayName: buzzProfileName.trim(),
         });
