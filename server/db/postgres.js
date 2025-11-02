@@ -14,13 +14,22 @@ const connectDB = async () => {
                           process.env.POSTGRES_URL ||
                           process.env.POSTGRES_CONNECTION_STRING;
 
+  // Debug: Log what we found (without password)
+  console.log('🔍 Checking for database connection string...');
+  console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Not set');
+  console.log('  - POSTGRES_URL:', process.env.POSTGRES_URL ? '✅ Set' : '❌ Not set');
+  console.log('  - POSTGRES_CONNECTION_STRING:', process.env.POSTGRES_CONNECTION_STRING ? '✅ Set' : '❌ Not set');
+
   if (!connectionString) {
     console.warn('⚠️ DATABASE_URL environment variable not set');
     console.warn('⚠️ Server will run in fallback mode (in-memory storage only)');
     console.warn('⚠️ To enable database, set DATABASE_URL in Railway environment variables');
+    console.warn('⚠️ Or create a .env file in the server directory with: DATABASE_URL=your_connection_string');
     isConnected = false;
     return null;
   }
+  
+  console.log('✅ Found database connection string (length:', connectionString.length, 'characters)');
 
   try {
     console.log('🔌 Connecting to PostgreSQL...');
@@ -63,10 +72,28 @@ const connectDB = async () => {
     return pool;
   } catch (error) {
     console.error('❌ PostgreSQL connection error:', error.message || error);
+    console.error('❌ Error details:', {
+      code: error.code,
+      name: error.name,
+      message: error.message,
+      stack: error.stack ? error.stack.split('\n').slice(0, 5).join('\n') : 'No stack trace'
+    });
     isConnected = false;
     pool = null;
     console.warn('⚠️ Server will continue without database connection');
     console.warn('⚠️ Users and data will be stored in memory only');
+    
+    // Provide helpful debugging info
+    if (error.code === 'ECONNREFUSED') {
+      console.warn('💡 Connection refused - Check if PostgreSQL service is running');
+    } else if (error.code === 'ENOTFOUND') {
+      console.warn('💡 Host not found - Check if connection string host is correct');
+    } else if (error.message && error.message.includes('password')) {
+      console.warn('💡 Authentication failed - Check if password in connection string is correct');
+    } else if (error.message && error.message.includes('SSL')) {
+      console.warn('💡 SSL error - Try adding ?sslmode=require to connection string');
+    }
+    
     return null;
   }
 };

@@ -6,7 +6,24 @@ const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
 // Load environment variables FIRST, before any other imports that might use them
-require('dotenv').config();
+// Try loading from server directory first, then root directory
+const path = require('path');
+const fs = require('fs');
+
+// Check if .env exists in server directory
+const serverEnvPath = path.join(__dirname, '.env');
+const rootEnvPath = path.join(__dirname, '..', '.env');
+
+if (fs.existsSync(serverEnvPath)) {
+  console.log('📁 Loading .env from server directory');
+  require('dotenv').config({ path: serverEnvPath });
+} else if (fs.existsSync(rootEnvPath)) {
+  console.log('📁 Loading .env from root directory');
+  require('dotenv').config({ path: rootEnvPath });
+} else {
+  console.log('📁 No .env file found, using environment variables');
+  require('dotenv').config(); // Still try default locations
+}
 
 const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
 // Use PostgreSQL instead of MongoDB
