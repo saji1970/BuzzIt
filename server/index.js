@@ -5,10 +5,12 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
+// Load environment variables FIRST, before any other imports that might use them
+require('dotenv').config();
+
 const { defaultFeatures, featureCategories, featureDescriptions } = require('./config/features');
 // Use PostgreSQL instead of MongoDB
 const { connectDB, query, getPool } = require('./db/postgres');
-require('dotenv').config();
 
 // PostgreSQL database functions
 const db = {
