@@ -174,12 +174,8 @@ const CreateProfileScreen: React.FC = () => {
           Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
             {
               text: 'OK',
-              onPress: () => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{name: 'MainTabs' as never}],
-                });
-              },
+              // Navigation will happen automatically when isAuthenticated becomes true
+              // The App.tsx will switch from CreateProfile to MainTabs automatically
             },
           ]);
         } else {
@@ -192,12 +188,7 @@ const CreateProfileScreen: React.FC = () => {
           Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
             {
               text: 'OK',
-              onPress: () => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{name: 'MainTabs' as never}],
-                });
-              },
+              // Navigation will happen automatically when isAuthenticated becomes true
             },
           ]);
         }
@@ -212,12 +203,7 @@ const CreateProfileScreen: React.FC = () => {
         Alert.alert('Success', 'Profile created! (Some details may not be saved)', [
           {
             text: 'OK',
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{name: 'MainTabs' as never}],
-              });
-            },
+            // Navigation will happen automatically when isAuthenticated becomes true
           },
         ]);
       }
@@ -299,13 +285,8 @@ const CreateProfileScreen: React.FC = () => {
           Alert.alert('Success', 'Profile created and logged in successfully! 🎉', [
             {
               text: 'OK',
-              onPress: () => {
-                // Navigate to MainTabs (Home) after profile creation
-                navigation.reset({
-                  index: 0,
-                  routes: [{name: 'MainTabs' as never}],
-                });
-              },
+              // Navigation will happen automatically when isAuthenticated becomes true
+              // The App.tsx will switch from CreateProfile to MainTabs automatically
             },
           ]);
         } else {
@@ -318,12 +299,7 @@ const CreateProfileScreen: React.FC = () => {
           Alert.alert('Partial Success', 'Profile created on server, but automatic login failed. Please login manually.', [
             {
               text: 'OK',
-              onPress: () => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{name: 'Login' as never}],
-                });
-              },
+              // Navigation will happen automatically - user stays on CreateProfile/Login
             },
           ]);
         }
