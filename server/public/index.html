@@ -629,7 +629,7 @@
 
         async function loadUsers() {
             try {
-                const response = await fetch('/api/admin/users', {
+                const response = await fetch('/api/admin/users?page=1&limit=100', {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
                     }
@@ -640,9 +640,15 @@
                 if (data.success) {
                     currentUsers = data.data.users;
                     renderUsers(data.data.users);
+                } else {
+                    console.error('Failed to load users:', data.error || data.message);
+                    const container = document.getElementById('usersContainer');
+                    container.innerHTML = `<div class="error-message">Error loading users: ${data.error || 'Unknown error'}</div>`;
                 }
             } catch (error) {
                 console.error('Error loading users:', error);
+                const container = document.getElementById('usersContainer');
+                container.innerHTML = `<div class="error-message">Network error loading users. Please refresh the page.</div>`;
             }
         }
 

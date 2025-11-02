@@ -1491,20 +1491,28 @@ const migrateInitialData = async () => {
       console.log(`✅ Migrated ${buzzes.length} buzzes`);
     }
     
-    // Create admin user if doesn't exist
+    // Create admin user if doesn't exist (with password)
     const adminExists = await User.findOne({ username: 'admin' });
     if (!adminExists) {
+      // Hash admin password (default: "admin")
+      const hashedPassword = await bcrypt.hash('admin', 10);
       const adminUser = new User({
         id: 'admin-1',
         username: 'admin',
         email: 'admin@buzzit.app',
         displayName: 'Admin',
+        password: hashedPassword,
         role: 'super_admin',
         isVerified: true,
         createdAt: new Date(),
       });
       await adminUser.save();
-      console.log('✅ Created admin user');
+      console.log('✅ Created admin user (username: admin, password: admin)');
+    } else if (!adminExists.password) {
+      // If admin exists but has no password, add it
+      const hashedPassword = await bcrypt.hash('admin', 10);
+      await User.updateOne({ username: 'admin' }, { password: hashedPassword });
+      console.log('✅ Added password to existing admin user');
     }
     
     console.log('✅ Migration complete');
