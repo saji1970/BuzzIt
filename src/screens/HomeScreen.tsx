@@ -21,7 +21,6 @@ import {useFeatures} from '../context/FeatureContext';
 import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
-import CreateProfileScreen from './CreateProfileScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
 import ConnectionStatus from '../components/ConnectionStatus';
@@ -348,9 +347,26 @@ const HomeScreen: React.FC = () => {
     );
   }
   
-  // Show Create Profile screen ONLY if user is truly not authenticated
+  // HomeScreen should only render when authenticated (navigation handles login/profile screens)
+  // But we'll still handle the case gracefully if somehow rendered while not authenticated
+  if (authLoading) {
+    return (
+      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
+        <Text style={{color: theme.colors.text}}>Loading...</Text>
+      </View>
+    );
+  }
+  
+  // If not authenticated, navigation should handle redirecting to Login/CreateProfile
+  // But we'll show a message just in case
   if (!isAuthenticated) {
-    return <CreateProfileScreen />;
+    return (
+      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center', padding: 20}]}>
+        <Text style={{color: theme.colors.text, fontSize: 16, textAlign: 'center'}}>
+          Please login or create a profile to continue.
+        </Text>
+      </View>
+    );
   }
   
   // Create a minimal user object as fallback if user is null
