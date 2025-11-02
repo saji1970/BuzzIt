@@ -223,7 +223,24 @@ class ApiService {
   }
 
   async checkUsernameAvailability(username: string): Promise<ApiResponse<{ available: boolean }>> {
-    return this.makeRequest<{ available: boolean }>(`/api/users/check-username/${username}`);
+    const response = await this.makeRequest<{ available: boolean }>(`/api/users/check-username/${username}`);
+    // Handle both formats: {available: boolean} and {success: true, available: boolean}
+    if (response.success && response.data) {
+      return {
+        success: true,
+        data: typeof response.data === 'object' && 'available' in response.data
+          ? response.data
+          : { available: response.data as any }
+      };
+    }
+    // Fallback for direct {available: boolean} response
+    if (!response.success && 'available' in response) {
+      return {
+        success: true,
+        data: { available: (response as any).available }
+      };
+    }
+    return response;
   }
 
   // Buzzes
