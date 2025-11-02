@@ -12,6 +12,9 @@ class ContactSyncService {
    */
   async requestContactsPermission(): Promise<boolean> {
     try {
+      if (!Contacts) {
+        Contacts = require('expo-contacts');
+      }
       const { status } = await Contacts.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
@@ -29,6 +32,11 @@ class ContactSyncService {
     phone?: string;
   }>> {
     try {
+      if (!Contacts) {
+        console.warn('expo-contacts not available');
+        return [];
+      }
+
       const hasPermission = await this.requestContactsPermission();
       if (!hasPermission) {
         console.warn('Contacts permission not granted');
