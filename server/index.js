@@ -698,23 +698,47 @@ app.get('/api/buzzes/:id', async (req, res) => {
   }
 });
 
-app.post('/api/buzzes', verifyToken, (req, res) => {
-  const newBuzz = {
-    id: generateId(),
-    userId: req.userId,
-    username: req.body.username,
-    userAvatar: req.body.userAvatar || null,
-    content: req.body.content,
-    media: req.body.media || { type: null, url: null },
-    interests: req.body.interests || [],
-    likes: 0,
-    comments: 0,
-    shares: 0,
-    createdAt: new Date().toISOString(),
-    isLiked: false,
-  };
-  buzzes.push(newBuzz);
-  res.status(201).json(newBuzz);
+app.post('/api/buzzes', verifyToken, async (req, res) => {
+  try {
+    // Get user info
+    const user = await User.findOne({ id: req.userId }).lean();
+    const username = user ? user.username : (req.body.username || 'anonymous');
+    const displayName = user ? user.displayName : username;
+    
+    const newBuzz = new Buzz({
+      id: generateId(),
+      userId: req.userId,
+      username: username,
+      displayName: displayName,
+      content: req.body.content,
+      type: req.body.type || 'text',
+      media: req.body.media || { type: null, url: null },
+      interests: req.body.interests || [],
+      location: req.body.location || null,
+      buzzType: req.body.buzzType || 'thought',
+      eventDate: req.body.eventDate || null,
+      pollOptions: req.body.pollOptions || [],
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      isLiked: false,
+    });
+    
+    const savedBuzz = await newBuzz.save();
+    
+    // Also add to in-memory array for backwards compatibility
+    buzzes.push(savedBuzz.toObject());
+    
+    // Update user buzz count
+    if (user) {
+      await User.updateOne({ id: req.userId }, { $inc: { buzzCount: 1 } });
+    }
+    
+    res.status(201).json(savedBuzz.toObject());
+  } catch (error) {
+    console.error('Create buzz error:', error);
+    res.status(500).json({ error: 'Failed to create buzz' });
+  }
 });
 
 app.patch('/api/buzzes/:id/like', verifyToken, (req, res) => {
