@@ -1802,11 +1802,25 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
-    // Start server anyway (fallback mode)
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`⚠️ Server running in fallback mode (no database)`);
-      console.log(`API URL: http://0.0.0.0:${PORT}`);
-    });
+    console.error('Error stack:', error.stack);
+    
+    // If database connection fails, still start server in fallback mode
+    // but log the error clearly
+    if (error.message && error.message.includes('Mongo')) {
+      console.error('⚠️ MongoDB connection failed, starting in fallback mode');
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`⚠️ Server running in fallback mode (no database)`);
+        console.log(`API URL: http://0.0.0.0:${PORT}`);
+        console.log('⚠️ Some features may not work without database connection');
+      });
+    } else {
+      // For other errors, try to start server anyway
+      console.error('⚠️ Starting server despite error (some features may not work)');
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`⚠️ Server running in degraded mode`);
+        console.log(`API URL: http://0.0.0.0:${PORT}`);
+      });
+    }
   }
 };
 
