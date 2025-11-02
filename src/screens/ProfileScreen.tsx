@@ -38,16 +38,31 @@ const ProfileScreen: React.FC = () => {
   useEffect(() => {
     if (user) {
       setEditForm({
-        username: user.username,
-        displayName: user.displayName,
-        email: user.email,
-        bio: user.bio,
+        username: user.username || '',
+        displayName: user.displayName || '',
+        email: user.email || '',
+        bio: user.bio || '',
         city: user.city || '',
         country: user.country || '',
       });
-      setSelectedInterests(user.interests);
+      setSelectedInterests(user.interests || []);
     }
   }, [user]);
+
+  // Refresh form data when entering edit mode
+  useEffect(() => {
+    if (isEditing && user) {
+      setEditForm({
+        username: user.username || '',
+        displayName: user.displayName || '',
+        email: user.email || '',
+        bio: user.bio || '',
+        city: user.city || '',
+        country: user.country || '',
+      });
+      setSelectedInterests(user.interests || []);
+    }
+  }, [isEditing, user]);
 
   const handleSaveProfile = async () => {
     if (!editForm.username.trim() || !editForm.displayName.trim()) {
