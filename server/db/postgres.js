@@ -24,24 +24,31 @@ const connectDB = async () => {
 
   try {
     console.log('🔌 Connecting to PostgreSQL...');
+    console.log('📍 Connection string:', connectionString.replace(/:[^:@]+@/, ':****@')); // Hide password in logs
+    
+    // Railway PostgreSQL requires SSL for internal connections
+    const isRailway = connectionString.includes('railway') || connectionString.includes('railway.internal');
+    const useSSL = isRailway || process.env.NODE_ENV === 'production';
     
     pool = new Pool({
       connectionString,
-      ssl: connectionString.includes('sslmode=require') || connectionString.includes('sslmode=require') 
-        ? { rejectUnauthorized: false } 
-        : process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      connectionTimeoutMillis: 5000,
+      ssl: useSSL ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 10000, // Increased timeout
       idleTimeoutMillis: 30000,
       max: 20, // Maximum number of clients in the pool
     });
 
-    // Test connection
+    // Test connection with timeout
+    console.log('🔄 Testing database connection...');
     const client = await pool.connect();
-    await client.query('SELECT NOW()');
+    const testResult = await client.query('SELECT NOW(), current_database(), version()');
     client.release();
 
-    isConnected = true;
     console.log('✅ PostgreSQL connected successfully');
+    console.log('📊 Database:', testResult.rows[0].current_database);
+    console.log('⏰ Server time:', testResult.rows[0].now);
+    
+    isConnected = true;
     
     // Handle pool errors
     pool.on('error', (err) => {
@@ -50,6 +57,7 @@ const connectDB = async () => {
     });
 
     // Initialize database tables if they don't exist
+    console.log('🔨 Initializing database tables...');
     await initializeTables();
     
     return pool;
@@ -64,12 +72,17 @@ const connectDB = async () => {
 };
 
 const initializeTables = async () => {
-  if (!pool || !isConnected) return;
+  if (!pool || !isConnected) {
+    console.error('❌ Cannot initialize tables: pool or connection not available');
+    return;
+  }
 
   try {
     const client = await pool.connect();
+    console.log('📝 Creating database tables...');
     
     // Create users table
+    console.log('  → Creating users table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
@@ -95,14 +108,17 @@ const initializeTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('  ✅ Users table created');
 
     // Create indexes
+    console.log('  → Creating users indexes...');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
 
     // Create buzzes table
+    console.log('  → Creating buzzes table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS buzzes (
         id VARCHAR(255) PRIMARY KEY,
@@ -129,13 +145,16 @@ const initializeTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('  ✅ Buzzes table created');
 
     // Create buzzes indexes
+    console.log('  → Creating buzzes indexes...');
     await client.query('CREATE INDEX IF NOT EXISTS idx_buzzes_user_id ON buzzes(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_buzzes_created_at ON buzzes(created_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_buzzes_user_created ON buzzes(user_id, created_at DESC)');
 
     // Create user_interactions table
+    console.log('  → Creating user_interactions table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_interactions (
         id SERIAL PRIMARY KEY,
@@ -147,11 +166,13 @@ const initializeTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('  ✅ User interactions table created');
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON user_interactions(user_id, timestamp DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_interactions_buzz_id ON user_interactions(buzz_id, type)');
 
     // Create verification_codes table
+    console.log('  → Creating verification_codes table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS verification_codes (
         id VARCHAR(255) PRIMARY KEY,
@@ -162,11 +183,13 @@ const initializeTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('  ✅ Verification codes table created');
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_verification_mobile ON verification_codes(mobile_number)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_verification_expires ON verification_codes(expires_at)');
 
     // Create live_streams table
+    console.log('  → Creating live_streams table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS live_streams (
         id VARCHAR(255) PRIMARY KEY,
@@ -186,15 +209,29 @@ const initializeTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('  ✅ Live streams table created');
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_streams_user_id ON live_streams(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_streams_is_live ON live_streams(is_live)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_streams_started_at ON live_streams(started_at DESC)');
 
+    // Verify tables were created
+    const tablesResult = await client.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+      ORDER BY table_name
+    `);
+    
+    console.log('📋 Created tables:', tablesResult.rows.map(r => r.table_name).join(', '));
+
     client.release();
-    console.log('✅ Database tables initialized');
+    console.log('✅ Database tables initialized successfully');
   } catch (error) {
     console.error('❌ Error initializing tables:', error.message || error);
+    console.error('Error stack:', error.stack);
+    throw error; // Re-throw so we know tables weren't created
   }
 };
 
