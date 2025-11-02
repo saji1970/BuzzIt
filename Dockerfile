@@ -15,6 +15,12 @@ COPY server/*.js ./
 # Copy config directory
 COPY server/config ./config/
 
+# Copy models directory (MongoDB models)
+COPY server/models ./models/
+
+# Copy db directory (database connection)
+COPY server/db ./db/
+
 # Copy public directory (admin panel)
 RUN mkdir -p public
 COPY server/public/index.html ./public/index.html
