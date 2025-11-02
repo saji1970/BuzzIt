@@ -951,6 +951,15 @@ app.patch('/api/users/:id', verifyToken, async (req, res) => {
       const values = [];
       let paramIndex = 1;
 
+      // Handle password update with hashing
+      if (req.body.password !== undefined) {
+        const hashedPassword = await bcrypt.hash(req.body.password, 10);
+        updateFields.push(`password = $${paramIndex}`);
+        values.push(hashedPassword);
+        paramIndex++;
+        console.log('✅ Password will be updated for user:', req.params.id);
+      }
+
       if (req.body.displayName !== undefined) {
         updateFields.push(`display_name = $${paramIndex++}`);
         values.push(req.body.displayName);
