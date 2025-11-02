@@ -123,7 +123,11 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
       });
 
       if (response.success) {
-        return {success: true, message: response.data?.message || 'Verification code sent'};
+        return {
+          success: true,
+          message: response.data?.message || 'Verification code sent',
+          verificationId: response.data?.verificationId || null,
+        };
       } else {
         return {success: false, error: response.error || 'Failed to send verification code'};
       }
