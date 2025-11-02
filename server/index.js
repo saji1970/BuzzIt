@@ -608,13 +608,28 @@ app.post('/api/auth/login', async (req, res) => {
     });
     
     if (!userPassword) {
-      console.error('❌ Login error: No password found for user:', username);
-      console.error('   User ID:', userObj.id);
-      console.error('   Database row:', userRow ? 'exists' : 'not found');
-      console.error('   Memory user:', userObj ? 'exists' : 'not found');
-      return res.status(401).json({ 
-        error: 'Invalid credentials',
-        message: 'User account has no password. Please contact support or create a new account.'
+      console.warn('⚠️ Login attempt for user without password:', username);
+      console.warn('   This user was likely created before password hashing was implemented.');
+      console.warn('   User ID:', userObj.id);
+      
+      // For backward compatibility: allow login with any password if user has no password
+      // This is a temporary measure for users created before password hashing
+      console.warn('   Allowing login without password verification (backward compatibility)');
+      
+      // Generate token and allow login
+      const token = generateToken(userObj.id || userObj._id);
+      const isAdmin = adminUsers.some(a => a.id === (userObj.id || userObj._id)) || 
+                     userObj.role === 'admin' || userObj.role === 'super_admin';
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = userObj;
+
+      return res.json({
+        success: true,
+        user: userWithoutPassword,
+        token,
+        isAdmin,
+        warning: 'This account has no password. Please update your password in settings for security.'
       });
     }
 
