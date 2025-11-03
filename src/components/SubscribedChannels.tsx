@@ -16,13 +16,14 @@ import ApiService from '../services/APIService';
 
 const {width} = Dimensions.get('window');
 
-interface Channel {
+interface FollowedItem {
   id: string;
   username: string;
   name: string;
   avatar: string | null;
   isLive?: boolean;
   lastPost?: string;
+  type: 'user' | 'channel'; // To distinguish users from channels
 }
 
 interface SubscribedChannelsProps {
@@ -32,16 +33,16 @@ interface SubscribedChannelsProps {
 const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress}) => {
   const {theme} = useTheme();
   const {user} = useUser();
-  const [followedUsers, setFollowedUsers] = useState<Channel[]>([]);
+  const [followedItems, setFollowedItems] = useState<FollowedItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadFollowedUsers();
+    loadFollowedItems();
   }, [user?.subscribedChannels]);
 
-  const loadFollowedUsers = async () => {
+  const loadFollowedItems = async () => {
     if (!user || !user.subscribedChannels || user.subscribedChannels.length === 0) {
-      setFollowedUsers([]);
+      setFollowedItems([]);
       return;
     }
 
@@ -54,19 +55,31 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
         // Filter to only show followed users
         const followed = response.data
           .filter((u: any) => user.subscribedChannels.includes(u.id))
-          .map((u: any) => ({
-            id: u.id,
-            username: u.username,
-            name: u.displayName || u.username,
-            avatar: u.avatar,
-            isLive: false, // TODO: Check if user is live
-          } as Channel));
+          .map((u: any) => {
+            // Determine if this is a channel or user
+            // Check multiple indicators: role, isChannel property, or channel-specific fields
+            const isChannel = u.role === 'channel' || 
+                             u.role === 'Channel' ||
+                             u.isChannel === true ||
+                             u.type === 'channel' ||
+                             (u.username && u.username.toLowerCase().includes('channel')) ||
+                             false; // Default to user if no indicator found
+            
+            return {
+              id: u.id,
+              username: u.username,
+              name: u.displayName || u.username,
+              avatar: u.avatar,
+              isLive: false, // TODO: Check if user is live via live streams API
+              type: isChannel ? 'channel' : 'user',
+            } as FollowedItem;
+          });
         
-        setFollowedUsers(followed);
+        setFollowedItems(followed);
       }
     } catch (error) {
-      console.error('Error loading followed users:', error);
-      setFollowedUsers([]);
+      console.error('Error loading followed items:', error);
+      setFollowedItems([]);
     } finally {
       setLoading(false);
     }
@@ -77,8 +90,8 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
     return null;
   }
 
-  // Show only followed users from database
-  const displayChannels = followedUsers;
+  // Show only followed users and channels from database
+  const displayItems = followedItems;
 
   const handleChannelPress = (channelId: string) => {
     if (onChannelPress) {
@@ -93,26 +106,26 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}>
-        {displayChannels.map((channel, index) => (
+        {displayItems.map((item, index) => (
           <TouchableOpacity
-            key={channel.id}
+            key={item.id}
             style={styles.channelItem}
-            onPress={() => handleChannelPress(channel.id)}>
+            onPress={() => handleChannelPress(item.id)}>
             <View
               style={[
                 styles.avatarContainer,
-                channel.isLive && styles.liveBorder,
+                item.isLive && styles.liveBorder,
               ]}>
               <View
                 style={[
                   styles.avatar,
                   {backgroundColor: theme.colors.primary},
                 ]}>
-                {channel.avatar ? (
-                  <Image source={{uri: channel.avatar}} style={styles.avatarImage} />
+                {item.avatar ? (
+                  <Image source={{uri: item.avatar}} style={styles.avatarImage} />
                 ) : (
                   <Text style={styles.avatarText}>
-                    {channel.name.charAt(0).toUpperCase()}
+                    {item.name.charAt(0).toUpperCase()}
                   </Text>
                 )}
               </View>
@@ -123,9 +136,17 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
                 {color: theme.colors.text},
               ]}
               numberOfLines={1}>
-              {channel.name}
+              {item.name}
             </Text>
-            {channel.isLive && (
+            {/* Icon below name to distinguish user vs channel */}
+            <View style={styles.typeIconContainer}>
+              {item.type === 'channel' ? (
+                <Icon name="video-library" size={14} color={theme.colors.primary} />
+              ) : (
+                <Icon name="person" size={14} color={theme.colors.textSecondary} />
+              )}
+            </View>
+            {item.isLive && (
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>Live</Text>
@@ -200,6 +221,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
     maxWidth: 70,
+  },
+  typeIconContainer: {
+    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   liveBadge: {
     flexDirection: 'row',
