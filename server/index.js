@@ -108,6 +108,16 @@ app.get('/user-login', (req, res) => {
   }
 });
 
+// User streaming page route
+app.get('/user-streaming', (req, res) => {
+  const userStreamingPath = path.join(publicPath, 'user-streaming.html');
+  if (fs.existsSync(userStreamingPath)) {
+    res.sendFile(userStreamingPath);
+  } else {
+    res.status(404).json({ error: 'User streaming page not found' });
+  }
+});
+
 // Simple root endpoint - serve admin panel HTML, or API info if requested as JSON
 app.get('/', (req, res) => {
   // If client requests JSON, return API info
