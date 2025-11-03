@@ -41,41 +41,63 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
   }, [user?.subscribedChannels]);
 
   const loadFollowedItems = async () => {
-    if (!user || !user.subscribedChannels || user.subscribedChannels.length === 0) {
-      setFollowedItems([]);
-      return;
-    }
-
     setLoading(true);
     try {
       // Get all users from API
       const response = await ApiService.getAllUsers();
       
       if (response.success && response.data) {
-        // Filter to only show followed users
-        const followed = response.data
-          .filter((u: any) => user.subscribedChannels.includes(u.id))
-          .map((u: any) => {
-            // Determine if this is a channel or user
-            // Check multiple indicators: role, isChannel property, or channel-specific fields
-            const isChannel = u.role === 'channel' || 
-                             u.role === 'Channel' ||
-                             u.isChannel === true ||
-                             u.type === 'channel' ||
-                             (u.username && u.username.toLowerCase().includes('channel')) ||
-                             false; // Default to user if no indicator found
-            
-            return {
-              id: u.id,
-              username: u.username,
-              name: u.displayName || u.username,
-              avatar: u.avatar,
-              isLive: false, // TODO: Check if user is live via live streams API
-              type: isChannel ? 'channel' : 'user',
-            } as FollowedItem;
-          });
+        let itemsToShow: FollowedItem[] = [];
         
-        setFollowedItems(followed);
+        // If user has subscribed channels, filter to show only followed users
+        if (user && user.subscribedChannels && user.subscribedChannels.length > 0) {
+          // Filter to only show followed users
+          const followed = response.data
+            .filter((u: any) => user.subscribedChannels.includes(u.id))
+            .map((u: any) => {
+              // Determine if this is a channel or user
+              const isChannel = u.role === 'channel' || 
+                               u.role === 'Channel' ||
+                               u.isChannel === true ||
+                               u.type === 'channel' ||
+                               (u.username && u.username.toLowerCase().includes('channel')) ||
+                               false;
+              
+              return {
+                id: u.id,
+                username: u.username,
+                name: u.displayName || u.username,
+                avatar: u.avatar,
+                isLive: false,
+                type: isChannel ? 'channel' : 'user',
+              } as FollowedItem;
+            });
+          itemsToShow = followed;
+        } else {
+          // If no subscriptions, show all users from database
+          itemsToShow = response.data
+            .filter((u: any) => u.id !== user?.id) // Exclude current user
+            .slice(0, 20) // Limit to first 20 for performance
+            .map((u: any) => {
+              const isChannel = u.role === 'channel' || 
+                               u.role === 'Channel' ||
+                               u.isChannel === true ||
+                               u.type === 'channel' ||
+                               (u.username && u.username.toLowerCase().includes('channel')) ||
+                               false;
+              
+              return {
+                id: u.id,
+                username: u.username,
+                name: u.displayName || u.username,
+                avatar: u.avatar,
+                isLive: false,
+                type: isChannel ? 'channel' : 'user',
+              } as FollowedItem;
+            });
+        }
+        
+        setFollowedItems(itemsToShow);
       }
     } catch (error) {
       console.error('Error loading followed items:', error);
