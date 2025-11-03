@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -83,6 +83,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const {features} = useFeatures();
   const [showShareModal, setShowShareModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
+  const [countdown, setCountdown] = useState<string>('');
 
   const handleShareClick = () => {
     setShowShareModal(true);
@@ -121,6 +122,42 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     setShowMenuModal(false);
     Alert.alert('Saved', 'This buzz has been saved to your collection!');
   };
+
+  // Countdown timer for scheduled streams/events
+  useEffect(() => {
+    if (buzz.eventDate) {
+      const updateCountdown = () => {
+        const eventDate = new Date(buzz.eventDate!);
+        const now = new Date();
+        const diff = eventDate.getTime() - now.getTime();
+
+        if (diff <= 0) {
+          setCountdown('Live Now!');
+          return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        if (days > 0) {
+          setCountdown(`${days}d ${hours}h ${minutes}m`);
+        } else if (hours > 0) {
+          setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+        } else if (minutes > 0) {
+          setCountdown(`${minutes}m ${seconds}s`);
+        } else {
+          setCountdown(`${seconds}s`);
+        }
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [buzz.eventDate]);
 
   const formatTimeAgo = (date: Date | string) => {
     const now = new Date();
@@ -185,12 +222,22 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                 source={{ uri: buzz.media.url }}
                 style={styles.video}
                 useNativeControls={true}
-                resizeMode="contain"
+                resizeMode={ResizeMode.CONTAIN}
                 shouldPlay={false}
                 isLooping={false}
                 isMuted={false}
               />
             )}
+          </View>
+        )}
+
+        {/* Countdown for scheduled streams/events */}
+        {buzz.eventDate && countdown && (
+          <View style={[styles.countdownContainer, {backgroundColor: theme.colors.primary + '20'}]}>
+            <Icon name="schedule" size={16} color={theme.colors.primary} />
+            <Text style={[styles.countdownText, {color: theme.colors.primary}]}>
+              ⏰ {countdown}
+            </Text>
           </View>
         )}
 
@@ -295,6 +342,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  countdownText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',

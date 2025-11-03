@@ -24,6 +24,8 @@ import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
+import StreamViewerScreen from './StreamViewerScreen';
+import CreateStreamScreen from './CreateStreamScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
 import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
@@ -33,6 +35,7 @@ import ContactSyncService from '../components/ContactSyncService';
 const {width} = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
+  const navigation = useNavigation();
   const {theme} = useTheme();
   const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
   const {isAuthenticated, isLoading: authLoading, user: authUser} = useAuth();
@@ -42,6 +45,7 @@ const HomeScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
   const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
+  const [selectedStream, setSelectedStream] = useState<LiveStream | null>(null);
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [loadingLiveStreams, setLoadingLiveStreams] = useState(false);
   const [userRecommendations, setUserRecommendations] = useState<UserRecommendation[]>([]);
@@ -67,7 +71,7 @@ const HomeScreen: React.FC = () => {
     loadBuzzes();
     loadLiveStreams();
     loadUserRecommendations();
-  }, [user, buzzes]);
+  }, [user, buzzes, authUser]);
 
   // Refresh live streams periodically
   useEffect(() => {
@@ -76,7 +80,7 @@ const HomeScreen: React.FC = () => {
     }, 30000); // Every 30 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [user, authUser]); // Recreate interval when user changes
 
   // Refresh buzzes when screen comes into focus
   useFocusEffect(
@@ -240,7 +244,20 @@ const HomeScreen: React.FC = () => {
       setLoadingLiveStreams(true);
       const response = await ApiService.getLiveStreams();
       if (response.success && response.data) {
-        setLiveStreams(response.data);
+        // Filter to only show streams from subscribed channels/users
+        const currentUserData = user || authUser;
+        const subscribedIds = currentUserData?.subscribedChannels || [];
+        
+        if (subscribedIds.length > 0) {
+          // Only show streams from subscribed channels
+          const filteredStreams = response.data.filter((stream: LiveStream) =>
+            subscribedIds.includes(stream.userId)
+          );
+          setLiveStreams(filteredStreams);
+        } else {
+          // If no subscriptions, show no streams
+          setLiveStreams([]);
+        }
       }
     } catch (error) {
       console.error('Error loading live streams:', error);
@@ -250,10 +267,11 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleStreamPress = (stream: LiveStream) => {
-    // Increment viewer count when stream is opened
-    ApiService.updateViewers(stream.id, 'increment');
-    // TODO: Navigate to full-screen stream view
-    console.log('Stream pressed:', stream.id);
+    setSelectedStream(stream);
+  };
+
+  const handleCloseStream = () => {
+    setSelectedStream(null);
   };
 
   const handleStreamUserPress = (userId: string) => {
@@ -450,11 +468,18 @@ const HomeScreen: React.FC = () => {
       <View style={[styles.buzzBanner, {backgroundColor: theme.colors.surface}]}>
         <View style={styles.buzzBannerContent}>
           <Text style={[styles.buzzText, {color: theme.colors.text}]}>Buzz</Text>
-          <TouchableOpacity
-            style={styles.searchIconButton}
-            onPress={() => setShowSearch(true)}>
-            <Icon name="search" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
+          <View style={{flexDirection: 'row', gap: 12}}>
+            <TouchableOpacity
+              style={styles.searchIconButton}
+              onPress={() => navigation.navigate('CreateStream' as never)}>
+              <Icon name="videocam" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.searchIconButton}
+              onPress={() => setShowSearch(true)}>
+              <Icon name="search" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -522,8 +547,9 @@ const HomeScreen: React.FC = () => {
         selectedInterests={selectedInterests}
       />
 
-      {/* Live Streams Section */}
-      {liveStreams.length > 0 && (
+      {/* Live Streams Section - Only show if user has subscriptions */}
+      {((user?.subscribedChannels && user.subscribedChannels.length > 0) || 
+        (authUser?.subscribedChannels && authUser.subscribedChannels.length > 0)) && (
         <View style={styles.liveStreamsSection}>
           <View style={styles.sectionHeader}>
             <Icon name="videocam" size={20} color={theme.colors.primary} />
@@ -531,16 +557,25 @@ const HomeScreen: React.FC = () => {
               Live Now
             </Text>
           </View>
-          <FlatList
-            data={liveStreams}
-            renderItem={renderLiveStream}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.liveStreamsList}
-            refreshing={loadingLiveStreams}
-            onRefresh={loadLiveStreams}
-          />
+          {liveStreams.length > 0 ? (
+            <FlatList
+              data={liveStreams}
+              renderItem={renderLiveStream}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.liveStreamsList}
+              refreshing={loadingLiveStreams}
+              onRefresh={loadLiveStreams}
+            />
+          ) : (
+            <View style={[styles.emptyStreamsContainer, {backgroundColor: theme.colors.surface}]}>
+              <Icon name="videocam-off" size={48} color={theme.colors.textSecondary} />
+              <Text style={[styles.emptyStreamsText, {color: theme.colors.textSecondary}]}>
+                No live streams from your subscribed channels
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -575,6 +610,14 @@ const HomeScreen: React.FC = () => {
           buzzerId={selectedBuzzerId}
           visible={!!selectedBuzzerId}
           onClose={handleCloseBuzzerProfile}
+        />
+      )}
+
+      {selectedStream && (
+        <StreamViewerScreen
+          stream={selectedStream}
+          visible={!!selectedStream}
+          onClose={handleCloseStream}
         />
       )}
 
@@ -744,6 +787,19 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  emptyStreamsContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+  },
+  emptyStreamsText: {
+    marginTop: 12,
+    fontSize: 14,
+    textAlign: 'center',
   },
   liveStreamsSection: {
     marginBottom: 16,

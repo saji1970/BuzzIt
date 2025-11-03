@@ -48,12 +48,19 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
   const [showControls, setShowControls] = useState(false);
 
   useEffect(() => {
+    // Auto-play video when stream is live and has URL
+    if (stream.isLive && stream.streamUrl && videoRef) {
+      videoRef.playAsync().catch((error) => {
+        console.log('Auto-play prevented or failed:', error);
+      });
+    }
+    
     return () => {
       if (videoRef) {
-        videoRef.unloadAsync();
+        videoRef.unloadAsync().catch(() => {});
       }
     };
-  }, [videoRef]);
+  }, [stream.isLive, stream.streamUrl]);
 
   const handlePlayPause = async () => {
     if (!videoRef) return;
@@ -103,19 +110,30 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
         <View style={styles.videoContainer}>
           {stream.streamUrl && stream.isLive ? (
             <Video
-              ref={(ref) => setVideoRef(ref)}
+              ref={(ref) => {
+                setVideoRef(ref);
+                if (ref && stream.isLive) {
+                  // Try to play when ref is set
+                  setTimeout(() => {
+                    ref.playAsync().catch(() => {});
+                  }, 100);
+                }
+              }}
               source={{ uri: stream.streamUrl }}
               style={styles.video}
               useNativeControls={false}
               resizeMode="cover"
-              shouldPlay={isPlaying}
+              shouldPlay={stream.isLive}
               isLooping={false}
+              isMuted={true}
               onLoad={() => {
-                // Auto-play live streams
-                setIsPlaying(true);
-                if (videoRef) {
-                  videoRef.playAsync();
+                if (videoRef && stream.isLive) {
+                  setIsPlaying(true);
+                  videoRef.playAsync().catch(() => {});
                 }
+              }}
+              onError={(error) => {
+                console.log('Video playback error:', error);
               }}
             />
           ) : (

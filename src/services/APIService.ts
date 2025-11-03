@@ -527,6 +527,18 @@ class ApiService {
     });
   }
 
+  // Stream Comments
+  async getStreamComments(streamId: string): Promise<ApiResponse<any[]>> {
+    return this.makeRequest<any[]>(`/api/live-streams/${streamId}/comments`);
+  }
+
+  async addStreamComment(streamId: string, comment: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/api/live-streams/${streamId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    });
+  }
+
   // AI Recommendations
   async getUserRecommendations(params: {
     contacts?: Array<{name: string; email?: string; phone?: string}>;

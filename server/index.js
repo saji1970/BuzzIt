@@ -98,6 +98,16 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const publicPath = path.join(__dirname, 'public');
 app.use(express.static(publicPath));
 
+// User login page route
+app.get('/user-login', (req, res) => {
+  const userLoginPath = path.join(publicPath, 'user-login.html');
+  if (fs.existsSync(userLoginPath)) {
+    res.sendFile(userLoginPath);
+  } else {
+    res.status(404).json({ error: 'User login page not found' });
+  }
+});
+
 // Simple root endpoint - serve admin panel HTML, or API info if requested as JSON
 app.get('/', (req, res) => {
   // If client requests JSON, return API info
@@ -305,9 +315,9 @@ const verifyAdmin = async (req, res, next) => {
     const admin = await getUserById(decoded.userId);
     
     if (admin && (admin.role === 'admin' || admin.role === 'super_admin')) {
-      req.adminId = decoded.userId;
-      req.adminRole = admin.role;
-      next();
+    req.adminId = decoded.userId;
+    req.adminRole = admin.role;
+    next();
     } else {
       // Fallback to in-memory adminUsers
       const adminUser = adminUsers.find(a => a.id === decoded.userId);
@@ -476,7 +486,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     // Remove password from response
     const { password: _, ...userWithoutPassword } = savedUser.toObject();
-    
+
     res.json({
       success: true,
       user: userWithoutPassword,
@@ -542,8 +552,8 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
     
-    // Handle in-memory admin (default password: "admin")
-    if (admin && password === 'admin') {
+    // Handle in-memory admin (default password: "admin" or "admin123@")
+    if (admin && (password === 'admin' || password === 'admin123@')) {
       const token = generateToken(admin.id);
       return res.json({
         success: true,
@@ -679,7 +689,7 @@ app.post('/api/auth/login', async (req, res) => {
       success: true,
       user: userWithoutPassword,
       token,
-      isAdmin,
+      isAdmin: isAdmin || false,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -704,23 +714,26 @@ app.get('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Get users error:', error);
     // Fallback to in-memory array
-    res.json(users);
+  res.json(users);
   }
 });
 
 app.get('/api/users/me', verifyToken, async (req, res) => {
   try {
     const user = await getUserById(req.userId);
-    if (user) {
+  if (user) {
       const { password, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      res.json({
+        success: true,
+        data: userWithoutPassword
+      });
     } else {
       // Fallback to in-memory array
       const memUser = users.find(u => u.id === req.userId);
       if (memUser) {
         res.json(memUser);
-      } else {
-        res.status(404).json({ error: 'User not found' });
+  } else {
+    res.status(404).json({ error: 'User not found' });
       }
     }
   } catch (error) {
@@ -732,7 +745,7 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const user = await getUserById(req.params.id);
-    if (user) {
+  if (user) {
       const { password, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } else {
@@ -740,8 +753,8 @@ app.get('/api/users/:id', async (req, res) => {
       const memUser = users.find(u => u.id === req.params.id);
       if (memUser) {
         res.json(memUser);
-      } else {
-        res.status(404).json({ error: 'User not found' });
+  } else {
+    res.status(404).json({ error: 'User not found' });
       }
     }
   } catch (error) {
@@ -753,8 +766,8 @@ app.get('/api/users/:id', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     console.log('POST /api/users - Request received:', {
-      username: req.body.username,
-      displayName: req.body.displayName,
+    username: req.body.username,
+    displayName: req.body.displayName,
       hasInterests: !!req.body.interests?.length,
     });
 
@@ -831,17 +844,17 @@ app.post('/api/users', async (req, res) => {
       username: req.body.username.toLowerCase(),
       displayName: req.body.displayName || req.body.username,
       email: req.body.email || `${req.body.username}@buzzit.app`,
-      mobileNumber: req.body.mobileNumber || '',
-      bio: req.body.bio || '',
-      avatar: req.body.avatar || null,
+    mobileNumber: req.body.mobileNumber || '',
+    bio: req.body.bio || '',
+    avatar: req.body.avatar || null,
       dateOfBirth: req.body.dateOfBirth || null,
-      interests: req.body.interests || [],
-      followers: 0,
-      following: 0,
-      buzzCount: 0,
-      subscribedChannels: [],
-      blockedUsers: [],
-      isVerified: false,
+    interests: req.body.interests || [],
+    followers: 0,
+    following: 0,
+    buzzCount: 0,
+    subscribedChannels: [],
+    blockedUsers: [],
+    isVerified: false,
       password: hashedPassword,
     };
     
@@ -1017,12 +1030,12 @@ app.patch('/api/users/:id', verifyToken, async (req, res) => {
       res.json(userWithoutPassword);
     } else {
       // Fallback to in-memory array
-      const userIndex = users.findIndex(u => u.id === req.params.id);
-      if (userIndex !== -1) {
-        users[userIndex] = { ...users[userIndex], ...req.body };
-        res.json(users[userIndex]);
-      } else {
-        res.status(404).json({ error: 'User not found' });
+  const userIndex = users.findIndex(u => u.id === req.params.id);
+  if (userIndex !== -1) {
+    users[userIndex] = { ...users[userIndex], ...req.body };
+    res.json(users[userIndex]);
+  } else {
+    res.status(404).json({ error: 'User not found' });
       }
     }
   } catch (error) {
@@ -1057,7 +1070,7 @@ app.get('/api/users/check-username/:username', async (req, res) => {
     
     console.log(`Username check: "${username}" - exists: ${exists}, dbUser: ${!!dbUser}, memUser: ${!!memUser}`);
     
-    res.json({ available: !exists });
+  res.json({ available: !exists });
   } catch (error) {
     console.error('Check username error:', error);
     // On error, default to allowing username (better UX than blocking all)
@@ -1068,15 +1081,15 @@ app.get('/api/users/check-username/:username', async (req, res) => {
 // Buzz endpoints
 app.get('/api/buzzes', async (req, res) => {
   try {
-    const { userId, interests } = req.query;
+  const { userId, interests } = req.query;
     let query = {};
-    
-    if (userId) {
+
+  if (userId) {
       query.userId = userId;
-    }
-    
-    if (interests) {
-      const interestArray = interests.split(',');
+  }
+
+  if (interests) {
+    const interestArray = interests.split(',');
       query['interests.id'] = { $in: interestArray };
     }
     
@@ -1112,15 +1125,15 @@ app.get('/api/buzzes', async (req, res) => {
 app.get('/api/buzzes/:id', async (req, res) => {
   try {
     const buzz = await getBuzzById(req.params.id);
-    if (buzz) {
-      res.json(buzz);
+  if (buzz) {
+    res.json(buzz);
     } else {
       // Fallback to in-memory array
       const memBuzz = buzzes.find(b => b.id === req.params.id);
       if (memBuzz) {
         res.json(memBuzz);
-      } else {
-        res.status(404).json({ error: 'Buzz not found' });
+  } else {
+    res.status(404).json({ error: 'Buzz not found' });
       }
     }
   } catch (error) {
@@ -1139,14 +1152,14 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
     const buzzId = generateId();
     const newBuzzData = {
       id: buzzId,
-      userId: req.userId,
+    userId: req.userId,
       username: username,
       displayName: displayName,
-      content: req.body.content,
+    content: req.body.content,
       type: req.body.type || 'text',
       mediaType: req.body.media?.type || null,
       mediaUrl: req.body.media?.url || null,
-      interests: req.body.interests || [],
+    interests: req.body.interests || [],
       locationLatitude: req.body.location?.latitude || null,
       locationLongitude: req.body.location?.longitude || null,
       locationCity: req.body.location?.city || null,
@@ -1154,11 +1167,11 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
       buzzType: req.body.buzzType || 'thought',
       eventDate: req.body.eventDate || null,
       pollOptions: req.body.pollOptions || [],
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      isLiked: false,
-    };
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    isLiked: false,
+  };
     
     let savedBuzz;
     if (db.isConnected()) {
@@ -1561,10 +1574,10 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
       // Also remove from in-memory arrays
       const userIndex = users.findIndex(u => u.id === userId);
       if (userIndex !== -1) users.splice(userIndex, 1);
-      buzzes = buzzes.filter(b => b.userId !== userId);
-      socialAccounts = socialAccounts.filter(s => s.userId !== userId);
-      
-      res.json({ success: true, message: 'User deleted successfully' });
+    buzzes = buzzes.filter(b => b.userId !== userId);
+    socialAccounts = socialAccounts.filter(s => s.userId !== userId);
+    
+    res.json({ success: true, message: 'User deleted successfully' });
     } else {
       // Fallback to in-memory array
       const userIndex = users.findIndex(u => u.id === userId);
@@ -2026,6 +2039,314 @@ app.post('/api/interactions', verifyToken, async (req, res) => {
   }
 });
 
+// Scheduled Streams Endpoints
+app.post('/api/live-streams/schedule', verifyToken, async (req, res) => {
+  try {
+    const { title, description, category, scheduledAt } = req.body;
+    
+    if (!title || !scheduledAt) {
+      return res.status(400).json({ error: 'Title and scheduled time are required' });
+    }
+
+    const user = await getUserById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (scheduledDate <= new Date()) {
+      return res.status(400).json({ error: 'Scheduled time must be in the future' });
+    }
+
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const streamId = generateId();
+    const buzzId = generateId();
+
+    // Create scheduled stream
+    await db.query(`
+      INSERT INTO scheduled_streams (
+        id, user_id, username, display_name, title, description, category, scheduled_at, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      streamId,
+      req.userId,
+      user.username,
+      user.displayName || user.username,
+      title,
+      description || '',
+      category || 'general',
+      scheduledDate,
+      new Date(),
+    ]);
+
+    // Create buzz with countdown
+    await db.query(`
+      INSERT INTO buzzes (
+        id, user_id, username, display_name, content, type, buzz_type, event_date, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      buzzId,
+      req.userId,
+      user.username,
+      user.displayName || user.username,
+      `🎥 Live Stream: ${title}\n\n${description || ''}\n\n⏰ Scheduled for: ${scheduledDate.toLocaleString()}`,
+      'text',
+      'event',
+      scheduledDate,
+      new Date(),
+    ]);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: streamId,
+        userId: req.userId,
+        title,
+        description: description || '',
+        category: category || 'general',
+        scheduledAt: scheduledDate,
+        buzzId,
+      },
+    });
+  } catch (error) {
+    console.error('Schedule stream error:', error);
+    res.status(500).json({ error: 'Failed to schedule stream' });
+  }
+});
+
+app.get('/api/live-streams/scheduled', verifyToken, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const result = await db.query(
+      'SELECT * FROM scheduled_streams WHERE user_id = $1 ORDER BY scheduled_at ASC',
+      [req.userId]
+    );
+
+    const scheduledStreams = result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      scheduledAt: row.scheduled_at,
+      createdAt: row.created_at,
+    }));
+
+    res.json({
+      success: true,
+      data: scheduledStreams,
+    });
+  } catch (error) {
+    console.error('Get scheduled streams error:', error);
+    res.status(500).json({ error: 'Failed to fetch scheduled streams' });
+  }
+});
+
+app.post('/api/live-streams/scheduled/:id/start', verifyToken, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    // Get scheduled stream
+    const scheduledResult = await db.query(
+      'SELECT * FROM scheduled_streams WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+
+    if (scheduledResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Scheduled stream not found' });
+    }
+
+    const scheduled = scheduledResult.rows[0];
+
+    // Check if user already has an active stream
+    const existingResult = await db.query(
+      'SELECT * FROM live_streams WHERE user_id = $1 AND is_live = true',
+      [req.userId]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'You already have an active live stream. Please end it first.' 
+      });
+    }
+
+    const user = await getUserById(req.userId);
+    const streamId = generateId();
+
+    // Create live stream from scheduled
+    const streamResult = await db.query(`
+      INSERT INTO live_streams (
+        id, user_id, username, display_name, title, description, stream_url,
+        thumbnail_url, is_live, viewers, category, tags, started_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `, [
+      streamId,
+      req.userId,
+      user.username,
+      user.displayName || user.username,
+      scheduled.title,
+      scheduled.description,
+      `rtmp://live.example.com/stream/${req.userId}`,
+      user.avatar || null,
+      true,
+      0,
+      scheduled.category,
+      JSON.stringify([]),
+      new Date(),
+    ]);
+
+    // Delete scheduled stream
+    await db.query('DELETE FROM scheduled_streams WHERE id = $1', [req.params.id]);
+
+    const row = streamResult.rows[0];
+    const stream = {
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      title: row.title,
+      description: row.description,
+      streamUrl: row.stream_url,
+      thumbnailUrl: row.thumbnail_url,
+      isLive: row.is_live,
+      viewers: row.viewers,
+      category: row.category,
+      tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+      startedAt: row.started_at,
+    };
+
+    res.status(201).json({
+      success: true,
+      data: stream,
+    });
+  } catch (error) {
+    console.error('Start scheduled stream error:', error);
+    res.status(500).json({ error: 'Failed to start scheduled stream' });
+  }
+});
+
+app.delete('/api/live-streams/scheduled/:id', verifyToken, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const result = await db.query(
+      'DELETE FROM scheduled_streams WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Scheduled stream not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Scheduled stream cancelled',
+    });
+  } catch (error) {
+    console.error('Cancel scheduled stream error:', error);
+    res.status(500).json({ error: 'Failed to cancel scheduled stream' });
+  }
+});
+
+// Stream Comments Endpoints
+app.get('/api/live-streams/:id/comments', async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    const result = await db.query(
+      'SELECT * FROM stream_comments WHERE stream_id = $1 ORDER BY created_at ASC',
+      [streamId]
+    );
+    
+    const comments = result.rows.map(row => ({
+      id: row.id,
+      streamId: row.stream_id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      comment: row.comment,
+      timestamp: row.created_at,
+    }));
+    
+    res.json({
+      success: true,
+      data: comments,
+    });
+  } catch (error) {
+    console.error('Get stream comments error:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+app.post('/api/live-streams/:id/comments', verifyToken, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { comment } = req.body;
+    
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const user = await getUserById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    // Check if stream exists
+    const streamCheck = await db.query('SELECT id FROM live_streams WHERE id = $1', [streamId]);
+    if (streamCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Stream not found' });
+    }
+    
+    const commentId = generateId();
+    const result = await db.query(
+      `INSERT INTO stream_comments (id, stream_id, user_id, username, display_name, comment)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [commentId, streamId, req.userId, user.username, user.displayName || user.username, comment.trim()]
+    );
+    
+    const newComment = {
+      id: result.rows[0].id,
+      streamId: result.rows[0].stream_id,
+      userId: result.rows[0].user_id,
+      username: result.rows[0].username,
+      displayName: result.rows[0].display_name,
+      comment: result.rows[0].comment,
+      timestamp: result.rows[0].created_at,
+    };
+    
+    res.status(201).json({
+      success: true,
+      data: newComment,
+    });
+  } catch (error) {
+    console.error('Create stream comment error:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
+
 app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
   try {
     let stream = null;
@@ -2096,19 +2417,19 @@ app.delete('/api/admin/buzzes/:id', verifyAdmin, async (req, res) => {
     
     if (deletedBuzz) {
       // Also remove from in-memory array
-      const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+    const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
       if (buzzIndex !== -1) buzzes.splice(buzzIndex, 1);
-      
+    
       // Update user buzz count
       await User.updateOne({ id: deletedBuzz.userId }, { $inc: { buzzCount: -1 } });
-      
+    
       res.json({ success: true, message: 'Buzz deleted successfully' });
     } else {
       // Fallback to in-memory array
       const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
       if (buzzIndex !== -1) {
-        buzzes.splice(buzzIndex, 1);
-        res.json({ success: true, message: 'Buzz deleted successfully' });
+    buzzes.splice(buzzIndex, 1);
+    res.json({ success: true, message: 'Buzz deleted successfully' });
       } else {
         res.status(404).json({ error: 'Buzz not found' });
       }
@@ -2431,14 +2752,14 @@ const startServer = async () => {
     
     // Migrate initial data to database (seed data)
     await migrateInitialData();
-    
-    // Start server
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
-      console.log(`API URL: http://0.0.0.0:${PORT}`);
+
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🔥 Buzz it Backend API running on port ${PORT}`);
+  console.log(`API URL: http://0.0.0.0:${PORT}`);
       console.log(`💾 Database: ${db.isConnected() ? 'PostgreSQL connected ✅' : 'Not connected ⚠️ (in-memory mode)'}`);
-      console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
-    });
+  console.log(`Twilio configured: ${process.env.TWILIO_ACCOUNT_SID ? 'Yes' : 'No'}`);
+});
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     console.error('Error stack:', error.stack);
@@ -2570,8 +2891,8 @@ const migrateInitialData = async () => {
     // Create admin user if doesn't exist (with password)
     const adminResult = await db.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminResult.rows.length === 0) {
-      // Hash admin password (default: "admin")
-      const hashedPassword = await bcrypt.hash('admin', 10);
+      // Hash admin password (default: "admin123@")
+      const hashedPassword = await bcrypt.hash('admin123@', 10);
       await db.query(`
         INSERT INTO users (
           id, username, display_name, email, password, role, is_verified, created_at
@@ -2586,7 +2907,7 @@ const migrateInitialData = async () => {
         true,
         new Date(),
       ]);
-      console.log('✅ Created admin user (username: admin, password: admin)');
+      console.log('✅ Created admin user (username: admin, password: admin123@)');
     } else if (!adminResult.rows[0].password) {
       // If admin exists but has no password, add one
       const hashedPassword = await bcrypt.hash('admin', 10);

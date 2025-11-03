@@ -249,6 +249,48 @@ const initializeTables = async () => {
     await client.query('CREATE INDEX IF NOT EXISTS idx_streams_is_live ON live_streams(is_live)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_streams_started_at ON live_streams(started_at DESC)');
 
+    // Create stream_comments table
+    console.log('  → Creating stream_comments table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stream_comments (
+        id VARCHAR(255) PRIMARY KEY,
+        stream_id VARCHAR(255) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (stream_id) REFERENCES live_streams(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('  ✅ Stream comments table created');
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_stream_comments_stream_id ON stream_comments(stream_id)');
+    console.log('  ✅ Created index on stream_comments.stream_id');
+
+    // Create scheduled_streams table
+    console.log('  → Creating scheduled_streams table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS scheduled_streams (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        category VARCHAR(100),
+        scheduled_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('  ✅ Scheduled streams table created');
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_streams_user_id ON scheduled_streams(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_streams_scheduled_at ON scheduled_streams(scheduled_at)');
+    console.log('  ✅ Created indexes on scheduled_streams');
+
     // Verify tables were created
     const tablesResult = await client.query(`
       SELECT table_name 

@@ -30,7 +30,13 @@
             padding: 30px;
             margin-bottom: 30px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header > div:first-child {
+            text-align: left;
         }
 
         .header h1 {
@@ -389,7 +395,7 @@
 <body>
     <div class="container">
         <!-- Login Form -->
-        <div id="loginForm" class="login-form">
+        <div id="loginForm" class="login-form" style="display: block;">
             <h2>Admin Login</h2>
             <p style="margin-bottom: 30px; color: #666;">Enter your admin credentials to access the panel</p>
             
@@ -401,11 +407,16 @@
                 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" placeholder="Default: admin123@" required>
                 </div>
                 
                 <button type="submit" class="btn">Login</button>
             </form>
+            
+            <p style="text-align: center; margin-top: 15px; color: #666; font-size: 14px;">
+                Admin: admin / admin123@<br>
+                Regular users will see streaming page
+            </p>
             
             <div id="loginError" class="alert alert-error" style="display: none; margin-top: 20px;">
                 Invalid credentials. Please try again.
@@ -413,15 +424,21 @@
         </div>
 
         <!-- Admin Panel -->
-        <div id="adminPanel" class="admin-panel">
+        <div id="adminPanel" class="admin-panel" style="display: none;">
             <div class="header">
-                <h1>🔧 Buzz it Admin Panel</h1>
-                <p>Manage your app features, users, and subscriptions</p>
+                <div>
+                    <h1>🔧 Buzz it Admin Panel</h1>
+                    <p>Manage your app features, users, and subscriptions</p>
+                </div>
+                <button class="btn" onclick="logout()" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    Logout
+                </button>
             </div>
 
             <div class="tabs">
                 <button class="tab active" onclick="showTab('features')">Features</button>
                 <button class="tab" onclick="showTab('users')">Users</button>
+                <button class="tab" onclick="showTab('streaming')">Live Streaming</button>
                 <button class="tab" onclick="showTab('subscriptions')">Subscriptions</button>
                 <button class="tab" onclick="showTab('stats')">Statistics</button>
             </div>
@@ -447,6 +464,74 @@
                 
                 <div id="usersContainer">
                     <div class="loading">Loading users...</div>
+                </div>
+            </div>
+
+            <!-- Streaming Tab -->
+            <div id="streamingTab" class="tab-content" style="display: none;">
+                <h2>Live Streaming & Channels</h2>
+                <p style="margin-bottom: 30px; color: #666;">Create channels, start live streams, and preview your broadcast</p>
+                
+                <div style="margin-bottom: 30px;">
+                    <button class="btn" onclick="showStreamForm()">+ Start New Stream</button>
+                </div>
+
+                <!-- Stream Form -->
+                <div id="streamForm" style="display: none; background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 15px; margin-bottom: 30px;">
+                    <h3>Create Live Stream</h3>
+                    <div class="form-group">
+                        <label>Stream Title</label>
+                        <input type="text" id="streamTitle" placeholder="Enter stream title" style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px;">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="streamDescription" placeholder="Enter stream description" style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; min-height: 100px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="streamCategory" style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px;">
+                            <option value="general">General</option>
+                            <option value="entertainment">Entertainment</option>
+                            <option value="education">Education</option>
+                            <option value="sports">Sports</option>
+                            <option value="music">Music</option>
+                            <option value="gaming">Gaming</option>
+                            <option value="news">News</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Stream URL (RTMP/HLS)</label>
+                        <input type="text" id="streamUrl" placeholder="rtmp://your-server.com/stream or leave empty for auto" style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px;">
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="createStream()">Start Stream</button>
+                        <button class="btn" style="background: #666;" onclick="cancelStreamForm()">Cancel</button>
+                        <button class="btn" style="background: #27ae60;" onclick="previewStream()">Preview in App</button>
+                    </div>
+                </div>
+
+                <!-- Active Streams -->
+                <div id="activeStreamsContainer">
+                    <h3 style="margin-bottom: 20px;">Active Streams</h3>
+                    <div id="activeStreamsList" class="loading">Loading active streams...</div>
+                </div>
+
+                <!-- Stream Preview -->
+                <div id="streamPreview" style="display: none; background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 15px; margin-top: 30px;">
+                    <h3>Stream Preview (How it looks in mobile app)</h3>
+                    <div id="previewVideoContainer" style="background: #000; border-radius: 12px; overflow: hidden; margin-top: 20px; position: relative; min-height: 400px;">
+                        <video id="previewVideo" controls style="width: 100%; height: 100%;" muted></video>
+                        <div style="position: absolute; top: 12px; left: 12px; background: #FF0069; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold;">
+                            <span style="display: inline-block; width: 8px; height: 8px; background: white; border-radius: 50%; margin-right: 6px;"></span>LIVE
+                        </div>
+                        <div style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: white; padding: 6px 12px; border-radius: 20px;">
+                            👁️ <span id="previewViewers">0</span> viewers
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
+                        <button class="btn" onclick="copyStreamLink()" style="margin-top: 10px;">Copy Stream Link</button>
+                    </div>
                 </div>
             </div>
 
@@ -478,11 +563,45 @@
         let currentUsers = [];
         let currentSubscriptions = [];
 
-        // Check if already logged in
-        if (authToken) {
-            showAdminPanel();
-            loadAllData();
+        // Always show login form first - verify token before auto-login
+        async function checkExistingAuth() {
+            const token = localStorage.getItem('adminToken');
+            if (token) {
+                try {
+                    const response = await fetch('/api/users/me', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success && data.data) {
+                        // Check if user is admin
+                        const isAdmin = data.data.role === 'admin' || data.data.role === 'super_admin';
+                        if (isAdmin) {
+                            authToken = token;
+                            showAdminPanel();
+                            loadAllData();
+                        } else {
+                            // Regular user - redirect to streaming page
+                            localStorage.removeItem('adminToken');
+                            window.location.href = '/user-streaming';
+                        }
+                    } else {
+                        // Invalid token - clear it
+                        localStorage.removeItem('adminToken');
+                        localStorage.removeItem('userToken');
+                    }
+                } catch (error) {
+                    // Error validating token - clear it
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('userToken');
+                }
+            }
         }
+        
+        // Check existing auth on page load
+        checkExistingAuth();
 
         // Login form handler
         document.getElementById('loginFormElement').addEventListener('submit', async (e) => {
@@ -503,13 +622,16 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    if (data.isAdmin) {
-                        authToken = data.token;
-                        localStorage.setItem('adminToken', authToken);
+                    authToken = data.token;
+                    localStorage.setItem('adminToken', authToken);
+                    localStorage.setItem('userToken', authToken);
+                    
+                    if (data.isAdmin || data.user?.role === 'admin' || data.user?.role === 'super_admin') {
                         showAdminPanel();
                         loadAllData();
                     } else {
-                        showError('Access denied. Admin privileges required.');
+                        // Regular user - redirect to user streaming page
+                        window.location.href = '/user-streaming';
                     }
                 } else {
                     showError(data.error || 'Login failed');
@@ -528,6 +650,34 @@
         function showAdminPanel() {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        function logout() {
+            // Clear authentication tokens
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('userToken');
+            
+            // Hide admin panel
+            document.getElementById('adminPanel').style.display = 'none';
+            
+            // Show login form
+            document.getElementById('loginForm').style.display = 'block';
+            
+            // Reset form
+            document.getElementById('loginFormElement').reset();
+            document.getElementById('username').value = 'admin';
+            
+            // Clear any error messages
+            const errorDiv = document.getElementById('loginError');
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
+            
+            // Reset state
+            authToken = null;
+            currentFeatures = {};
+            currentUsers = [];
+            currentSubscriptions = [];
         }
 
         function showTab(tabName) {
@@ -553,7 +703,8 @@
                 loadFeatures(),
                 loadUsers(),
                 loadSubscriptions(),
-                loadStats()
+                loadStats(),
+                loadActiveStreams()
             ]);
         }
 
@@ -864,6 +1015,226 @@
                 alertDiv.remove();
             }, 5000);
         }
+
+        // Streaming Functions
+        let currentStream = null;
+        let previewVideo = null;
+
+        function showStreamForm() {
+            document.getElementById('streamForm').style.display = 'block';
+        }
+
+        function cancelStreamForm() {
+            document.getElementById('streamForm').style.display = 'none';
+            document.getElementById('streamTitle').value = '';
+            document.getElementById('streamDescription').value = '';
+            document.getElementById('streamCategory').value = 'general';
+            document.getElementById('streamUrl').value = '';
+        }
+
+        async function createStream() {
+            const title = document.getElementById('streamTitle').value;
+            const description = document.getElementById('streamDescription').value;
+            const category = document.getElementById('streamCategory').value;
+            const streamUrl = document.getElementById('streamUrl').value;
+
+            if (!title) {
+                showAlert('Please enter a stream title', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/live-streams', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        category,
+                        streamUrl: streamUrl || undefined
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentStream = data.data;
+                    showAlert('Stream started successfully!', 'success');
+                    cancelStreamForm();
+                    loadActiveStreams();
+                    showStreamPreview();
+                } else {
+                    showAlert(data.error || 'Failed to start stream', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            }
+        }
+
+        async function loadActiveStreams() {
+            try {
+                const response = await fetch('/api/live-streams', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const activeStreams = data.data.filter(s => s.isLive);
+                    renderActiveStreams(activeStreams);
+                }
+            } catch (error) {
+                console.error('Error loading active streams:', error);
+                document.getElementById('activeStreamsList').innerHTML = '<div class="loading">Error loading streams</div>';
+            }
+        }
+
+        function renderActiveStreams(streams) {
+            const container = document.getElementById('activeStreamsList');
+            
+            if (streams.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No active streams</p>';
+                return;
+            }
+
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">';
+            
+            streams.forEach(stream => {
+                html += `
+                    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                            <div>
+                                <h4 style="margin: 0 0 5px 0;">${stream.title}</h4>
+                                <p style="color: #666; margin: 0; font-size: 14px;">${stream.displayName || stream.username}</p>
+                            </div>
+                            <span style="background: #FF0069; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">LIVE</span>
+                        </div>
+                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">${stream.description || 'No description'}</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #666; font-size: 12px;">👁️ ${stream.viewers} viewers</span>
+                            <div>
+                                <button class="btn-small btn-success" onclick="previewStreamById('${stream.id}')">Preview</button>
+                                <button class="btn-small btn-danger" onclick="endStream('${stream.id}')">End</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function showStreamPreview() {
+            if (!currentStream) return;
+
+            document.getElementById('streamPreview').style.display = 'block';
+            previewVideo = document.getElementById('previewVideo');
+            
+            if (currentStream.streamUrl) {
+                previewVideo.src = currentStream.streamUrl;
+                previewVideo.play();
+            }
+
+            document.getElementById('previewViewers').textContent = currentStream.viewers || 0;
+            document.getElementById('streamShareLink').textContent = `${window.location.origin}/stream/${currentStream.id}`;
+            
+            // Update viewer count periodically
+            setInterval(() => {
+                updateViewerCount();
+            }, 5000);
+        }
+
+        async function previewStreamById(streamId) {
+            try {
+                const response = await fetch(`/api/live-streams/${streamId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentStream = data.data;
+                    showStreamPreview();
+                }
+            } catch (error) {
+                showAlert('Failed to load stream', 'error');
+            }
+        }
+
+        async function endStream(streamId) {
+            if (!confirm('Are you sure you want to end this stream?')) return;
+
+            try {
+                const response = await fetch(`/api/live-streams/${streamId}/end`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('Stream ended successfully', 'success');
+                    loadActiveStreams();
+                    if (previewVideo) {
+                        previewVideo.pause();
+                        previewVideo.src = '';
+                    }
+                    document.getElementById('streamPreview').style.display = 'none';
+                    currentStream = null;
+                } else {
+                    showAlert(data.error || 'Failed to end stream', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            }
+        }
+
+        async function updateViewerCount() {
+            if (!currentStream) return;
+
+            try {
+                const response = await fetch(`/api/live-streams/${currentStream.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    document.getElementById('previewViewers').textContent = data.data.viewers || 0;
+                }
+            } catch (error) {
+                console.error('Error updating viewer count:', error);
+            }
+        }
+
+        function copyStreamLink() {
+            const link = document.getElementById('streamShareLink').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                showAlert('Stream link copied to clipboard!', 'success');
+            });
+        }
+
+        // Load streams when streaming tab is shown
+        const originalShowTab = showTab;
+        showTab = function(tabName) {
+            originalShowTab(tabName);
+            if (tabName === 'streaming') {
+                loadActiveStreams();
+            }
+        };
     </script>
 </body>
 </html>

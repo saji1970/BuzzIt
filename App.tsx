@@ -21,6 +21,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
+import CreateStreamScreen from './src/screens/CreateStreamScreen';
 import {useTheme} from './src/context/ThemeContext';
 import {createStackNavigator} from '@react-navigation/stack';
 
@@ -115,7 +116,10 @@ const AppContent = () => {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{headerShown: false}}>
           {isAuthenticated ? (
-            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <>
+              <Stack.Screen name="MainTabs" component={MainTabs} />
+              <Stack.Screen name="CreateStream" component={CreateStreamScreen} />
+            </>
           ) : (
             <>
               <Stack.Screen name="Login" component={LoginScreen} />
