@@ -24,9 +24,9 @@ COPY server/services ./services/
 # Copy db directory (database connection)
 COPY server/db ./db/
 
-# Copy public directory (admin panel)
+# Copy public directory (admin panel and user pages)
 RUN mkdir -p public
-COPY server/public/index.html ./public/index.html
+COPY server/public/*.html ./public/
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000

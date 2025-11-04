@@ -111,10 +111,41 @@ app.get('/user-login', (req, res) => {
 // User streaming page route
 app.get('/user-streaming', (req, res) => {
   const userStreamingPath = path.join(publicPath, 'user-streaming.html');
+  // Try absolute path resolution
+  const absolutePath = path.resolve(userStreamingPath);
+  
+  console.log('🔍 User streaming path check:', {
+    publicPath,
+    userStreamingPath,
+    absolutePath,
+    exists: fs.existsSync(userStreamingPath),
+    absoluteExists: fs.existsSync(absolutePath)
+  });
+  
   if (fs.existsSync(userStreamingPath)) {
     res.sendFile(userStreamingPath);
+  } else if (fs.existsSync(absolutePath)) {
+    res.sendFile(absolutePath);
   } else {
-    res.status(404).json({ error: 'User streaming page not found' });
+    // Try alternative paths
+    const altPath1 = path.join(__dirname, 'public', 'user-streaming.html');
+    const altPath2 = path.resolve(__dirname, 'public', 'user-streaming.html');
+    
+    if (fs.existsSync(altPath1)) {
+      res.sendFile(altPath1);
+    } else if (fs.existsSync(altPath2)) {
+      res.sendFile(altPath2);
+    } else {
+      console.error('❌ User streaming page not found. Tried paths:', {
+        userStreamingPath,
+        absolutePath,
+        altPath1,
+        altPath2,
+        __dirname,
+        publicPath
+      });
+      res.status(404).json({ error: 'User streaming page not found' });
+    }
   }
 });
 
