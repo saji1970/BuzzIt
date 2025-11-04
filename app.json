@@ -2,7 +2,7 @@
   "expo": {
     "name": "Buzz it",
     "slug": "buzzit",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.buzzit.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "compileSdkVersion": 33,
       "targetSdkVersion": 33,
       "adaptiveIcon": {
@@ -29,7 +29,8 @@
     "plugins": [
       "expo-image-picker",
       "expo-av",
-      "expo-location"
+      "expo-location",
+      "expo-camera"
     ],
     "extra": {
       "eas": {
