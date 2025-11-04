@@ -797,6 +797,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: -0.5,
   },
+  goLiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  goLiveText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   searchIconButton: {
     padding: 4,
   },
