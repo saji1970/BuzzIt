@@ -457,25 +457,49 @@
                                 </div>
                             </div>
 
-                            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                                <button type="submit" class="btn">Start Stream</button>
-                                <button type="button" class="btn btn-secondary" onclick="previewStream()">Preview</button>
-                                <button type="button" class="btn btn-success" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
-                            </div>
-                        </form>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="button" class="btn" onclick="startCameraStream()" id="startCameraBtn">📹 Start Camera Stream</button>
+                        <button type="submit" class="btn" id="startStreamBtn" style="display: none;">Start Stream</button>
+                        <button type="button" class="btn btn-secondary" onclick="previewStream()" id="previewBtn" style="display: none;">Preview</button>
+                        <button type="button" class="btn btn-success" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
+                        <button type="button" class="btn btn-danger" onclick="stopCameraStream()" id="stopCameraBtn" style="display: none;">Stop Camera</button>
                     </div>
+                </form>
+            </div>
 
-                    <!-- Stream Preview -->
-                    <div id="streamPreview" class="card" style="display: none;">
-                        <h2>Stream Preview</h2>
-                        <div class="preview-container">
-                            <video id="previewVideo" class="preview-video" controls muted></video>
-                            <div class="preview-overlay">
-                                <span class="live-dot"></span>
-                                LIVE
-                            </div>
-                            <div class="viewer-count">👁️ <span id="previewViewers">0</span> viewers</div>
-                        </div>
+            <!-- Camera Preview -->
+            <div id="cameraPreview" class="card" style="display: none;">
+                <h2>Camera Stream Preview</h2>
+                <div class="preview-container">
+                    <video id="cameraVideo" class="preview-video" autoplay playsinline></video>
+                    <div class="preview-overlay">
+                        <span class="live-dot"></span>
+                        LIVE
+                    </div>
+                    <div class="viewer-count">👁️ <span id="cameraViewers">0</span> viewers</div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button class="btn btn-secondary" onclick="toggleMute()" id="muteBtn">🔇 Mute</button>
+                        <button class="btn btn-secondary" onclick="switchCamera()" id="switchCameraBtn">🔄 Switch Camera</button>
+                        <button class="btn btn-danger" onclick="stopCameraStream()">Stop Stream</button>
+                    </div>
+                    <p><strong>Stream Link:</strong> <span id="cameraStreamLink" style="color: #667eea;"></span></p>
+                    <button class="btn btn-success" onclick="copyCameraStreamLink()" style="margin-top: 10px;">Copy Stream Link</button>
+                </div>
+            </div>
+
+            <!-- Stream Preview -->
+            <div id="streamPreview" class="card" style="display: none;">
+                <h2>Stream Preview</h2>
+                <div class="preview-container">
+                    <video id="previewVideo" class="preview-video" controls muted></video>
+                    <div class="preview-overlay">
+                        <span class="live-dot"></span>
+                        LIVE
+                    </div>
+                    <div class="viewer-count">👁️ <span id="previewViewers">0</span> viewers</div>
+                </div>
                         <div style="margin-top: 20px;">
                             <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
                             <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
@@ -589,6 +613,11 @@
         let channels = [];
         let availableInterests = [];
         let selectedInterests = [];
+        let localStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isMuted = false;
+        let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back
 
         // Check if already logged in
         if (authToken) {
@@ -829,20 +858,40 @@
             }
         });
 
-        document.getElementById('createStreamForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
+        async function startCameraStream() {
             if (!selectedChannel) {
                 showAlert('Please select a channel first', 'error');
                 return;
             }
 
-            const title = document.getElementById('streamTitle').value;
-            const description = document.getElementById('streamDescription').value;
-            const category = document.getElementById('streamCategory').value;
-            const streamUrl = document.getElementById('streamUrl').value;
-
             try {
+                // Request camera and microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                });
+
+                localStream = stream;
+                const cameraVideo = document.getElementById('cameraVideo');
+                cameraVideo.srcObject = stream;
+                cameraVideo.play();
+
+                // Show camera preview
+                document.getElementById('cameraPreview').style.display = 'block';
+                document.getElementById('startCameraBtn').style.display = 'none';
+                document.getElementById('stopCameraBtn').style.display = 'inline-block';
+                document.getElementById('startStreamBtn').style.display = 'inline-block';
+                document.getElementById('previewBtn').style.display = 'inline-block';
+
+                // Create stream record in backend
+                const title = document.getElementById('streamTitle').value || `${selectedChannel.name} Live Stream`;
+                const description = document.getElementById('streamDescription').value || '';
+                const category = document.getElementById('streamCategory').value;
+
                 const response = await fetch('/api/live-streams', {
                     method: 'POST',
                     headers: {
@@ -853,7 +902,6 @@
                         title,
                         description,
                         category,
-                        streamUrl: streamUrl || undefined,
                         channelId: selectedChannel.id
                     })
                 });
@@ -862,16 +910,138 @@
 
                 if (data.success) {
                     currentStream = data.data;
-                    showAlert('Stream started successfully!', 'success');
-                    document.getElementById('createStreamForm').reset();
+                    document.getElementById('cameraStreamLink').textContent = `${window.location.origin}/stream/${currentStream.id}`;
+                    
+                    // Start MediaRecorder for recording (optional, for future use)
+                    if (MediaRecorder.isTypeSupported('video/webm')) {
+                        mediaRecorder = new MediaRecorder(stream, {
+                            mimeType: 'video/webm;codecs=vp8,opus'
+                        });
+
+                        mediaRecorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                                recordedChunks.push(event.data);
+                            }
+                        };
+
+                        mediaRecorder.start(1000); // Record 1 second chunks
+                    }
+
+                    showAlert('Camera stream started!', 'success');
                     loadActiveStreams();
-                    showStreamPreview();
                 } else {
                     showAlert(data.error || 'Failed to start stream', 'error');
+                    stopCameraStream();
                 }
             } catch (error) {
-                showAlert('Network error. Please try again.', 'error');
+                console.error('Error accessing camera:', error);
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    showAlert('Camera and microphone permissions are required. Please allow access in your browser settings.', 'error');
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    showAlert('No camera or microphone found. Please connect a camera and microphone.', 'error');
+                } else {
+                    showAlert('Failed to access camera: ' + error.message, 'error');
+                }
             }
+        }
+
+        function stopCameraStream() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder = null;
+                recordedChunks = [];
+            }
+
+            const cameraVideo = document.getElementById('cameraVideo');
+            if (cameraVideo) {
+                cameraVideo.srcObject = null;
+            }
+
+            document.getElementById('cameraPreview').style.display = 'none';
+            document.getElementById('startCameraBtn').style.display = 'inline-block';
+            document.getElementById('stopCameraBtn').style.display = 'none';
+            document.getElementById('startStreamBtn').style.display = 'none';
+            document.getElementById('previewBtn').style.display = 'none';
+
+            // End stream in backend if it exists
+            if (currentStream) {
+                endStream(currentStream.id);
+                currentStream = null;
+            }
+        }
+
+        function toggleMute() {
+            if (localStream) {
+                const audioTracks = localStream.getAudioTracks();
+                audioTracks.forEach(track => {
+                    track.enabled = !track.enabled;
+                });
+                isMuted = !isMuted;
+                const muteBtn = document.getElementById('muteBtn');
+                muteBtn.textContent = isMuted ? '🔊 Unmute' : '🔇 Mute';
+            }
+        }
+
+        async function switchCamera() {
+            if (localStream) {
+                // Stop current tracks
+                localStream.getVideoTracks().forEach(track => track.stop());
+                
+                // Switch facing mode
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                
+                try {
+                    // Get new stream with switched camera
+                    const videoStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: currentFacingMode,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+
+                    // Replace video track
+                    const videoTrack = videoStream.getVideoTracks()[0];
+                    const sender = localStream.getVideoTracks()[0];
+                    localStream.removeTrack(sender);
+                    localStream.addTrack(videoTrack);
+
+                    const cameraVideo = document.getElementById('cameraVideo');
+                    cameraVideo.srcObject = localStream;
+                } catch (error) {
+                    console.error('Error switching camera:', error);
+                    showAlert('Failed to switch camera', 'error');
+                }
+            }
+        }
+
+        function copyCameraStreamLink() {
+            const link = document.getElementById('cameraStreamLink').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                showAlert('Stream link copied to clipboard!', 'success');
+            });
+        }
+
+        document.getElementById('createStreamForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // If camera is already running, just update the stream info
+            if (localStream && currentStream) {
+                const title = document.getElementById('streamTitle').value;
+                const description = document.getElementById('streamDescription').value;
+                
+                // Update stream info via API if needed
+                showAlert('Stream is already running from camera!', 'success');
+                return;
+            }
+
+            // Otherwise, start camera stream
+            await startCameraStream();
         });
 
         document.getElementById('scheduleStreamForm').addEventListener('submit', async (e) => {
