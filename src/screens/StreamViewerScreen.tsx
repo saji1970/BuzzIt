@@ -390,6 +390,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 16,
     fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   liveBadge: {
     position: 'absolute',
