@@ -24,7 +24,15 @@
       "targetSdkVersion": 33,
       "adaptiveIcon": {
         "backgroundColor": "#E4405F"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "plugins": [
       "expo-image-picker",
