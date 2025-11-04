@@ -8,20 +8,14 @@ import {ThemeProvider} from './src/context/ThemeContext';
 import {UserProvider} from './src/context/UserContext';
 import {AuthProvider, useAuth} from './src/context/AuthContext';
 import {FeatureProvider} from './src/context/FeatureContext';
-import {BuzzChannelProvider} from './src/context/BuzzChannelContext';
-import {RadioChannelProvider} from './src/context/RadioChannelContext';
 import HomeScreen from './src/screens/HomeScreen';
 import CreateBuzzScreen from './src/screens/CreateBuzzScreen';
-import BuzzChannelScreen from './src/screens/BuzzChannelScreen';
-import CreateChannelContentScreen from './src/screens/CreateChannelContentScreen';
-import RadioChannelScreen from './src/screens/RadioChannelScreen';
-import CreateRadioChannelScreen from './src/screens/CreateRadioChannelScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
-import CreateStreamScreen from './src/screens/CreateStreamScreen';
+import GoBuzzLiveScreen from './src/screens/GoBuzzLiveScreen';
 import {useTheme} from './src/context/ThemeContext';
 import {createStackNavigator} from '@react-navigation/stack';
 
@@ -44,12 +38,6 @@ const MainTabs = () => {
               break;
             case 'Create':
               iconName = 'add-circle';
-              break;
-            case 'Channel':
-              iconName = 'video-library';
-              break;
-            case 'Radio':
-              iconName = 'library-music';
               break;
             case 'Profile':
               iconName = 'person';
@@ -82,8 +70,6 @@ const MainTabs = () => {
       })}>
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Create" component={CreateBuzzScreen} />
-      <Tab.Screen name="Channel" component={BuzzChannelScreen} />
-      <Tab.Screen name="Radio" component={RadioChannelScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
       {isAdmin && <Tab.Screen name="Admin" component={AdminDashboardScreen} />}
       <Tab.Screen name="Settings" component={SettingsScreen} />
@@ -118,7 +104,7 @@ const AppContent = () => {
           {isAuthenticated ? (
             <>
               <Stack.Screen name="MainTabs" component={MainTabs} />
-              <Stack.Screen name="CreateStream" component={CreateStreamScreen} />
+              <Stack.Screen name="GoBuzzLive" component={GoBuzzLiveScreen} />
             </>
           ) : (
             <>
@@ -138,11 +124,7 @@ const App = () => {
       <FeatureProvider>
         <AuthProvider>
           <UserProvider>
-            <BuzzChannelProvider>
-              <RadioChannelProvider>
-                <AppContent />
-              </RadioChannelProvider>
-            </BuzzChannelProvider>
+            <AppContent />
           </UserProvider>
         </AuthProvider>
       </FeatureProvider>

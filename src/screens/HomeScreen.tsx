@@ -508,9 +508,10 @@ const HomeScreen: React.FC = () => {
           <Text style={[styles.buzzText, {color: theme.colors.text}]}>Buzz</Text>
           <View style={{flexDirection: 'row', gap: 12}}>
             <TouchableOpacity
-              style={styles.searchIconButton}
-              onPress={() => navigation.navigate('CreateStream' as never)}>
-              <Icon name="videocam" size={24} color={theme.colors.text} />
+              style={[styles.goLiveButton, {backgroundColor: theme.colors.primary}]}
+              onPress={() => navigation.navigate('GoBuzzLive' as never)}>
+              <Icon name="videocam" size={20} color="#FFFFFF" />
+              <Text style={styles.goLiveText}>goBuzzLive</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.searchIconButton}
