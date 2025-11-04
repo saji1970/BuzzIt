@@ -1017,6 +1017,21 @@ const styles = StyleSheet.create({
   userResultUsername: {
     fontSize: 14,
   },
+  channelInterests: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  interestChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  interestChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   emptySearch: {
     flex: 1,
     justifyContent: 'center',
