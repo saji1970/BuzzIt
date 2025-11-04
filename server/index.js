@@ -2082,6 +2082,7 @@ app.post('/api/interactions', verifyToken, async (req, res) => {
 
 // Scheduled Streams Endpoints
 app.post('/api/live-streams/schedule', verifyToken, async (req, res) => {
+  console.log('📅 POST /api/live-streams/schedule - Request received');
   try {
     const { title, description, category, scheduledAt } = req.body;
     
@@ -2159,6 +2160,7 @@ app.post('/api/live-streams/schedule', verifyToken, async (req, res) => {
 });
 
 app.get('/api/live-streams/scheduled', verifyToken, async (req, res) => {
+  console.log('📅 GET /api/live-streams/scheduled - Request received');
   try {
     if (!db.isConnected()) {
       return res.status(503).json({ error: 'Database not available' });
