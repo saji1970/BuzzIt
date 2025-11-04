@@ -229,7 +229,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {stream.streamUrl ? (
+          {stream.streamUrl && stream.isLive ? (
             <Video
               ref={videoRef}
               source={{ uri: stream.streamUrl }}
@@ -238,11 +238,27 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               resizeMode="contain"
               shouldPlay={true}
               isLooping={false}
+              onError={(error) => {
+                console.error('Video playback error:', error);
+                Alert.alert(
+                  'Stream Error',
+                  'Unable to play stream. The broadcaster may be using a camera stream that requires a media server for viewing.',
+                  [{ text: 'OK' }]
+                );
+              }}
             />
-          ) : (
+          ) : stream.isLive ? (
             <View style={styles.placeholderVideo}>
               <Icon name="videocam" size={64} color="#FFFFFF" />
-              <Text style={styles.placeholderText}>Stream not available</Text>
+              <Text style={styles.placeholderText}>Live stream starting...</Text>
+              <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7 }]}>
+                The broadcaster is using their camera. Stream will be available once connected to media server.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.placeholderVideo}>
+              <Icon name="videocam-off" size={64} color="#FFFFFF" />
+              <Text style={styles.placeholderText}>Stream has ended</Text>
             </View>
           )}
 

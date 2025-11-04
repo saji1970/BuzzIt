@@ -134,8 +134,20 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
               }}
               onError={(error) => {
                 console.log('Video playback error:', error);
+                // Don't show error to user, just log it
               }}
             />
+          ) : stream.isLive ? (
+            // Live stream without URL (camera stream from web)
+            <View style={[styles.thumbnail, {backgroundColor: theme.colors.background}]}>
+              <View style={styles.liveIndicatorContainer}>
+                <View style={styles.livePulse} />
+                <Icon name="videocam" size={48} color={theme.colors.primary} />
+              </View>
+              <Text style={[styles.liveIndicatorText, {color: theme.colors.primary}]}>
+                LIVE
+              </Text>
+            </View>
           ) : (
             <View style={[styles.thumbnail, {backgroundColor: theme.colors.background}]}>
               {stream.thumbnailUrl ? (
@@ -388,6 +400,25 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  liveIndicatorContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  livePulse: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 0, 105, 0.3)',
+    opacity: 0.6,
+  },
+  liveIndicatorText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
 });
 

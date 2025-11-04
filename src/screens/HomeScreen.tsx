@@ -248,9 +248,26 @@ const HomeScreen: React.FC = () => {
         const currentUserData = user || authUser;
         const subscribedIds = currentUserData?.subscribedChannels || [];
         
+        // Map response data to LiveStream format
+        const mappedStreams: LiveStream[] = response.data.map((stream: any) => ({
+          id: stream.id,
+          userId: stream.userId,
+          username: stream.username,
+          displayName: stream.displayName,
+          title: stream.title,
+          description: stream.description,
+          streamUrl: stream.streamUrl || '', // Handle empty streamUrl
+          thumbnailUrl: stream.thumbnailUrl,
+          isLive: stream.isLive,
+          viewers: stream.viewers || 0,
+          category: stream.category,
+          startedAt: stream.startedAt,
+          tags: stream.tags || [],
+        }));
+        
         if (subscribedIds.length > 0) {
           // Only show streams from subscribed channels
-          const filteredStreams = response.data.filter((stream: LiveStream) =>
+          const filteredStreams = mappedStreams.filter((stream: LiveStream) =>
             subscribedIds.includes(stream.userId)
           );
           setLiveStreams(filteredStreams);
@@ -261,6 +278,7 @@ const HomeScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading live streams:', error);
+      setLiveStreams([]);
     } finally {
       setLoadingLiveStreams(false);
     }
