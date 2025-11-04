@@ -96,7 +96,13 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files (admin panel) BEFORE other routes
 const publicPath = path.join(__dirname, 'public');
-app.use(express.static(publicPath));
+// Only serve static files for non-API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next(); // Skip static file serving for API routes
+  }
+  express.static(publicPath)(req, res, next);
+});
 
 // User login page route
 app.get('/user-login', (req, res) => {
