@@ -910,7 +910,24 @@
 
                 if (data.success) {
                     currentStream = data.data;
-                    document.getElementById('cameraStreamLink').textContent = `${window.location.origin}/stream/${currentStream.id}`;
+                    
+                    // Show Restream info if available
+                    if (data.data.restreamRtmpUrl && data.data.restreamKey) {
+                        const restreamInfo = `
+                            <div style="margin-top: 15px; padding: 15px; background: #f0f0f0; border-radius: 8px;">
+                                <h4 style="margin-bottom: 10px; color: #667eea;">📡 Restream Configuration</h4>
+                                <p style="margin: 5px 0;"><strong>RTMP URL:</strong> <code style="background: white; padding: 2px 6px; border-radius: 4px;">${data.data.restreamRtmpUrl}</code></p>
+                                <p style="margin: 5px 0;"><strong>Stream Key:</strong> <code style="background: white; padding: 2px 6px; border-radius: 4px;">${data.data.restreamKey}</code></p>
+                                <p style="margin-top: 10px; font-size: 0.9em; color: #666;">Use these credentials with OBS or other streaming software to broadcast to Restream.</p>
+                                <button class="btn btn-secondary" onclick="copyRestreamInfo()" style="margin-top: 10px;">Copy RTMP Info</button>
+                            </div>
+                        `;
+                        document.getElementById('cameraPreview').insertAdjacentHTML('beforeend', restreamInfo);
+                    }
+                    
+                    // Use Restream playback URL if available, otherwise use local stream link
+                    const streamLink = data.data.restreamPlaybackUrl || `${window.location.origin}/stream/${currentStream.id}`;
+                    document.getElementById('cameraStreamLink').textContent = streamLink;
                     
                     // Start MediaRecorder for recording (optional, for future use)
                     if (MediaRecorder.isTypeSupported('video/webm')) {
@@ -927,7 +944,7 @@
                         mediaRecorder.start(1000); // Record 1 second chunks
                     }
 
-                    showAlert('Camera stream started!', 'success');
+                    showAlert('Camera stream started! Restream integration active.', 'success');
                     loadActiveStreams();
                 } else {
                     showAlert(data.error || 'Failed to start stream', 'error');
@@ -1024,6 +1041,18 @@
             const link = document.getElementById('cameraStreamLink').textContent;
             navigator.clipboard.writeText(link).then(() => {
                 showAlert('Stream link copied to clipboard!', 'success');
+            });
+        }
+
+        function copyRestreamInfo() {
+            if (!currentStream || !currentStream.restreamRtmpUrl || !currentStream.restreamKey) {
+                showAlert('Restream information not available', 'error');
+                return;
+            }
+            
+            const info = `RTMP URL: ${currentStream.restreamRtmpUrl}\nStream Key: ${currentStream.restreamKey}`;
+            navigator.clipboard.writeText(info).then(() => {
+                showAlert('Restream credentials copied to clipboard!', 'success');
             });
         }
 

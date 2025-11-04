@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
+const https = require('https');
+const http = require('http');
 // Load environment variables FIRST, before any other imports that might use them
 // Try loading from server directory first, then root directory
 const path = require('path');
@@ -329,6 +331,81 @@ const generateId = () => Date.now().toString();
 const generateToken = (userId) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 };
+
+// Restream API helper function
+async function getRestreamStreamKey(streamId, streamTitle) {
+  const restreamApiKey = process.env.RESTREAM_API_KEY;
+  if (!restreamApiKey) {
+    return null;
+  }
+
+  try {
+    // Get Restream stream key via API
+    // According to Restream API docs, we need to create a stream or get existing stream key
+    const apiUrl = 'https://api.restream.io/v2/user/stream-key';
+    
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.restream.io',
+        path: '/v2/user/stream-key',
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${restreamApiKey}`,
+          'Content-Type': 'application/json',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const response = JSON.parse(data);
+              // Restream typically provides:
+              // - streamKey: The RTMP stream key
+              // - rtmpUrl: RTMP server URL (usually rtmp://live.restream.io/live)
+              // - playbackUrl: HLS or playback URL for viewers
+              
+              const rtmpUrl = 'rtmp://live.restream.io/live';
+              const streamKey = response.streamKey || response.key || streamId;
+              
+              // Construct playback URL (Restream provides this, but we'll use a placeholder)
+              // In production, you'd get this from Restream's API response
+              const playbackUrl = `https://restream.io/playback/${streamKey}`;
+              
+              resolve({
+                streamKey: streamKey,
+                rtmpUrl: rtmpUrl,
+                playbackUrl: playbackUrl,
+              });
+            } else {
+              console.error('Restream API error:', res.statusCode, data);
+              resolve(null);
+            }
+          } catch (error) {
+            console.error('Error parsing Restream response:', error);
+            resolve(null);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('Restream API request error:', error);
+        resolve(null);
+      });
+
+      req.end();
+    });
+  } catch (error) {
+    console.error('Error getting Restream stream key:', error);
+    return null;
+  }
+}
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -1660,13 +1737,16 @@ app.get('/api/live-streams', async (req, res) => {
           displayName: row.display_name,
           title: row.title,
           description: row.description,
-          streamUrl: row.stream_url,
+          streamUrl: row.restream_playback_url || row.stream_url,
           thumbnailUrl: row.thumbnail_url,
           isLive: row.is_live,
           viewers: row.viewers,
           category: row.category,
           tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
           channelId: row.channel_id,
+          restreamKey: row.restream_key,
+          restreamRtmpUrl: row.restream_rtmp_url,
+          restreamPlaybackUrl: row.restream_playback_url,
           startedAt: row.started_at,
           endedAt: row.ended_at,
         }));
@@ -1761,6 +1841,27 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
     }
 
     const streamId = generateId();
+    
+    // Get Restream credentials if available
+    let restreamKey = null;
+    let restreamRtmpUrl = null;
+    let restreamPlaybackUrl = null;
+    
+    if (process.env.RESTREAM_API_KEY) {
+      try {
+        // Get Restream stream key via API
+        const restreamData = await getRestreamStreamKey(streamId, req.body.title || `${user.displayName}'s Live Stream`);
+        if (restreamData) {
+          restreamKey = restreamData.streamKey;
+          restreamRtmpUrl = restreamData.rtmpUrl;
+          restreamPlaybackUrl = restreamData.playbackUrl;
+        }
+      } catch (error) {
+        console.error('Error getting Restream credentials:', error);
+        // Continue without Restream if it fails
+      }
+    }
+    
     const newStreamData = {
       id: streamId,
       userId: req.userId,
@@ -1768,13 +1869,16 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       displayName: user.displayName,
       title: req.body.title || `${user.displayName}'s Live Stream`,
       description: req.body.description || '',
-      streamUrl: req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`,
+      streamUrl: restreamPlaybackUrl || req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`,
       thumbnailUrl: req.body.thumbnailUrl || user.avatar,
       isLive: true,
       viewers: 0,
       category: req.body.category || 'general',
       tags: req.body.tags || [],
       channelId: req.body.channelId || null,
+      restreamKey: restreamKey,
+      restreamRtmpUrl: restreamRtmpUrl,
+      restreamPlaybackUrl: restreamPlaybackUrl,
     };
 
     let savedStream;
@@ -1783,8 +1887,9 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
         const result = await db.query(`
           INSERT INTO live_streams (
             id, user_id, username, display_name, title, description, stream_url,
-            thumbnail_url, is_live, viewers, category, tags, channel_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            thumbnail_url, is_live, viewers, category, tags, channel_id,
+            restream_key, restream_rtmp_url, restream_playback_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           RETURNING *
         `, [
           newStreamData.id,
@@ -1800,6 +1905,9 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           newStreamData.category,
           JSON.stringify(newStreamData.tags),
           newStreamData.channelId,
+          newStreamData.restreamKey,
+          newStreamData.restreamRtmpUrl,
+          newStreamData.restreamPlaybackUrl,
         ]);
         
         const row = result.rows[0];
@@ -1817,6 +1925,9 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           category: row.category,
           tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
           channelId: row.channel_id,
+          restreamKey: row.restream_key,
+          restreamRtmpUrl: row.restream_rtmp_url,
+          restreamPlaybackUrl: row.restream_playback_url,
           startedAt: row.started_at,
         };
       } catch (saveError) {
@@ -2583,13 +2694,16 @@ app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
             displayName: updatedRow.display_name,
             title: updatedRow.title,
             description: updatedRow.description,
-            streamUrl: updatedRow.stream_url,
+            streamUrl: updatedRow.restream_playback_url || updatedRow.stream_url,
             thumbnailUrl: updatedRow.thumbnail_url,
             isLive: updatedRow.is_live,
             viewers: updatedRow.viewers,
             category: updatedRow.category,
             tags: typeof updatedRow.tags === 'string' ? JSON.parse(updatedRow.tags) : (updatedRow.tags || []),
             channelId: updatedRow.channel_id,
+            restreamKey: updatedRow.restream_key,
+            restreamRtmpUrl: updatedRow.restream_rtmp_url,
+            restreamPlaybackUrl: updatedRow.restream_playback_url,
             startedAt: updatedRow.started_at,
             endedAt: updatedRow.ended_at,
           };
