@@ -114,9 +114,12 @@ const HomeScreen: React.FC = () => {
       blockedUsers: [],
     };
     
-    // First, filter out buzzes from blocked users
-    let unblockedBuzzes = buzzes.filter(buzz => !isBlocked(buzz.userId));
-    console.log('Unblocked buzzes count:', unblockedBuzzes.length);
+    // First, filter out buzzes from blocked users and own buzzes
+    const currentUserId = user?.id || authUser?.id;
+    let unblockedBuzzes = buzzes.filter(buzz => 
+      !isBlocked(buzz.userId) && buzz.userId !== currentUserId
+    );
+    console.log('Unblocked buzzes count (excluding own):', unblockedBuzzes.length);
     
     // Ensure unblockedBuzzes is not undefined
     if (!unblockedBuzzes) {

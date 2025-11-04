@@ -20,6 +20,8 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
+import {useAuth} from '../context/AuthContext';
+import ApiService from '../services/APIService';
 import * as Location from 'expo-location';
 
 type BuzzType = 'event' | 'gossip' | 'thought' | 'poll';
@@ -33,6 +35,8 @@ const CreateBuzzScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, addBuzz, interests} = useUser();
   const {features} = useFeatures();
+  const {user: authUser} = useAuth();
+  const [isCreating, setIsCreating] = useState(false);
   const [content, setContent] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
   const [buzzType, setBuzzType] = useState<BuzzType | null>(null);
@@ -263,40 +267,85 @@ const CreateBuzzScreen: React.FC = () => {
       buzzContent += `\n\n📊 Poll Options:\n${validOptions.map((option, index) => `${index + 1}. ${option.text}`).join('\n')}`;
     }
 
-    const newBuzz = {
-      userId: user.id,
-      username: user.username,
-      userAvatar: user.avatar,
-      content: buzzContent,
-      media,
-      interests: selectedInterests,
-      location: includeLocation && userLocation ? userLocation : undefined,
-      buzzType,
-      eventDate: buzzType === 'event' ? eventDate : undefined,
-      pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      isLiked: false,
-    };
+    setIsCreating(true);
 
-    addBuzz(newBuzz);
-    
-    // Reset form
-    setContent('');
-    setSelectedInterests([]);
-    setBuzzType(null);
-    setEventDate('');
-    setPollOptions([
-      {id: '1', text: 'Yes'},
-      {id: '2', text: 'No'},
-      {id: '3', text: "Don't Know"},
-    ]);
-    setMedia({type: null, url: null});
-    setIncludeLocation(false);
-    setUserLocation(null);
-    
-    Alert.alert('Success', 'Your buzz has been created!');
+    try {
+      const newBuzz = {
+        userId: user.id,
+        username: user.username,
+        userAvatar: user.avatar,
+        content: buzzContent,
+        media,
+        interests: selectedInterests,
+        location: includeLocation && userLocation ? userLocation : undefined,
+        buzzType,
+        eventDate: buzzType === 'event' ? eventDate : undefined,
+        pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+      };
+
+      // Save to backend first
+      const response = await ApiService.createBuzz(newBuzz);
+      
+      if (response.success && response.data) {
+        // Add to local state with the server response
+        addBuzz(response.data);
+        
+        // Reset form
+        setContent('');
+        setSelectedInterests([]);
+        setBuzzType(null);
+        setEventDate('');
+        setPollOptions([
+          {id: '1', text: 'Yes'},
+          {id: '2', text: 'No'},
+          {id: '3', text: "Don't Know"},
+        ]);
+        setMedia({type: null, url: null});
+        setIncludeLocation(false);
+        setUserLocation(null);
+        
+        Alert.alert('Success', 'Your buzz has been created and shared!');
+      } else {
+        // Fallback: add to local state if API fails
+        addBuzz({
+          ...newBuzz,
+          id: Date.now().toString(),
+          createdAt: new Date(),
+          isLiked: false,
+        });
+        Alert.alert('Warning', 'Buzz created locally but failed to sync with server. Please check your connection.');
+      }
+    } catch (error: any) {
+      console.error('Error creating buzz:', error);
+      // Fallback: add to local state
+      const fallbackBuzz = {
+        userId: user.id,
+        username: user.username,
+        userAvatar: user.avatar,
+        content: buzzContent,
+        media,
+        interests: selectedInterests,
+        location: includeLocation && userLocation ? userLocation : undefined,
+        buzzType,
+        eventDate: buzzType === 'event' ? eventDate : undefined,
+        pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+      };
+      addBuzz({
+        ...fallbackBuzz,
+        id: Date.now().toString(),
+        createdAt: new Date(),
+        isLiked: false,
+      });
+      Alert.alert('Error', 'Failed to create buzz on server. Saved locally only.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleShareToSocial = async () => {

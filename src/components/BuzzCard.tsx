@@ -17,6 +17,7 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {Buzz} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
+import {useAuth} from '../context/AuthContext';
 import SocialMediaShareModal from './SocialMediaShareModal';
 
 const {width} = Dimensions.get('window');
@@ -81,6 +82,8 @@ const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout
 const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFollowing = false, onFollow}) => {
   const {theme} = useTheme();
   const {features} = useFeatures();
+  const {user: currentUser} = useAuth();
+  const isOwnBuzz = currentUser?.id === buzz.userId;
   const [showShareModal, setShowShareModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
@@ -193,13 +196,15 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
               {buzz.username}
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.followButton, isFollowing && styles.followingButton]}
-            onPress={handleFollow}>
-            <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-              {isFollowing ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
+          {!isOwnBuzz && (
+            <TouchableOpacity
+              style={[styles.followButton, isFollowing && styles.followingButton]}
+              onPress={handleFollow}>
+              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                {isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         <TouchableOpacity style={styles.moreButton} onPress={() => setShowMenuModal(true)}>
           <Icon name="more-vert" size={24} color={theme.colors.text} />

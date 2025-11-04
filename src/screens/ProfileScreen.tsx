@@ -14,17 +14,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
-import {useUser, User, Interest} from '../context/UserContext';
+import {useUser, User, Interest, Buzz} from '../context/UserContext';
 import {useAuth} from '../context/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import ApiService from '../services/APIService';
+import BuzzCard from '../components/BuzzCard';
+import {FlatList} from 'react-native';
 
 const ProfileScreen: React.FC = () => {
   const {theme} = useTheme();
-  const {user, setUser, interests, updateUserInterests} = useUser();
+  const {user, setUser, interests, updateUserInterests, buzzes, likeBuzz, shareBuzz} = useUser();
   const {logout} = useAuth();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
+  const [showMyBuzzes, setShowMyBuzzes] = useState(false);
   const [editForm, setEditForm] = useState({
     username: '',
     displayName: '',
@@ -438,6 +441,51 @@ const ProfileScreen: React.FC = () => {
             </Animatable.View>
           ))}
         </View>
+      </View>
+
+      <View style={styles.myBuzzesSection}>
+        <TouchableOpacity
+          style={styles.myBuzzesHeader}
+          onPress={() => setShowMyBuzzes(!showMyBuzzes)}>
+          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+            My Buzzes ({buzzes.filter(b => b.userId === user?.id).length})
+          </Text>
+          <Icon
+            name={showMyBuzzes ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+            size={24}
+            color={theme.colors.text}
+          />
+        </TouchableOpacity>
+        {showMyBuzzes && (
+          <View style={styles.myBuzzesList}>
+            {buzzes.filter(b => b.userId === user?.id).length === 0 ? (
+              <View style={styles.emptyBuzzes}>
+                <Icon name="article" size={48} color={theme.colors.textSecondary} />
+                <Text style={[styles.emptyBuzzesText, {color: theme.colors.textSecondary}]}>
+                  You haven't created any buzzes yet
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={buzzes.filter(b => b.userId === user?.id).sort((a, b) => {
+                  const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                  const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                  return dateB.getTime() - dateA.getTime();
+                })}
+                keyExtractor={item => item.id}
+                renderItem={({item}) => (
+                  <BuzzCard
+                    buzz={item}
+                    onLike={() => likeBuzz(item.id)}
+                    onShare={() => shareBuzz(item.id)}
+                    onPress={() => {}}
+                  />
+                )}
+                scrollEnabled={false}
+              />
+            )}
+          </View>
+        )}
       </View>
     </Animatable.View>
   );
