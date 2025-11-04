@@ -2302,6 +2302,121 @@ app.delete('/api/live-streams/scheduled/:id', verifyToken, async (req, res) => {
   }
 });
 
+// Channels Endpoints
+app.post('/api/channels', verifyToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Channel name is required' });
+    }
+
+    const user = await getUserById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const channelId = generateId();
+
+    // Create channel in database
+    await db.query(`
+      INSERT INTO channels (
+        id, user_id, username, display_name, name, description, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      channelId,
+      req.userId,
+      user.username,
+      user.displayName || user.username,
+      name.trim(),
+      description ? description.trim() : '',
+      new Date(),
+    ]);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: channelId,
+        userId: req.userId,
+        username: user.username,
+        displayName: user.displayName || user.username,
+        name: name.trim(),
+        description: description ? description.trim() : '',
+        createdAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error('Create channel error:', error);
+    
+    // Check if it's a duplicate channel name error
+    if (error.code === '23505') {
+      return res.status(400).json({ error: 'Channel name already exists' });
+    }
+    
+    res.status(500).json({ error: 'Failed to create channel' });
+  }
+});
+
+app.get('/api/channels', verifyToken, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const result = await db.query(
+      'SELECT * FROM channels WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.userId]
+    );
+
+    const channels = result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      name: row.name,
+      description: row.description,
+      createdAt: row.created_at,
+    }));
+
+    res.json({
+      success: true,
+      data: channels,
+    });
+  } catch (error) {
+    console.error('Get channels error:', error);
+    res.status(500).json({ error: 'Failed to fetch channels' });
+  }
+});
+
+app.delete('/api/channels/:id', verifyToken, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const result = await db.query(
+      'DELETE FROM channels WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Channel deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete channel error:', error);
+    res.status(500).json({ error: 'Failed to delete channel' });
+  }
+});
+
 // Stream Comments Endpoints
 app.get('/api/live-streams/:id/comments', async (req, res) => {
   try {

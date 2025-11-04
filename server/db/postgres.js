@@ -291,6 +291,27 @@ const initializeTables = async () => {
     await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_streams_scheduled_at ON scheduled_streams(scheduled_at)');
     console.log('  ✅ Created indexes on scheduled_streams');
 
+    // Create channels table
+    console.log('  → Creating channels table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS channels (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        name VARCHAR(500) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(user_id, name)
+      )
+    `);
+    console.log('  ✅ Channels table created');
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_channels_user_id ON channels(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_channels_name ON channels(name)');
+    console.log('  ✅ Created indexes on channels');
+
     // Verify tables were created
     const tablesResult = await client.query(`
       SELECT table_name 
