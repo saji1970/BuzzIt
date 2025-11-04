@@ -2554,6 +2554,46 @@ app.get('/api/channels', verifyToken, async (req, res) => {
   }
 });
 
+// Public endpoint to get all channels for search (no auth required)
+app.get('/api/channels/all', async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { search } = req.query;
+    let query = 'SELECT * FROM channels ORDER BY created_at DESC';
+    let params = [];
+
+    if (search) {
+      query = 'SELECT * FROM channels WHERE name ILIKE $1 OR description ILIKE $1 ORDER BY created_at DESC';
+      params = [`%${search}%`];
+    }
+
+    const result = await db.query(query, params);
+
+    const channels = result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      name: row.name,
+      description: row.description,
+      interests: typeof row.interests === 'string' ? JSON.parse(row.interests) : (row.interests || []),
+      createdAt: row.created_at,
+      type: 'channel', // Mark as channel for frontend
+    }));
+
+    res.json({
+      success: true,
+      data: channels,
+    });
+  } catch (error) {
+    console.error('Get all channels error:', error);
+    res.status(500).json({ error: 'Failed to fetch channels' });
+  }
+});
+
 app.delete('/api/channels/:id', verifyToken, async (req, res) => {
   try {
     if (!db.isConnected()) {

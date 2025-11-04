@@ -203,24 +203,44 @@ const HomeScreen: React.FC = () => {
 
     setSearching(true);
     try {
-      const response = await ApiService.getAllUsers();
+      const queryLower = query.toLowerCase();
       let results: any[] = [];
       
+      // Fetch users and channels in parallel
+      const [usersResponse, channelsResponse] = await Promise.all([
+        ApiService.getAllUsers(),
+        ApiService.getAllChannels(),
+      ]);
+      
       // Add users from API
-      if (response.success && response.data) {
-        const filteredUsers = response.data.filter((u: any) =>
-          u.username?.toLowerCase().includes(query.toLowerCase()) ||
-          u.displayName?.toLowerCase().includes(query.toLowerCase())
-        ).map((u: any) => ({...u, type: 'user'}));
+      if (usersResponse.success && usersResponse.data) {
+        const filteredUsers = usersResponse.data.filter((u: any) =>
+          u.username?.toLowerCase().includes(queryLower) ||
+          u.displayName?.toLowerCase().includes(queryLower)
+        ).map((u: any) => ({
+          ...u,
+          type: 'user',
+          searchName: u.displayName || u.username,
+        }));
         results.push(...filteredUsers);
       }
       
-      // Add channels from mock data
-      const filteredChannels = mockChannels.filter((c: any) =>
-        c.username?.toLowerCase().includes(query.toLowerCase()) ||
-        c.name?.toLowerCase().includes(query.toLowerCase())
-      );
-      results.push(...filteredChannels);
+      // Add channels from API
+      if (channelsResponse.success && channelsResponse.data) {
+        const filteredChannels = channelsResponse.data.filter((c: any) =>
+          c.name?.toLowerCase().includes(queryLower) ||
+          c.description?.toLowerCase().includes(queryLower) ||
+          c.username?.toLowerCase().includes(queryLower)
+        ).map((c: any) => ({
+          ...c,
+          type: 'channel',
+          searchName: c.name,
+          // Use channel name as display name, username as username
+          displayName: c.name,
+          username: c.username || `channel_${c.id}`,
+        }));
+        results.push(...filteredChannels);
+      }
       
       setSearchResults(results);
     } catch (error) {
@@ -679,7 +699,12 @@ const HomeScreen: React.FC = () => {
                 <TouchableOpacity
                   style={[styles.userResultItem, {backgroundColor: theme.colors.background}]}
                   onPress={() => {
-                    setSelectedBuzzerId(item.id);
+                    if (item.type === 'channel') {
+                      // For channels, navigate to channel owner's profile or show channel details
+                      setSelectedBuzzerId(item.userId || item.id);
+                    } else {
+                      setSelectedBuzzerId(item.id);
+                    }
                     setShowSearch(false);
                   }}>
                   <View style={[styles.userAvatar, {backgroundColor: theme.colors.primary}]}>
@@ -687,14 +712,17 @@ const HomeScreen: React.FC = () => {
                       <Image source={{uri: item.avatar}} style={styles.userAvatarImage} />
                     ) : (
                       <Text style={styles.userAvatarText}>
-                        {item.username?.charAt(0).toUpperCase() || '?'}
+                        {item.type === 'channel' 
+                          ? (item.name?.charAt(0).toUpperCase() || '📺')
+                          : (item.username?.charAt(0).toUpperCase() || item.displayName?.charAt(0).toUpperCase() || '?')
+                        }
                       </Text>
                     )}
                   </View>
                   <View style={styles.userResultInfo}>
                     <View style={styles.userResultHeader}>
-                      <Text style={[styles.userResultName, {color: theme.colors.text}]}>
-                        {item.displayName || item.name || item.username}
+                      <Text style={[styles.userResultName, {color: theme.colors.text}]} numberOfLines={1}>
+                        {item.type === 'channel' ? item.name : (item.displayName || item.username)}
                       </Text>
                       {item.type === 'channel' && (
                         <View style={[styles.channelBadge, {backgroundColor: theme.colors.primary + '20'}]}>
@@ -703,9 +731,23 @@ const HomeScreen: React.FC = () => {
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.userResultUsername, {color: theme.colors.textSecondary}]}>
-                      @{item.username}
+                    <Text style={[styles.userResultUsername, {color: theme.colors.textSecondary}]} numberOfLines={1}>
+                      {item.type === 'channel' 
+                        ? `@${item.username || 'channel'}${item.description ? ' • ' + item.description.substring(0, 30) : ''}`
+                        : `@${item.username}`
+                      }
                     </Text>
+                    {item.type === 'channel' && item.interests && item.interests.length > 0 && (
+                      <View style={styles.channelInterests}>
+                        {item.interests.slice(0, 3).map((interestId: string, idx: number) => (
+                          <View key={idx} style={[styles.interestChip, {backgroundColor: theme.colors.primary + '15'}]}>
+                            <Text style={[styles.interestChipText, {color: theme.colors.primary, fontSize: 10}]}>
+                              #{interestId}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                   <Icon name="chevron-right" size={24} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
@@ -715,7 +757,7 @@ const HomeScreen: React.FC = () => {
                   <View style={styles.emptySearch}>
                     <Icon name="person-search" size={48} color={theme.colors.textSecondary} />
                     <Text style={[styles.emptySearchText, {color: theme.colors.textSecondary}]}>
-                      No users found
+                      No users or channels found
                     </Text>
                   </View>
                 ) : null

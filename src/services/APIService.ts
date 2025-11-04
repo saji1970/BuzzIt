@@ -539,6 +539,16 @@ class ApiService {
     });
   }
 
+  // Channels
+  async getChannels(): Promise<ApiResponse<any[]>> {
+    return this.makeRequest<any[]>('/api/channels');
+  }
+
+  async getAllChannels(): Promise<ApiResponse<any[]>> {
+    // Public endpoint to get all channels for search
+    return this.makeRequest<any[]>('/api/channels/all');
+  }
+
   // AI Recommendations
   async getUserRecommendations(params: {
     contacts?: Array<{name: string; email?: string; phone?: string}>;
