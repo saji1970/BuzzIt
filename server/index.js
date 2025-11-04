@@ -2310,10 +2310,42 @@ app.delete('/api/live-streams/scheduled/:id', verifyToken, async (req, res) => {
   }
 });
 
+// Interests endpoint
+app.get('/api/interests', async (req, res) => {
+  try {
+    // Return available interests
+    const interests = [
+      { id: 'tech', name: 'Technology', category: 'Technology', emoji: '💻' },
+      { id: 'sports', name: 'Sports', category: 'Sports', emoji: '⚽' },
+      { id: 'music', name: 'Music', category: 'Entertainment', emoji: '🎵' },
+      { id: 'food', name: 'Food', category: 'Lifestyle', emoji: '🍔' },
+      { id: 'travel', name: 'Travel', category: 'Lifestyle', emoji: '✈️' },
+      { id: 'fitness', name: 'Fitness', category: 'Health', emoji: '💪' },
+      { id: 'art', name: 'Art', category: 'Creative', emoji: '🎨' },
+      { id: 'fashion', name: 'Fashion', category: 'Lifestyle', emoji: '👗' },
+      { id: 'gaming', name: 'Gaming', category: 'Entertainment', emoji: '🎮' },
+      { id: 'education', name: 'Education', category: 'Education', emoji: '📚' },
+      { id: 'business', name: 'Business', category: 'Business', emoji: '💼' },
+      { id: 'politics', name: 'Politics', category: 'News', emoji: '🏛️' },
+      { id: 'science', name: 'Science', category: 'Education', emoji: '🔬' },
+      { id: 'nature', name: 'Nature', category: 'Lifestyle', emoji: '🌲' },
+      { id: 'photography', name: 'Photography', category: 'Creative', emoji: '📷' },
+    ];
+    
+    res.json({
+      success: true,
+      data: interests,
+    });
+  } catch (error) {
+    console.error('Get interests error:', error);
+    res.status(500).json({ error: 'Failed to fetch interests' });
+  }
+});
+
 // Channels Endpoints
 app.post('/api/channels', verifyToken, async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, interests } = req.body;
     
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Channel name is required' });
@@ -2333,8 +2365,8 @@ app.post('/api/channels', verifyToken, async (req, res) => {
     // Create channel in database
     await db.query(`
       INSERT INTO channels (
-        id, user_id, username, display_name, name, description, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        id, user_id, username, display_name, name, description, interests, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `, [
       channelId,
       req.userId,
@@ -2342,6 +2374,7 @@ app.post('/api/channels', verifyToken, async (req, res) => {
       user.displayName || user.username,
       name.trim(),
       description ? description.trim() : '',
+      JSON.stringify(interests || []),
       new Date(),
     ]);
 
@@ -2354,6 +2387,7 @@ app.post('/api/channels', verifyToken, async (req, res) => {
         displayName: user.displayName || user.username,
         name: name.trim(),
         description: description ? description.trim() : '',
+        interests: interests || [],
         createdAt: new Date(),
       },
     });
@@ -2387,6 +2421,7 @@ app.get('/api/channels', verifyToken, async (req, res) => {
       displayName: row.display_name,
       name: row.name,
       description: row.description,
+      interests: typeof row.interests === 'string' ? JSON.parse(row.interests) : (row.interests || []),
       createdAt: row.created_at,
     }));
 

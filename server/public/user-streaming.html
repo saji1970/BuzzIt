@@ -22,6 +22,71 @@
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            display: flex;
+            gap: 20px;
+        }
+
+        .channels-sidebar {
+            width: 280px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .channels-sidebar h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .channel-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .channel-item:hover {
+            background: #f8f9fa;
+        }
+
+        .channel-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .channel-item h3 {
+            font-size: 1rem;
+            margin-bottom: 5px;
+        }
+
+        .channel-item p {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        .channel-interests {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .interest-tag {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+
+        .main-content {
+            flex: 1;
         }
 
         .header {
@@ -125,6 +190,43 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
+        }
+
+        .interests-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .interest-option {
+            padding: 10px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .interest-option:hover {
+            border-color: #667eea;
+        }
+
+        .interest-option.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .interest-option .emoji {
+            font-size: 1.5rem;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .interest-option .name {
+            font-size: 0.85rem;
+            font-weight: 600;
         }
 
         .btn {
@@ -253,7 +355,25 @@
             border: 1px solid #f5c6cb;
         }
 
+        .no-channel-message {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .no-channel-message h2 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
         @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .channels-sidebar {
+                width: 100%;
+                max-height: 300px;
+            }
             .form-row {
                 grid-template-columns: 1fr;
             }
@@ -262,150 +382,176 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🎥 Buzz it Streaming</h1>
-            <div class="user-info">
-                <span id="currentUsername"></span>
-                <button class="logout-btn" onclick="logout()">Logout</button>
+        <!-- Channels Sidebar -->
+        <div class="channels-sidebar">
+            <h2>📺 My Channels</h2>
+            <div id="channelsList">
+                <p style="color: #666; text-align: center; padding: 20px;">Loading channels...</p>
             </div>
+            <button class="btn" onclick="showCreateChannelForm()" style="width: 100%; margin-top: 20px;">
+                + Create Channel
+            </button>
         </div>
 
-        <div id="alert" class="alert"></div>
-
-        <div class="tabs">
-            <button class="tab-btn active" onclick="showTab('live')">Live Stream</button>
-            <button class="tab-btn" onclick="showTab('schedule')">Schedule Stream</button>
-            <button class="tab-btn" onclick="showTab('channels')">My Channels</button>
-        </div>
-
-        <!-- Live Stream Tab -->
-        <div id="liveTab" class="tab-content active">
-            <div class="card">
-                <h2>Start Live Stream</h2>
-                <form id="createStreamForm">
-                    <div class="form-group">
-                        <label for="streamTitle">Stream Title *</label>
-                        <input type="text" id="streamTitle" required placeholder="Enter stream title">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="streamDescription">Description</label>
-                        <textarea id="streamDescription" placeholder="Enter stream description"></textarea>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="streamCategory">Category</label>
-                            <select id="streamCategory">
-                                <option value="general">General</option>
-                                <option value="entertainment">Entertainment</option>
-                                <option value="education">Education</option>
-                                <option value="sports">Sports</option>
-                                <option value="music">Music</option>
-                                <option value="gaming">Gaming</option>
-                                <option value="news">News</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="streamUrl">Stream URL (Optional)</label>
-                            <input type="text" id="streamUrl" placeholder="rtmp://your-server.com/stream">
-                        </div>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="btn">Start Stream</button>
-                        <button type="button" class="btn btn-secondary" onclick="previewStream()">Preview</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Stream Preview -->
-            <div id="streamPreview" class="card" style="display: none;">
-                <h2>Stream Preview</h2>
-                <div class="preview-container">
-                    <video id="previewVideo" class="preview-video" controls muted></video>
-                    <div class="preview-overlay">
-                        <span class="live-dot"></span>
-                        LIVE
-                    </div>
-                    <div class="viewer-count">👁️ <span id="previewViewers">0</span> viewers</div>
-                </div>
-                <div style="margin-top: 20px;">
-                    <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
-                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-                        <button class="btn btn-success" onclick="copyStreamLink()">Copy Stream Link</button>
-                        <button class="btn" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
-                        <button class="btn btn-danger" onclick="endCurrentStream()">End Stream</button>
-                    </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <h1>🎥 Buzz it Streaming</h1>
+                <div class="user-info">
+                    <span id="currentUsername"></span>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
                 </div>
             </div>
 
-            <!-- Active Streams -->
-            <div class="card">
-                <h2>Your Active Streams</h2>
-                <div id="activeStreamsList">
-                    <p style="color: #666;">No active streams</p>
+            <div id="alert" class="alert"></div>
+
+            <!-- No Channel Selected View -->
+            <div id="noChannelView" class="card no-channel-message">
+                <h2>Select a Channel to Start Streaming</h2>
+                <p>Choose a channel from the sidebar or create a new one to begin streaming.</p>
+            </div>
+
+            <!-- Channel Selected View -->
+            <div id="channelView" style="display: none;">
+                <div class="card">
+                    <h2 id="selectedChannelName"></h2>
+                    <p id="selectedChannelDesc" style="color: #666; margin-bottom: 20px;"></p>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="showTab('live')">Live Stream</button>
+                    <button class="tab-btn" onclick="showTab('schedule')">Schedule Stream</button>
+                </div>
+
+                <!-- Live Stream Tab -->
+                <div id="liveTab" class="tab-content active">
+                    <div class="card">
+                        <h2>Start Live Stream</h2>
+                        <form id="createStreamForm">
+                            <div class="form-group">
+                                <label for="streamTitle">Stream Title *</label>
+                                <input type="text" id="streamTitle" required placeholder="Enter stream title">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="streamDescription">Description</label>
+                                <textarea id="streamDescription" placeholder="Enter stream description"></textarea>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="streamCategory">Category</label>
+                                    <select id="streamCategory">
+                                        <option value="general">General</option>
+                                        <option value="entertainment">Entertainment</option>
+                                        <option value="education">Education</option>
+                                        <option value="sports">Sports</option>
+                                        <option value="music">Music</option>
+                                        <option value="gaming">Gaming</option>
+                                        <option value="news">News</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="streamUrl">Stream URL (Optional)</label>
+                                    <input type="text" id="streamUrl" placeholder="rtmp://your-server.com/stream">
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button type="submit" class="btn">Start Stream</button>
+                                <button type="button" class="btn btn-secondary" onclick="previewStream()">Preview</button>
+                                <button type="button" class="btn btn-success" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Stream Preview -->
+                    <div id="streamPreview" class="card" style="display: none;">
+                        <h2>Stream Preview</h2>
+                        <div class="preview-container">
+                            <video id="previewVideo" class="preview-video" controls muted></video>
+                            <div class="preview-overlay">
+                                <span class="live-dot"></span>
+                                LIVE
+                            </div>
+                            <div class="viewer-count">👁️ <span id="previewViewers">0</span> viewers</div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
+                            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                                <button class="btn btn-success" onclick="copyStreamLink()">Copy Stream Link</button>
+                                <button class="btn" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
+                                <button class="btn btn-danger" onclick="endCurrentStream()">End Stream</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Streams -->
+                    <div class="card">
+                        <h2>Active Streams</h2>
+                        <div id="activeStreamsList">
+                            <p style="color: #666;">No active streams</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Stream Tab -->
+                <div id="scheduleTab" class="tab-content">
+                    <div class="card">
+                        <h2>Schedule a Stream</h2>
+                        <p style="color: #666; margin-bottom: 20px;">Schedule a stream and we'll automatically create a buzz with countdown</p>
+                        <form id="scheduleStreamForm">
+                            <div class="form-group">
+                                <label for="scheduledTitle">Stream Title *</label>
+                                <input type="text" id="scheduledTitle" required placeholder="Enter stream title">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="scheduledDescription">Description</label>
+                                <textarea id="scheduledDescription" placeholder="Enter stream description"></textarea>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="scheduledDate">Date *</label>
+                                    <input type="date" id="scheduledDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="scheduledTime">Time *</label>
+                                    <input type="time" id="scheduledTime" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="scheduledCategory">Category</label>
+                                <select id="scheduledCategory">
+                                    <option value="general">General</option>
+                                    <option value="entertainment">Entertainment</option>
+                                    <option value="education">Education</option>
+                                    <option value="sports">Sports</option>
+                                    <option value="music">Music</option>
+                                    <option value="gaming">Gaming</option>
+                                    <option value="news">News</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn">Schedule Stream</button>
+                        </form>
+                    </div>
+
+                    <!-- Scheduled Streams -->
+                    <div class="card">
+                        <h2>Scheduled Streams</h2>
+                        <div id="scheduledStreamsList">
+                            <p style="color: #666;">No scheduled streams</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Schedule Stream Tab -->
-        <div id="scheduleTab" class="tab-content">
-            <div class="card">
-                <h2>Schedule a Stream</h2>
-                <p style="color: #666; margin-bottom: 20px;">Schedule a stream and we'll automatically create a buzz with countdown</p>
-                <form id="scheduleStreamForm">
-                    <div class="form-group">
-                        <label for="scheduledTitle">Stream Title *</label>
-                        <input type="text" id="scheduledTitle" required placeholder="Enter stream title">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="scheduledDescription">Description</label>
-                        <textarea id="scheduledDescription" placeholder="Enter stream description"></textarea>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scheduledDate">Date *</label>
-                            <input type="date" id="scheduledDate" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="scheduledTime">Time *</label>
-                            <input type="time" id="scheduledTime" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="scheduledCategory">Category</label>
-                        <select id="scheduledCategory">
-                            <option value="general">General</option>
-                            <option value="entertainment">Entertainment</option>
-                            <option value="education">Education</option>
-                            <option value="sports">Sports</option>
-                            <option value="music">Music</option>
-                            <option value="gaming">Gaming</option>
-                            <option value="news">News</option>
-                        </select>
-                    </div>
-
-                    <button type="submit" class="btn">Schedule Stream</button>
-                </form>
-            </div>
-
-            <!-- Scheduled Streams -->
-            <div class="card">
-                <h2>Scheduled Streams</h2>
-                <div id="scheduledStreamsList">
-                    <p style="color: #666;">No scheduled streams</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Channels Tab -->
-        <div id="channelsTab" class="tab-content">
-            <div class="card">
-                <h2>Create Channel</h2>
+            <!-- Create Channel Modal -->
+            <div id="createChannelModal" class="card" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                <h2>Create New Channel</h2>
                 <form id="createChannelForm">
                     <div class="form-group">
                         <label for="channelName">Channel Name *</label>
@@ -417,15 +563,18 @@
                         <textarea id="channelDescription" placeholder="Enter channel description"></textarea>
                     </div>
 
-                    <button type="submit" class="btn">Create Channel</button>
-                </form>
-            </div>
+                    <div class="form-group">
+                        <label>Select Interests for this Channel</label>
+                        <div id="interestsSelector" class="interests-selector">
+                            <!-- Interests will be loaded here -->
+                        </div>
+                    </div>
 
-            <div class="card">
-                <h2>Your Channels</h2>
-                <div id="channelsList">
-                    <p style="color: #666;">No channels created</p>
-                </div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn">Create Channel</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideCreateChannelForm()">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -436,6 +585,10 @@
         let currentStream = null;
         let scheduledStreams = [];
         let countdownInterval = null;
+        let selectedChannel = null;
+        let channels = [];
+        let availableInterests = [];
+        let selectedInterests = [];
 
         // Check if already logged in
         if (authToken) {
@@ -459,14 +612,65 @@
                 if (data.success && data.data) {
                     currentUser = data.data;
                     document.getElementById('currentUsername').textContent = currentUser.displayName || currentUser.username;
-                    loadActiveStreams();
-                    loadScheduledStreams();
+                    await loadInterests();
+                    await loadChannels();
                 } else {
                     window.location.href = '/';
                 }
             } catch (error) {
                 window.location.href = '/';
             }
+        }
+
+        async function loadInterests() {
+            try {
+                const response = await fetch('/api/interests');
+                const data = await response.json();
+                if (data.success && data.data) {
+                    availableInterests = data.data;
+                    renderInterestsSelector();
+                }
+            } catch (error) {
+                console.error('Error loading interests:', error);
+            }
+        }
+
+        function renderInterestsSelector() {
+            const container = document.getElementById('interestsSelector');
+            container.innerHTML = '';
+            availableInterests.forEach(interest => {
+                const div = document.createElement('div');
+                div.className = 'interest-option';
+                div.onclick = () => toggleInterest(interest.id);
+                div.innerHTML = `
+                    <span class="emoji">${interest.emoji}</span>
+                    <span class="name">${interest.name}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleInterest(interestId) {
+            const index = selectedInterests.indexOf(interestId);
+            if (index > -1) {
+                selectedInterests.splice(index, 1);
+            } else {
+                selectedInterests.push(interestId);
+            }
+            updateInterestUI();
+        }
+
+        function updateInterestUI() {
+            const options = document.querySelectorAll('.interest-option');
+            options.forEach(option => {
+                const name = option.querySelector('.name').textContent;
+                const interest = availableInterests.find(i => i.name === name);
+                if (interest && selectedInterests.includes(interest.id)) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
         }
 
         function showTab(tabName) {
@@ -497,8 +701,141 @@
             }, 5000);
         }
 
+        function showCreateChannelForm() {
+            document.getElementById('createChannelModal').style.display = 'block';
+            selectedInterests = [];
+            updateInterestUI();
+        }
+
+        function hideCreateChannelForm() {
+            document.getElementById('createChannelModal').style.display = 'none';
+            document.getElementById('createChannelForm').reset();
+        }
+
+        async function loadChannels() {
+            try {
+                const response = await fetch('/api/channels', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    channels = data.data;
+                    renderChannels();
+                    
+                    if (channels.length === 0) {
+                        document.getElementById('noChannelView').style.display = 'block';
+                        document.getElementById('channelView').style.display = 'none';
+                    } else {
+                        // Auto-select first channel if none selected
+                        if (!selectedChannel && channels.length > 0) {
+                            selectChannel(channels[0]);
+                        }
+                    }
+                } else {
+                    channels = [];
+                    renderChannels();
+                }
+            } catch (error) {
+                console.error('Error loading channels:', error);
+                channels = [];
+                renderChannels();
+            }
+        }
+
+        function renderChannels() {
+            const container = document.getElementById('channelsList');
+            
+            if (channels.length === 0) {
+                container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No channels created</p>';
+                return;
+            }
+
+            let html = '';
+            channels.forEach(channel => {
+                const isActive = selectedChannel && selectedChannel.id === channel.id;
+                html += `
+                    <div class="channel-item ${isActive ? 'active' : ''}" onclick="selectChannel(${JSON.stringify(channel).replace(/"/g, '&quot;')})">
+                        <h3>${channel.name}</h3>
+                        <p>${channel.description || 'No description'}</p>
+                        ${channel.interests && channel.interests.length > 0 ? `
+                            <div class="channel-interests">
+                                ${channel.interests.map(interestId => {
+                                    const interest = availableInterests.find(i => i.id === interestId);
+                                    return interest ? `<span class="interest-tag">${interest.emoji} ${interest.name}</span>` : '';
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function selectChannel(channel) {
+            selectedChannel = channel;
+            document.getElementById('selectedChannelName').textContent = channel.name;
+            document.getElementById('selectedChannelDesc').textContent = channel.description || 'No description';
+            document.getElementById('noChannelView').style.display = 'none';
+            document.getElementById('channelView').style.display = 'block';
+            renderChannels();
+            loadActiveStreams();
+        }
+
+        // Channel form handler
+        document.getElementById('createChannelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const channelName = document.getElementById('channelName').value;
+            const channelDescription = document.getElementById('channelDescription').value;
+
+            if (selectedInterests.length === 0) {
+                showAlert('Please select at least one interest for the channel', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        name: channelName,
+                        description: channelDescription,
+                        interests: selectedInterests
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('Channel created successfully!', 'success');
+                    hideCreateChannelForm();
+                    await loadChannels();
+                    if (data.data) {
+                        selectChannel(data.data);
+                    }
+                } else {
+                    showAlert(data.error || 'Failed to create channel', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            }
+        });
+
         document.getElementById('createStreamForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (!selectedChannel) {
+                showAlert('Please select a channel first', 'error');
+                return;
+            }
 
             const title = document.getElementById('streamTitle').value;
             const description = document.getElementById('streamDescription').value;
@@ -516,7 +853,8 @@
                         title,
                         description,
                         category,
-                        streamUrl: streamUrl || undefined
+                        streamUrl: streamUrl || undefined,
+                        channelId: selectedChannel.id
                     })
                 });
 
@@ -538,6 +876,11 @@
 
         document.getElementById('scheduleStreamForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (!selectedChannel) {
+                showAlert('Please select a channel first', 'error');
+                return;
+            }
 
             const title = document.getElementById('scheduledTitle').value;
             const description = document.getElementById('scheduledDescription').value;
@@ -564,7 +907,8 @@
                         title,
                         description,
                         category,
-                        scheduledAt: scheduledDateTime.toISOString()
+                        scheduledAt: scheduledDateTime.toISOString(),
+                        channelId: selectedChannel.id
                     })
                 });
 
@@ -583,6 +927,8 @@
         });
 
         async function loadActiveStreams() {
+            if (!selectedChannel) return;
+            
             try {
                 const response = await fetch('/api/live-streams', {
                     headers: {
@@ -593,10 +939,10 @@
                 const data = await response.json();
 
                 if (data.success && data.data) {
-                    const userStreams = data.data.filter(s => 
-                        s.userId === currentUser.id && s.isLive
+                    const channelStreams = data.data.filter(s => 
+                        s.userId === currentUser.id && s.isLive && s.channelId === selectedChannel.id
                     );
-                    renderActiveStreams(userStreams);
+                    renderActiveStreams(channelStreams);
                 }
             } catch (error) {
                 console.error('Error loading streams:', error);
@@ -604,6 +950,8 @@
         }
 
         async function loadScheduledStreams() {
+            if (!selectedChannel) return;
+            
             try {
                 const response = await fetch('/api/live-streams/scheduled', {
                     headers: {
@@ -614,8 +962,8 @@
                 const data = await response.json();
 
                 if (data.success && data.data) {
-                    scheduledStreams = data.data;
-                    renderScheduledStreams(data.data);
+                    scheduledStreams = data.data.filter(s => s.channelId === selectedChannel.id);
+                    renderScheduledStreams(scheduledStreams);
                 }
             } catch (error) {
                 console.error('Error loading scheduled streams:', error);
@@ -728,18 +1076,6 @@
             }, 5000);
         }
 
-        function broadcastStream() {
-            if (!currentStream) {
-                showAlert('No stream to broadcast', 'error');
-                return;
-            }
-
-            // Open stream in new window for broadcasting
-            const streamUrl = `${window.location.origin}/stream/${currentStream.id}`;
-            window.open(streamUrl, '_blank');
-            showAlert('Stream opened in new window for broadcasting', 'success');
-        }
-
         function previewStream() {
             if (currentStream) {
                 showStreamPreview();
@@ -780,6 +1116,17 @@
             navigator.clipboard.writeText(link).then(() => {
                 showAlert('Stream link copied to clipboard!', 'success');
             });
+        }
+
+        function broadcastStream() {
+            if (!currentStream) {
+                showAlert('No stream to broadcast', 'error');
+                return;
+            }
+
+            const streamUrl = `${window.location.origin}/stream/${currentStream.id}`;
+            window.open(streamUrl, '_blank');
+            showAlert('Stream opened in new window for broadcasting', 'success');
         }
 
         async function endStream(streamId) {
@@ -864,120 +1211,9 @@
             }
         }
 
-        // Channel form handler
-        document.getElementById('createChannelForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const channelName = document.getElementById('channelName').value;
-            const channelDescription = document.getElementById('channelDescription').value;
-
-            try {
-                const response = await fetch('/api/channels', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        name: channelName,
-                        description: channelDescription
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showAlert('Channel created successfully!', 'success');
-                    document.getElementById('createChannelForm').reset();
-                    loadChannels();
-                } else {
-                    showAlert(data.error || 'Failed to create channel', 'error');
-                }
-            } catch (error) {
-                showAlert('Network error. Please try again.', 'error');
-            }
-        });
-
-        async function loadChannels() {
-            try {
-                const response = await fetch('/api/channels', {
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.data) {
-                    renderChannels(data.data);
-                } else {
-                    renderChannels([]);
-                }
-            } catch (error) {
-                console.error('Error loading channels:', error);
-                renderChannels([]);
-            }
-        }
-
-        function renderChannels(channels) {
-            const container = document.getElementById('channelsList');
-
-            if (channels.length === 0) {
-                container.innerHTML = '<p style="color: #666;">No channels created</p>';
-                return;
-            }
-
-            let html = '';
-            channels.forEach(channel => {
-                html += `
-                    <div class="stream-card">
-                        <h3>${channel.name}</h3>
-                        <p style="color: #666; margin-bottom: 15px;">${channel.description || 'No description'}</p>
-                        <div class="stream-actions">
-                            <button class="btn" onclick="startChannelStream('${channel.id}')">Start Stream</button>
-                            <button class="btn btn-danger" onclick="deleteChannel('${channel.id}')">Delete</button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-        }
-
-        async function startChannelStream(channelId) {
-            // Redirect to live stream tab
-            showTab('live');
-            document.querySelector('.tab-btn[onclick="showTab(\'live\')"]').click();
-        }
-
-        async function deleteChannel(channelId) {
-            if (!confirm('Are you sure you want to delete this channel?')) return;
-
-            try {
-                const response = await fetch(`/api/channels/${channelId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showAlert('Channel deleted successfully', 'success');
-                    loadChannels();
-                } else {
-                    showAlert(data.error || 'Failed to delete channel', 'error');
-                }
-            } catch (error) {
-                showAlert('Network error. Please try again.', 'error');
-            }
-        }
-
-
         // Auto-refresh streams every 10 seconds
         setInterval(() => {
-            if (authToken && currentUser) {
+            if (authToken && currentUser && selectedChannel) {
                 loadActiveStreams();
             }
         }, 10000);

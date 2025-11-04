@@ -301,6 +301,7 @@ const initializeTables = async () => {
         display_name VARCHAR(255),
         name VARCHAR(500) NOT NULL,
         description TEXT,
+        interests JSONB DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         UNIQUE(user_id, name)
