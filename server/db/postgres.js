@@ -238,9 +238,11 @@ const initializeTables = async () => {
         viewers INTEGER DEFAULT 0,
         category VARCHAR(100),
         tags JSONB DEFAULT '[]',
+        channel_id VARCHAR(255),
         started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ended_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
       )
     `);
     console.log('  ✅ Live streams table created');
@@ -280,9 +282,11 @@ const initializeTables = async () => {
         title VARCHAR(500) NOT NULL,
         description TEXT,
         category VARCHAR(100),
+        channel_id VARCHAR(255),
         scheduled_at TIMESTAMP NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
       )
     `);
     console.log('  ✅ Scheduled streams table created');

@@ -1666,6 +1666,7 @@ app.get('/api/live-streams', async (req, res) => {
           viewers: row.viewers,
           category: row.category,
           tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+          channelId: row.channel_id,
           startedAt: row.started_at,
           endedAt: row.ended_at,
         }));
@@ -1772,6 +1773,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       viewers: 0,
       category: req.body.category || 'general',
       tags: req.body.tags || [],
+      channelId: req.body.channelId || null,
     };
 
     let savedStream;
@@ -1780,8 +1782,8 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
         const result = await db.query(`
           INSERT INTO live_streams (
             id, user_id, username, display_name, title, description, stream_url,
-            thumbnail_url, is_live, viewers, category, tags
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            thumbnail_url, is_live, viewers, category, tags, channel_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING *
         `, [
           newStreamData.id,
@@ -1796,6 +1798,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           newStreamData.viewers,
           newStreamData.category,
           JSON.stringify(newStreamData.tags),
+          newStreamData.channelId,
         ]);
         
         const row = result.rows[0];
@@ -1812,6 +1815,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           viewers: row.viewers,
           category: row.category,
           tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+          channelId: row.channel_id,
           startedAt: row.started_at,
         };
       } catch (saveError) {
