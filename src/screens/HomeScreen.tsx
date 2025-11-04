@@ -739,13 +739,18 @@ const HomeScreen: React.FC = () => {
                     </Text>
                     {item.type === 'channel' && item.interests && item.interests.length > 0 && (
                       <View style={styles.channelInterests}>
-                        {item.interests.slice(0, 3).map((interestId: string, idx: number) => (
-                          <View key={idx} style={[styles.interestChip, {backgroundColor: theme.colors.primary + '15'}]}>
-                            <Text style={[styles.interestChipText, {color: theme.colors.primary, fontSize: 10}]}>
-                              #{interestId}
-                            </Text>
-                          </View>
-                        ))}
+                        {item.interests.slice(0, 3).map((interestId: string, idx: number) => {
+                          // Try to find interest name from available interests
+                          const interest = user?.interests?.find((i: any) => i.id === interestId);
+                          const interestName = interest?.name || interestId;
+                          return (
+                            <View key={idx} style={[styles.interestChip, {backgroundColor: theme.colors.primary + '15'}]}>
+                              <Text style={[styles.interestChipText, {color: theme.colors.primary, fontSize: 10}]}>
+                                {interest?.emoji || ''} {interestName}
+                              </Text>
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
                   </View>
