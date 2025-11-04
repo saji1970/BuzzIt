@@ -748,6 +748,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  myBuzzesSection: {
+    marginTop: 20,
+  },
+  myBuzzesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  myBuzzesList: {
+    marginTop: 10,
+  },
+  emptyBuzzes: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyBuzzesText: {
+    marginTop: 12,
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
 
 export default ProfileScreen;
