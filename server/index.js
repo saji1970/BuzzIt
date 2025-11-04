@@ -1707,6 +1707,7 @@ app.get('/api/live-streams/:id', async (req, res) => {
             viewers: row.viewers,
             category: row.category,
             tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+            channelId: row.channel_id,
             startedAt: row.started_at,
             endedAt: row.ended_at,
           };
@@ -2588,6 +2589,7 @@ app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
             viewers: updatedRow.viewers,
             category: updatedRow.category,
             tags: typeof updatedRow.tags === 'string' ? JSON.parse(updatedRow.tags) : (updatedRow.tags || []),
+            channelId: updatedRow.channel_id,
             startedAt: updatedRow.started_at,
             endedAt: updatedRow.ended_at,
           };
