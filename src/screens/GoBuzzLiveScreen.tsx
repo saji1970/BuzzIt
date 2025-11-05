@@ -14,7 +14,7 @@ import {
   Share,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { Camera, CameraType } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -38,10 +38,7 @@ const GoBuzzLiveScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user: currentUser} = useAuth();
   const navigation = useNavigation();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [type, setType] = useState<CameraType>(Camera.Type.front);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -49,15 +46,7 @@ const GoBuzzLiveScreen: React.FC = () => {
   const [comments, setComments] = useState<StreamComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [currentStream, setCurrentStream] = useState<any>(null);
-  const cameraRef = useRef<any>(null);
   const commentsEndRef = useRef<View>(null);
-
-  useEffect(() => {
-    (async () => {
-      const {status} = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
 
   useEffect(() => {
     if (isStreaming && currentStream) {
@@ -230,13 +219,6 @@ const GoBuzzLiveScreen: React.FC = () => {
     }
   };
 
-  const toggleCamera = () => {
-    setType(
-      type === Camera.Type.back
-        ? Camera.Type.front
-        : Camera.Type.back
-    );
-  };
 
   const formatTime = (date: Date): string => {
     const now = new Date();
@@ -453,7 +435,7 @@ const GoBuzzLiveScreen: React.FC = () => {
             </View>
           </>
         )}
-      </Camera>
+      </View>
     </View>
   );
 };
