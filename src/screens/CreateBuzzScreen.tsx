@@ -214,7 +214,7 @@ const CreateBuzzScreen: React.FC = () => {
     }
   };
 
-  const handleCreateBuzz = () => {
+  const handleCreateBuzz = async () => {
     // Check if buzz creation is enabled
     if (!features.buzzCreation) {
       Alert.alert('Feature Disabled', 'Buzz creation is currently disabled by admin.');
