@@ -20,8 +20,8 @@
     "android": {
       "package": "com.buzzit.app",
       "versionCode": 3,
-      "compileSdkVersion": 33,
-      "targetSdkVersion": 33,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
       "adaptiveIcon": {
         "backgroundColor": "#E4405F"
       },
