@@ -14,7 +14,7 @@ import {
   Share,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { Camera } from 'expo-camera';
+import { Camera, CameraType } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -39,7 +39,7 @@ const GoBuzzLiveScreen: React.FC = () => {
   const {user: currentUser} = useAuth();
   const navigation = useNavigation();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [type, setType] = useState(Camera.Constants.Type.front);
+  const [type, setType] = useState<CameraType>(Camera.Type.front);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
@@ -232,9 +232,9 @@ const GoBuzzLiveScreen: React.FC = () => {
 
   const toggleCamera = () => {
     setType(
-      type === Camera.Constants.Type.back
-        ? Camera.Constants.Type.front
-        : Camera.Constants.Type.back
+      type === Camera.Type.back
+        ? Camera.Type.front
+        : Camera.Type.back
     );
   };
 
