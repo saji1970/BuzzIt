@@ -239,42 +239,12 @@ const GoBuzzLiveScreen: React.FC = () => {
     </View>
   );
 
-  if (hasPermission === null) {
-    return (
-      <View style={[styles.container, {backgroundColor: '#000'}]}>
-        <Text style={styles.loadingText}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (hasPermission === false) {
-    return (
-      <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
-        <Icon name="videocam-off" size={64} color="#FFFFFF" />
-        <Text style={styles.errorText}>Camera permission denied</Text>
-        <Text style={styles.errorSubtext}>Please enable camera access in Settings</Text>
-        <TouchableOpacity
-          style={[styles.goLiveButton, {backgroundColor: '#FF0069', marginTop: 20}]}
-          onPress={async () => {
-            const {status} = await Camera.requestCameraPermissionsAsync();
-            setHasPermission(status === 'granted');
-          }}>
-          <Text style={styles.goLiveButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: '#000'}]}>
       <StatusBar barStyle="light-content" />
       
-      {/* Camera View */}
-      <Camera
-        ref={cameraRef}
-        style={styles.camera}
-        type={type}
-      >
+      {/* Content View */}
+      <View style={styles.contentView}>
         {/* Top Overlay */}
         <View style={styles.topOverlay}>
           <TouchableOpacity
@@ -364,18 +334,14 @@ const GoBuzzLiveScreen: React.FC = () => {
             <View style={styles.bottomControls}>
               <TouchableOpacity
                 style={styles.controlButton}
-                onPress={toggleCamera}>
-                <Icon name="flip-camera-ios" size={28} color="#FFFFFF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={() => setIsMuted(!isMuted)}>
-                <Icon
-                  name={isMuted ? 'mic-off' : 'mic'}
-                  size={28}
-                  color={isMuted ? '#FF0069' : '#FFFFFF'}
-                />
+                onPress={() => {
+                  Alert.alert(
+                    'Stream from Web',
+                    'For live camera streaming, please use the web interface at https://buzzit-production.up.railway.app/user-streaming',
+                    [{text: 'OK'}]
+                  );
+                }}>
+                <Icon name="videocam" size={28} color="#FFFFFF" />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -444,8 +410,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  camera: {
+  contentView: {
     flex: 1,
+    width: '100%',
+    backgroundColor: '#000',
   },
   loadingText: {
     color: '#FFFFFF',
