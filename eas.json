@@ -7,10 +7,11 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       },
       "env": {
-        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dkotlin.daemon.jvm.options=-Xmx2g"
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dkotlin.daemon.jvm.options=-Xmx4g -Dkotlin.incremental=false"
       }
     },
     "production": {
