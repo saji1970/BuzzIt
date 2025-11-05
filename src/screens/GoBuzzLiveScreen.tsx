@@ -14,7 +14,7 @@ import {
   Share,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { Camera } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -38,8 +38,8 @@ const GoBuzzLiveScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user: currentUser} = useAuth();
   const navigation = useNavigation();
-  const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<CameraType>('front');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [type, setType] = useState(Camera.Constants.Type.front);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
@@ -51,6 +51,13 @@ const GoBuzzLiveScreen: React.FC = () => {
   const [currentStream, setCurrentStream] = useState<any>(null);
   const cameraRef = useRef<any>(null);
   const commentsEndRef = useRef<View>(null);
+
+  useEffect(() => {
+    (async () => {
+      const {status} = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
 
   useEffect(() => {
     if (isStreaming && currentStream) {
@@ -224,7 +231,11 @@ const GoBuzzLiveScreen: React.FC = () => {
   };
 
   const toggleCamera = () => {
-    setFacing(facing === 'back' ? 'front' : 'back');
+    setType(
+      type === Camera.Constants.Type.back
+        ? Camera.Constants.Type.front
+        : Camera.Constants.Type.back
+    );
   };
 
   const formatTime = (date: Date): string => {
@@ -246,7 +257,7 @@ const GoBuzzLiveScreen: React.FC = () => {
     </View>
   );
 
-  if (!permission) {
+  if (hasPermission === null) {
     return (
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         <Text style={styles.loadingText}>Requesting camera permission...</Text>
@@ -254,7 +265,7 @@ const GoBuzzLiveScreen: React.FC = () => {
     );
   }
 
-  if (!permission.granted) {
+  if (hasPermission === false) {
     return (
       <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
         <Icon name="videocam-off" size={64} color="#FFFFFF" />
@@ -262,7 +273,10 @@ const GoBuzzLiveScreen: React.FC = () => {
         <Text style={styles.errorSubtext}>Please enable camera access in Settings</Text>
         <TouchableOpacity
           style={[styles.goLiveButton, {backgroundColor: '#FF0069', marginTop: 20}]}
-          onPress={requestPermission}>
+          onPress={async () => {
+            const {status} = await Camera.requestCameraPermissionsAsync();
+            setHasPermission(status === 'granted');
+          }}>
           <Text style={styles.goLiveButtonText}>Grant Permission</Text>
         </TouchableOpacity>
       </View>
@@ -274,10 +288,10 @@ const GoBuzzLiveScreen: React.FC = () => {
       <StatusBar barStyle="light-content" />
       
       {/* Camera View */}
-      <CameraView
+      <Camera
         ref={cameraRef}
         style={styles.camera}
-        facing={facing}
+        type={type}
       >
         {/* Top Overlay */}
         <View style={styles.topOverlay}>
@@ -439,7 +453,7 @@ const GoBuzzLiveScreen: React.FC = () => {
             </View>
           </>
         )}
-      </CameraView>
+      </Camera>
     </View>
   );
 };
