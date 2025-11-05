@@ -38,8 +38,7 @@
     "plugins": [
       "expo-image-picker",
       "expo-av",
-      "expo-location",
-      "expo-camera"
+      "expo-location"
     ],
     "extra": {
       "eas": {
