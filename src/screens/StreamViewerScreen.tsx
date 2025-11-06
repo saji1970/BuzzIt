@@ -237,10 +237,24 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       console.warn('Invalid stream URL (relative path):', url);
       return false;
     }
+    // Check if it contains the backend URL (which means it's a relative path that was converted)
+    if (url.includes('buzzit-production.up.railway.app/stream/')) {
+      console.warn('Invalid stream URL (backend path, not streaming server):', url);
+      return false;
+    }
     // Check if it's a valid URL format (http:// or https://)
     try {
       const urlObj = new URL(url);
-      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+      // Only allow http/https protocols
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+        return false;
+      }
+      // Don't allow backend API URLs as stream URLs
+      if (urlObj.hostname.includes('buzzit-production.up.railway.app') && urlObj.pathname.startsWith('/stream/')) {
+        console.warn('Invalid stream URL (backend API path, not streaming server):', url);
+        return false;
+      }
+      return true;
     } catch (e) {
       console.warn('Invalid stream URL format:', url);
       return false;

@@ -104,10 +104,20 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
     if (!url || url.trim() === '') return false;
     // Check if it's a relative path (starts with /)
     if (url.startsWith('/')) return false;
+    // Check if it contains the backend URL (which means it's a relative path that was converted)
+    if (url.includes('buzzit-production.up.railway.app/stream/')) return false;
     // Check if it's a valid URL format (http:// or https://)
     try {
       const urlObj = new URL(url);
-      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+      // Only allow http/https protocols
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+        return false;
+      }
+      // Don't allow backend API URLs as stream URLs
+      if (urlObj.hostname.includes('buzzit-production.up.railway.app') && urlObj.pathname.startsWith('/stream/')) {
+        return false;
+      }
+      return true;
     } catch (e) {
       return false;
     }

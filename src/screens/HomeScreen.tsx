@@ -325,7 +325,7 @@ const HomeScreen: React.FC = () => {
             displayName: stream.displayName,
             title: stream.title,
             description: stream.description,
-            streamUrl: stream.streamUrl || '', // Handle empty streamUrl
+            streamUrl: stream.streamUrl && !stream.streamUrl.startsWith('/') ? stream.streamUrl : '', // Only use valid full URLs
             thumbnailUrl: stream.thumbnailUrl,
             isLive: stream.isLive,
             viewers: stream.viewers || 0,
