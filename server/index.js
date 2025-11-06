@@ -417,9 +417,17 @@ const verifyToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
+    // Handle both userId and id in token (for backward compatibility)
+    req.userId = decoded.userId || decoded.id;
+    
+    if (!req.userId) {
+      console.error('Token missing userId:', decoded);
+      return res.status(401).json({ error: 'Invalid token: missing user ID' });
+    }
+    
     next();
   } catch (error) {
+    console.error('Token verification error:', error.message);
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
@@ -2464,24 +2472,51 @@ app.get('/api/interests', async (req, res) => {
 // Channels Endpoints
 app.post('/api/channels', verifyToken, async (req, res) => {
   try {
+    console.log('Channel creation request:', {
+      userId: req.userId,
+      body: req.body,
+      hasName: !!req.body.name,
+      hasDescription: !!req.body.description,
+      hasInterests: !!req.body.interests,
+    });
+
     const { name, description, interests } = req.body;
     
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Channel name is required' });
     }
 
-    const user = await getUserById(req.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
     if (!db.isConnected()) {
+      console.error('Database not connected');
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const user = await getUserById(req.userId);
+    if (!user) {
+      console.error('User not found:', req.userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('User found:', { id: user.id, username: user.username, displayName: user.displayName });
+
+    // Ensure all required fields have valid values
+    const channelUsername = user.username || 'unknown';
+    const channelDisplayName = user.displayName || user.username || 'Unknown User';
+    const channelDescription = description ? description.trim() : '';
+    const channelInterests = interests || [];
+
     const channelId = generateId();
 
-    // Create channel in database
+    console.log('Channel data to insert:', {
+      id: channelId,
+      userId: req.userId,
+      username: channelUsername,
+      displayName: channelDisplayName,
+      name: name.trim(),
+      description: channelDescription,
+      interestsCount: channelInterests.length,
+    });
+
     await db.query(`
       INSERT INTO channels (
         id, user_id, username, display_name, name, description, interests, created_at
@@ -2489,36 +2524,56 @@ app.post('/api/channels', verifyToken, async (req, res) => {
     `, [
       channelId,
       req.userId,
-      user.username,
-      user.displayName || user.username,
+      channelUsername,
+      channelDisplayName,
       name.trim(),
-      description ? description.trim() : '',
-      JSON.stringify(interests || []),
+      channelDescription, // Use empty string instead of null
+      JSON.stringify(channelInterests),
       new Date(),
     ]);
+
+    console.log('Channel created successfully:', channelId);
 
     res.status(201).json({
       success: true,
       data: {
         id: channelId,
         userId: req.userId,
-        username: user.username,
-        displayName: user.displayName || user.username,
+        username: channelUsername,
+        displayName: channelDisplayName,
         name: name.trim(),
-        description: description ? description.trim() : '',
-        interests: interests || [],
-        createdAt: new Date(),
+        description: channelDescription,
+        interests: channelInterests,
+        createdAt: new Date().toISOString(),
       },
     });
   } catch (error) {
     console.error('Create channel error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack,
+    });
     
     // Check if it's a duplicate channel name error
     if (error.code === '23505') {
       return res.status(400).json({ error: 'Channel name already exists' });
     }
     
-    res.status(500).json({ error: 'Failed to create channel' });
+    // Check if it's a foreign key constraint error (user not found)
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'User not found or invalid user ID' });
+    }
+    
+    // Provide more detailed error message
+    const errorMessage = error.message || 'Failed to create channel';
+    console.error('Full error:', JSON.stringify(error, null, 2));
+    
+    res.status(500).json({ 
+      error: 'Failed to create channel',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
   }
 });
 

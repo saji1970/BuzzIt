@@ -549,6 +549,24 @@ class ApiService {
     return this.makeRequest<any[]>('/api/channels/all');
   }
 
+  async createChannel(channelData: {
+    name: string;
+    description?: string;
+    interests?: any[];
+  }): Promise<ApiResponse<any>> {
+    console.log('Creating channel:', channelData);
+    return this.makeRequest<any>('/api/channels', {
+      method: 'POST',
+      body: JSON.stringify(channelData),
+    });
+  }
+
+  async deleteChannel(channelId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeRequest<{ message: string }>(`/api/channels/${channelId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // AI Recommendations
   async getUserRecommendations(params: {
     contacts?: Array<{name: string; email?: string; phone?: string}>;

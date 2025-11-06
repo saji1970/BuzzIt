@@ -64,12 +64,33 @@ const convertDbBuzzToObject = (row) => {
 
 // User queries
 const getUserById = async (userId) => {
-  if (!isConnected()) return null;
+  if (!userId) {
+    console.error('getUserById called with null/undefined userId');
+    return null;
+  }
+  
+  if (!isConnected()) {
+    console.warn('Database not connected, cannot fetch user:', userId);
+    return null;
+  }
+  
   try {
     const result = await query('SELECT * FROM users WHERE id = $1', [userId]);
-    return result.rows.length > 0 ? convertDbUserToObject(result.rows[0]) : null;
+    if (result.rows.length > 0) {
+      const user = convertDbUserToObject(result.rows[0]);
+      console.log('User fetched:', { id: user.id, username: user.username });
+      return user;
+    } else {
+      console.warn('User not found in database:', userId);
+      return null;
+    }
   } catch (error) {
     console.error('Error getting user by ID:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      userId: userId,
+    });
     return null;
   }
 };
