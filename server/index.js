@@ -1954,14 +1954,14 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
     let savedStream;
     if (db.isConnected()) {
       try {
-        // Always exclude channel_id from INSERT since the column may not exist in the database
-        // This prevents errors if the database table hasn't been migrated yet
+        // Only include columns that exist in the production database
+        // Exclude: channel_id, restream_key, restream_rtmp_url, restream_playback_url
+        // These columns may not exist if the database hasn't been fully migrated
         const query = `
           INSERT INTO live_streams (
             id, user_id, username, display_name, title, description, stream_url,
-            thumbnail_url, is_live, viewers, category, tags,
-            restream_key, restream_rtmp_url, restream_playback_url
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            thumbnail_url, is_live, viewers, category, tags
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           RETURNING *
         `;
         const params = [
@@ -1977,9 +1977,6 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           newStreamData.viewers,
           newStreamData.category,
           JSON.stringify(newStreamData.tags || []),
-          newStreamData.restreamKey || null,
-          newStreamData.restreamRtmpUrl || null,
-          newStreamData.restreamPlaybackUrl || null,
         ];
         
         const result = await db.query(query, params);
@@ -1998,10 +1995,10 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           viewers: row.viewers,
           category: row.category,
           tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
-          channelId: row.channel_id,
-          restreamKey: row.restream_key,
-          restreamRtmpUrl: row.restream_rtmp_url,
-          restreamPlaybackUrl: row.restream_playback_url,
+          channelId: row.channel_id || null,
+          restreamKey: row.restream_key || null,
+          restreamRtmpUrl: row.restream_rtmp_url || null,
+          restreamPlaybackUrl: row.restream_playback_url || null,
           startedAt: row.started_at,
         };
       } catch (saveError) {
