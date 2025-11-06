@@ -17,11 +17,13 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useRadioChannel, RadioChannel} from '../context/RadioChannelContext';
 import {useUser} from '../context/UserContext';
+import {useAuth} from '../context/AuthContext';
 
 const CreateRadioChannelScreen: React.FC = () => {
   const {theme} = useTheme();
   const {addRadioChannel} = useRadioChannel();
   const {user} = useUser();
+  const {user: authUser} = useAuth();
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -78,15 +80,17 @@ const CreateRadioChannelScreen: React.FC = () => {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Error', 'Please create a profile first');
+    // Check both user contexts
+    const currentUser = user || authUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'Please login and create a profile first');
       return;
     }
 
     const newChannel: Omit<RadioChannel, 'id' | 'createdAt' | 'updatedAt'> = {
-      hostId: user.id,
-      hostName: user.username,
-      hostAvatar: user.avatar,
+      hostId: currentUser.id,
+      hostName: currentUser.username,
+      hostAvatar: currentUser.avatar || null,
       title: title.trim(),
       description: description.trim(),
       category,

@@ -19,11 +19,13 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {useBuzzChannel, BuzzChannelContent} from '../context/BuzzChannelContext';
 import {useUser} from '../context/UserContext';
+import {useAuth} from '../context/AuthContext';
 
 const CreateChannelContentScreen: React.FC = () => {
   const {theme} = useTheme();
   const {addChannelContent} = useBuzzChannel();
   const {user} = useUser();
+  const {user: authUser} = useAuth();
   
   const [contentType, setContentType] = useState<BuzzChannelContent['type']>('music_video');
   const [title, setTitle] = useState('');
@@ -164,15 +166,17 @@ const CreateChannelContentScreen: React.FC = () => {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Error', 'Please create a profile first');
+    // Check both user contexts
+    const currentUser = user || authUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'Please login and create a profile first');
       return;
     }
 
     const newContent: Omit<BuzzChannelContent, 'id' | 'createdAt' | 'updatedAt'> = {
-      userId: user.id,
-      username: user.username,
-      userAvatar: user.avatar,
+      userId: currentUser.id,
+      username: currentUser.username,
+      userAvatar: currentUser.avatar || null,
       title: title.trim(),
       description: description.trim(),
       type: contentType,

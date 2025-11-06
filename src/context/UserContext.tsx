@@ -114,6 +114,34 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     loadBuzzes();
   }, []);
 
+  // Sync user when AsyncStorage changes (e.g., after login)
+  useEffect(() => {
+    const syncUser = async () => {
+      try {
+        const savedUser = await AsyncStorage.getItem('user');
+        if (savedUser) {
+          const userData = JSON.parse(savedUser);
+          // Only update if different from current user
+          if (!user || user.id !== userData.id) {
+            if (!userData.subscribedChannels) {
+              userData.subscribedChannels = [];
+            }
+            if (!userData.blockedUsers) {
+              userData.blockedUsers = [];
+            }
+            setUserState(userData);
+          }
+        }
+      } catch (error) {
+        console.log('Error syncing user:', error);
+      }
+    };
+
+    // Sync every 2 seconds (for login sync)
+    const interval = setInterval(syncUser, 2000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const loadUser = async () => {
     try {
       const savedUser = await AsyncStorage.getItem('user');

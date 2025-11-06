@@ -14,7 +14,8 @@ import {
   Share,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+// @ts-ignore - react-native-vision-camera will be installed
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -46,7 +47,29 @@ const GoBuzzLiveScreen: React.FC = () => {
   const [comments, setComments] = useState<StreamComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [currentStream, setCurrentStream] = useState<any>(null);
-  const commentsEndRef = useRef<View>(null);
+  
+  // Camera state - React Native Vision Camera
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const [isRecording, setIsRecording] = useState(false);
+  const [cameraPosition, setCameraPosition] = useState<'front' | 'back'>('back');
+  const cameraRef = useRef<Camera>(null);
+  
+  // Get camera devices
+  const device = useCameraDevice(cameraPosition);
+
+  // Request camera permission on mount and log camera status
+  useEffect(() => {
+    console.log('Camera status:', {
+      hasPermission,
+      device: device ? device.name : 'null',
+      cameraPosition,
+    });
+    
+    if (!hasPermission) {
+      console.log('Requesting camera permission...');
+      requestPermission();
+    }
+  }, [hasPermission, device, cameraPosition]);
 
   useEffect(() => {
     if (isStreaming && currentStream) {
@@ -72,14 +95,7 @@ const GoBuzzLiveScreen: React.FC = () => {
     }
   }, [isStreaming, currentStream]);
 
-  useEffect(() => {
-    // Auto-scroll to bottom when new comment arrives
-    if (comments.length > 0 && commentsEndRef.current) {
-      setTimeout(() => {
-        commentsEndRef.current?.scrollIntoView({behavior: 'smooth'});
-      }, 100);
-    }
-  }, [comments]);
+  // Note: Auto-scroll functionality removed - FlatList handles scrolling automatically
 
   const loadComments = async () => {
     if (!currentStream) return;
@@ -120,6 +136,15 @@ const GoBuzzLiveScreen: React.FC = () => {
       return;
     }
 
+    // Request camera permission if not granted
+    if (!hasPermission) {
+      const result = await requestPermission();
+      if (!result) {
+        Alert.alert('Permission Required', 'Camera permission is needed to go live.');
+        return;
+      }
+    }
+
     try {
       const response = await ApiService.createLiveStream({
         title: title.trim(),
@@ -129,8 +154,10 @@ const GoBuzzLiveScreen: React.FC = () => {
 
       if (response.success) {
         setCurrentStream(response.data);
-        setIsStreaming(true);
         setShowSetup(false);
+        // Start recording first, then set streaming
+        await startRecording();
+        setIsStreaming(true);
         // Increment viewer when starting
         await ApiService.updateViewers(response.data.id, 'increment');
       } else {
@@ -139,6 +166,39 @@ const GoBuzzLiveScreen: React.FC = () => {
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to start stream');
     }
+  };
+
+  const startRecording = async () => {
+    if (device && !isRecording) {
+      try {
+        // Set recording state - camera will activate video/audio when isStreaming becomes true
+        setIsRecording(true);
+        console.log('Recording started with Vision Camera');
+        console.log('Camera device:', device.name, 'Position:', cameraPosition);
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        setIsRecording(false);
+        Alert.alert('Error', 'Failed to start recording');
+      }
+    } else {
+      console.warn('Cannot start recording:', {device: !!device, isRecording, hasPermission});
+    }
+  };
+
+  const stopRecording = async () => {
+    if (isRecording) {
+      try {
+        setIsRecording(false);
+        // Stop recording when ending stream
+        console.log('Recording stopped');
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+      }
+    }
+  };
+
+  const toggleCameraFacing = () => {
+    setCameraPosition(current => (current === 'back' ? 'front' : 'back'));
   };
 
   const handleEndStream = async () => {
@@ -150,23 +210,40 @@ const GoBuzzLiveScreen: React.FC = () => {
         {
           text: 'End Stream',
           style: 'destructive',
-          onPress: async () => {
-            if (currentStream) {
-              try {
-                await ApiService.endLiveStream(currentStream.id);
-                setIsStreaming(false);
-                setCurrentStream(null);
-                setShowSetup(true);
-                setTitle('');
-                setDescription('');
-                setComments([]);
-                setViewers(0);
-                navigation.goBack();
-              } catch (error: any) {
-                Alert.alert('Error', 'Failed to end stream');
-              }
-            }
-          },
+              onPress: async () => {
+                if (currentStream) {
+                  try {
+                    // Stop recording first
+                    await stopRecording();
+                    setIsRecording(false);
+                    
+                    // End stream on backend
+                    await ApiService.endLiveStream(currentStream.id);
+                    
+                    // Clear all state
+                    setIsStreaming(false);
+                    setCurrentStream(null);
+                    setShowSetup(true);
+                    setTitle('');
+                    setDescription('');
+                    setComments([]);
+                    setViewers(0);
+                    
+                    // Navigate back immediately
+                    navigation.goBack();
+                  } catch (error: any) {
+                    console.error('Error ending stream:', error);
+                    // Still navigate back even if API call fails
+                    setIsStreaming(false);
+                    setCurrentStream(null);
+                    setIsRecording(false);
+                    navigation.goBack();
+                  }
+                } else {
+                  // No stream to end, just go back
+                  navigation.goBack();
+                }
+              },
         },
       ]
     );
@@ -239,9 +316,100 @@ const GoBuzzLiveScreen: React.FC = () => {
     </View>
   );
 
+  // Show permission request screen
+  if (!hasPermission) {
+    return (
+      <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
+        <Icon name="videocam-off" size={64} color="#FFFFFF" />
+        <Text style={styles.errorText}>Camera Permission Required</Text>
+        <Text style={styles.errorSubtext}>
+          We need camera access to enable live streaming with Vision Camera
+        </Text>
+        <TouchableOpacity
+          style={[styles.goLiveButton, {backgroundColor: '#FF0069', marginTop: 20}]}
+          onPress={async () => {
+            const granted = await requestPermission();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Camera permission is required for live streaming.');
+            }
+          }}>
+          <Text style={styles.goLiveButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.cancelButton, {backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 10}]}
+          onPress={() => navigation.goBack()}>
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Show error if no camera device available
+  if (!device) {
+    return (
+      <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
+        <Icon name="videocam-off" size={64} color="#FFFFFF" />
+        <Text style={styles.errorText}>Camera Not Available</Text>
+        <Text style={styles.errorSubtext}>
+          No camera device found. Please check your device.
+        </Text>
+        <TouchableOpacity
+          style={[styles.cancelButton, {backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 20}]}
+          onPress={() => navigation.goBack()}>
+          <Text style={styles.cancelButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, {backgroundColor: '#000'}]}>
       <StatusBar barStyle="light-content" />
+      
+      {/* Camera Preview - React Native Vision Camera */}
+      {/* Show camera preview when permission granted, but only activate video/audio when streaming */}
+      {hasPermission && device ? (
+        <Camera
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          device={device}
+          isActive={true} // Always active for preview
+          video={isStreaming} // Only enable video recording when streaming
+          audio={isStreaming} // Only enable audio recording when streaming
+          enableZoomGesture={false}
+          orientation="portrait"
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, {backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center'}]}>
+          {!hasPermission ? (
+            <View style={{alignItems: 'center', padding: 20}}>
+              <Icon name="videocam-off" size={64} color="#FFFFFF" />
+              <Text style={{color: '#FFFFFF', marginTop: 16, fontSize: 16, textAlign: 'center', marginBottom: 20}}>
+                Camera permission required
+              </Text>
+              <TouchableOpacity
+                style={[styles.goLiveButton, {backgroundColor: '#FF0069'}]}
+                onPress={async () => {
+                  const granted = await requestPermission();
+                  if (!granted) {
+                    Alert.alert('Permission Denied', 'Camera permission is required for live streaming.');
+                  }
+                }}>
+                <Text style={styles.goLiveButtonText}>Grant Permission</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !device ? (
+            <View style={{alignItems: 'center', padding: 20}}>
+              <Icon name="videocam-off" size={64} color="#FFFFFF" />
+              <Text style={{color: '#FFFFFF', marginTop: 16, fontSize: 16, textAlign: 'center'}}>
+                Camera not available on this device
+              </Text>
+            </View>
+          ) : (
+            <Text style={{color: '#FFFFFF', fontSize: 16}}>Initializing camera...</Text>
+          )}
+        </View>
+      )}
       
       {/* Content View */}
       <View style={styles.contentView}>
@@ -332,18 +500,22 @@ const GoBuzzLiveScreen: React.FC = () => {
           <>
             {/* Bottom Controls */}
             <View style={styles.bottomControls}>
+              {/* Toggle Camera */}
               <TouchableOpacity
                 style={styles.controlButton}
-                onPress={() => {
-                  Alert.alert(
-                    'Stream from Web',
-                    'For live camera streaming, please use the web interface at https://buzzit-production.up.railway.app/user-streaming',
-                    [{text: 'OK'}]
-                  );
-                }}>
-                <Icon name="videocam" size={28} color="#FFFFFF" />
+                onPress={toggleCameraFacing}>
+                <Icon name="flip-camera-ios" size={28} color="#FFFFFF" />
               </TouchableOpacity>
 
+              {/* Recording Indicator */}
+              {isRecording && (
+                <View style={styles.recordingIndicator}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>LIVE</Text>
+                </View>
+              )}
+
+              {/* End Stream Button */}
               <TouchableOpacity
                 style={[styles.endButton, {backgroundColor: '#FF0069'}]}
                 onPress={handleEndStream}>
@@ -397,7 +569,6 @@ const GoBuzzLiveScreen: React.FC = () => {
                   />
                 </TouchableOpacity>
               </View>
-              <View ref={commentsEndRef} />
             </View>
           </>
         )}
@@ -413,7 +584,7 @@ const styles = StyleSheet.create({
   contentView: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
   },
   loadingText: {
     color: '#FFFFFF',
@@ -675,6 +846,26 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF0069',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+  },
+  recordingText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

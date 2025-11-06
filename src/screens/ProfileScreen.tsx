@@ -24,7 +24,7 @@ import {FlatList} from 'react-native';
 const ProfileScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user, setUser, interests, updateUserInterests, buzzes, likeBuzz, shareBuzz} = useUser();
-  const {logout} = useAuth();
+  const {logout, user: authUser, isAuthenticated} = useAuth();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [showMyBuzzes, setShowMyBuzzes] = useState(false);
@@ -39,33 +39,35 @@ const ProfileScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
 
   useEffect(() => {
-    if (user) {
+    const currentUser = user || authUser;
+    if (currentUser) {
       setEditForm({
-        username: user.username || '',
-        displayName: user.displayName || '',
-        email: user.email || '',
-        bio: user.bio || '',
-        city: user.city || '',
-        country: user.country || '',
+        username: currentUser.username || '',
+        displayName: currentUser.displayName || '',
+        email: currentUser.email || '',
+        bio: currentUser.bio || '',
+        city: currentUser.city || '',
+        country: currentUser.country || '',
       });
-      setSelectedInterests(user.interests || []);
+      setSelectedInterests(currentUser.interests || []);
     }
-  }, [user]);
+  }, [user, authUser]);
 
   // Refresh form data when entering edit mode
   useEffect(() => {
-    if (isEditing && user) {
+    const currentUser = user || authUser;
+    if (isEditing && currentUser) {
       setEditForm({
-        username: user.username || '',
-        displayName: user.displayName || '',
-        email: user.email || '',
-        bio: user.bio || '',
-        city: user.city || '',
-        country: user.country || '',
+        username: currentUser.username || '',
+        displayName: currentUser.displayName || '',
+        email: currentUser.email || '',
+        bio: currentUser.bio || '',
+        city: currentUser.city || '',
+        country: currentUser.country || '',
       });
-      setSelectedInterests(user.interests || []);
+      setSelectedInterests(currentUser.interests || []);
     }
-  }, [isEditing, user]);
+  }, [isEditing, user, authUser]);
 
   const handleSaveProfile = async () => {
     if (!editForm.username.trim() || !editForm.displayName.trim()) {
@@ -79,8 +81,14 @@ const ProfileScreen: React.FC = () => {
     }
 
     try {
+      const currentUser = user || authUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'User not found. Please login again.');
+        return;
+      }
+
       // Update profile on backend
-      const response = await ApiService.updateUser(user!.id, {
+      const response = await ApiService.updateUser(currentUser.id, {
         displayName: editForm.displayName.trim(),
         email: editForm.email.trim(),
         bio: editForm.bio.trim(),
@@ -91,7 +99,7 @@ const ProfileScreen: React.FC = () => {
 
       if (response.success && response.data) {
         const updatedUser: User = {
-          ...user!,
+          ...currentUser,
           ...response.data,
           interests: selectedInterests,
         };
@@ -103,7 +111,7 @@ const ProfileScreen: React.FC = () => {
       } else {
         // Backend update failed, still save locally
         const updatedUser: User = {
-          ...user!,
+          ...currentUser,
           username: editForm.username.trim(),
           displayName: editForm.displayName.trim(),
           email: editForm.email.trim(),
@@ -366,27 +374,33 @@ const ProfileScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  const renderProfileView = () => (
+  // Get the current user from UserContext or AuthContext
+  const currentUser = user || authUser;
+
+  const renderProfileView = () => {
+    if (!currentUser) return null;
+    
+    return (
     <Animatable.View animation="fadeInUp" style={styles.profileContainer}>
       <View style={styles.profileHeader}>
         <View style={[styles.avatar, {backgroundColor: theme.colors.primary}]}>
-          {user?.avatar ? (
-            <Image source={{uri: user.avatar}} style={styles.avatarImage} />
+          {currentUser?.avatar ? (
+            <Image source={{uri: currentUser.avatar}} style={styles.avatarImage} />
           ) : (
             <Text style={styles.avatarText}>
-              {user?.username.charAt(0).toUpperCase()}
+              {currentUser?.username.charAt(0).toUpperCase()}
             </Text>
           )}
         </View>
         <Text style={[styles.displayName, {color: theme.colors.text}]}>
-          {user?.displayName}
+          {currentUser?.displayName}
         </Text>
         <Text style={[styles.username, {color: theme.colors.textSecondary}]}>
-          @{user?.username}
+          @{currentUser?.username}
         </Text>
-        {user?.bio && (
+        {currentUser?.bio && (
           <Text style={[styles.bio, {color: theme.colors.text}]}>
-            {user.bio}
+            {currentUser.bio}
           </Text>
         )}
       </View>
@@ -394,7 +408,7 @@ const ProfileScreen: React.FC = () => {
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={[styles.statNumber, {color: theme.colors.primary}]}>
-            {user?.buzzCount || 0}
+            {currentUser?.buzzCount || 0}
           </Text>
           <Text style={[styles.statLabel, {color: theme.colors.textSecondary}]}>
             Buzzes
@@ -402,7 +416,7 @@ const ProfileScreen: React.FC = () => {
         </View>
         <View style={styles.statItem}>
           <Text style={[styles.statNumber, {color: theme.colors.primary}]}>
-            {user?.followers || 0}
+            {currentUser?.followers || 0}
           </Text>
           <Text style={[styles.statLabel, {color: theme.colors.textSecondary}]}>
             Followers
@@ -410,7 +424,7 @@ const ProfileScreen: React.FC = () => {
         </View>
         <View style={styles.statItem}>
           <Text style={[styles.statNumber, {color: theme.colors.primary}]}>
-            {user?.following || 0}
+            {currentUser?.following || 0}
           </Text>
           <Text style={[styles.statLabel, {color: theme.colors.textSecondary}]}>
             Following
@@ -423,7 +437,7 @@ const ProfileScreen: React.FC = () => {
           My Interests
         </Text>
         <View style={styles.interestsList}>
-          {user?.interests.map((interest, index) => (
+          {currentUser?.interests.map((interest, index) => (
             <Animatable.View
               key={interest.id}
               animation="fadeInUp"
@@ -448,7 +462,7 @@ const ProfileScreen: React.FC = () => {
           style={styles.myBuzzesHeader}
           onPress={() => setShowMyBuzzes(!showMyBuzzes)}>
           <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            My Buzzes ({buzzes.filter(b => b.userId === user?.id).length})
+            My Buzzes ({buzzes.filter(b => b.userId === currentUser?.id).length})
           </Text>
           <Icon
             name={showMyBuzzes ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
@@ -458,7 +472,7 @@ const ProfileScreen: React.FC = () => {
         </TouchableOpacity>
         {showMyBuzzes && (
           <View style={styles.myBuzzesList}>
-            {buzzes.filter(b => b.userId === user?.id).length === 0 ? (
+            {buzzes.filter(b => b.userId === currentUser?.id).length === 0 ? (
               <View style={styles.emptyBuzzes}>
                 <Icon name="article" size={48} color={theme.colors.textSecondary} />
                 <Text style={[styles.emptyBuzzesText, {color: theme.colors.textSecondary}]}>
@@ -467,7 +481,7 @@ const ProfileScreen: React.FC = () => {
               </View>
             ) : (
               <FlatList
-                data={buzzes.filter(b => b.userId === user?.id).sort((a, b) => {
+                data={buzzes.filter(b => b.userId === currentUser?.id).sort((a, b) => {
                   const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
                   const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
                   return dateB.getTime() - dateA.getTime();
@@ -488,10 +502,11 @@ const ProfileScreen: React.FC = () => {
         )}
       </View>
     </Animatable.View>
-  );
+    );
+  };
 
-  // If no user, show message to create profile first
-  if (!user) {
+  // If no user and not authenticated, show message to create profile first
+  if (!currentUser || !isAuthenticated) {
     return (
       <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
         <LinearGradient

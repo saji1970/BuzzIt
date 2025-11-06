@@ -288,7 +288,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity style={styles.actionButton} onPress={onPress}>
           <Icon name="chat-bubble-outline" size={20} color={theme.colors.textSecondary} />
           <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
             {buzz.comments}

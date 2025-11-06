@@ -29,6 +29,7 @@ export interface LiveStream {
   category?: string;
   startedAt: string | Date;
   tags?: string[];
+  endedAt?: string | Date; // Track when stream ended
 }
 
 interface LiveStreamCardProps {
@@ -48,19 +49,14 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
   const [showControls, setShowControls] = useState(false);
 
   useEffect(() => {
-    // Auto-play video when stream is live and has URL
-    if (stream.isLive && stream.streamUrl && videoRef) {
-      videoRef.playAsync().catch((error) => {
-        console.log('Auto-play prevented or failed:', error);
-      });
-    }
-    
+    // Don't auto-play to prevent app freezing
+    // User can tap to play if needed
     return () => {
       if (videoRef) {
         videoRef.unloadAsync().catch(() => {});
       }
     };
-  }, [stream.isLive, stream.streamUrl]);
+  }, [stream.id]); // Only cleanup on stream change
 
   const handlePlayPause = async () => {
     if (!videoRef) return;
@@ -98,6 +94,25 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
     return `${diffMins}m`;
   };
 
+  // Don't render if stream is not live
+  if (!stream.isLive) {
+    return null;
+  }
+
+  // Check if stream URL is valid (must be a full URL, not a relative path)
+  const isValidStreamUrl = (url: string): boolean => {
+    if (!url || url.trim() === '') return false;
+    // Check if it's a relative path (starts with /)
+    if (url.startsWith('/')) return false;
+    // Check if it's a valid URL format (http:// or https://)
+    try {
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  };
+
   return (
     <Animatable.View
       animation="fadeInUp"
@@ -108,35 +123,23 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
         onLongPress={() => setShowControls(!showControls)}>
         {/* Video Player or Thumbnail */}
         <View style={styles.videoContainer}>
-          {stream.streamUrl && stream.isLive ? (
-            <Video
-              ref={(ref) => {
-                setVideoRef(ref);
-                if (ref && stream.isLive) {
-                  // Try to play when ref is set
-                  setTimeout(() => {
-                    ref.playAsync().catch(() => {});
-                  }, 100);
-                }
-              }}
-              source={{ uri: stream.streamUrl }}
-              style={styles.video}
-              useNativeControls={false}
-              resizeMode="cover"
-              shouldPlay={stream.isLive}
-              isLooping={false}
-              isMuted={true}
-              onLoad={() => {
-                if (videoRef && stream.isLive) {
-                  setIsPlaying(true);
-                  videoRef.playAsync().catch(() => {});
-                }
-              }}
-              onError={(error) => {
-                console.log('Video playback error:', error);
-                // Don't show error to user, just log it
-              }}
-            />
+          {stream.streamUrl && stream.streamUrl.trim() !== '' && stream.isLive && isValidStreamUrl(stream.streamUrl) ? (
+            <View style={styles.videoPlaceholder}>
+              {stream.thumbnailUrl ? (
+                <Image
+                  source={{uri: stream.thumbnailUrl}}
+                  style={styles.thumbnailImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.thumbnail, {backgroundColor: theme.colors.background}]}>
+                  <Icon name="videocam" size={48} color={theme.colors.primary} />
+                </View>
+              )}
+              <View style={styles.playOverlay}>
+                <Icon name="play-circle-filled" size={48} color="#FFFFFF" />
+              </View>
+            </View>
           ) : stream.isLive ? (
             // Live stream without URL (camera stream from web)
             <View style={[styles.thumbnail, {backgroundColor: theme.colors.background}]}>
@@ -279,6 +282,20 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: '100%',
     height: '100%',
+  },
+  videoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -24,
+    marginLeft: -24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 24,
   },
   liveBadge: {
     position: 'absolute',

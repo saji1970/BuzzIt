@@ -30,6 +30,7 @@ const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
+    // Validate inputs
     if (!username.trim()) {
       Alert.alert('Error', 'Please enter your username');
       return;
@@ -39,12 +40,18 @@ const LoginScreen: React.FC = () => {
       return;
     }
 
+    console.log('Login attempt for:', username);
     const result = await login(username.trim(), password);
+    console.log('Login result:', result);
     
     if (result.success) {
-      Alert.alert('Success', 'Welcome back! 🎉');
+      // Login successful - navigation will happen automatically via App.tsx
+      // Wait a moment for state to update
+      setTimeout(() => {
+        Alert.alert('Success', 'Welcome back! 🎉');
+      }, 500);
     } else {
-      Alert.alert('Login Failed', result.error || 'Invalid credentials');
+      Alert.alert('Login Failed', result.error || 'Invalid username or password. Please check your credentials and try again.');
     }
   };
 

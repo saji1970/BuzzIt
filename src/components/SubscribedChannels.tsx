@@ -28,13 +28,17 @@ interface FollowedItem {
 
 interface SubscribedChannelsProps {
   onChannelPress?: (channelId: string) => void;
+  onYourBuzzPress?: () => void;
 }
 
-const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress}) => {
+const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, onYourBuzzPress}) => {
   const {theme} = useTheme();
-  const {user} = useUser();
+  const {user, buzzes} = useUser();
   const [followedItems, setFollowedItems] = useState<FollowedItem[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Get user's own buzz count
+  const userBuzzCount = buzzes?.filter(buzz => buzz.userId === user?.id).length || 0;
 
   useEffect(() => {
     loadFollowedItems();
@@ -48,54 +52,40 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
       
       if (response.success && response.data) {
         let itemsToShow: FollowedItem[] = [];
+        const subscribedIds = user?.subscribedChannels || [];
         
-        // If user has subscribed channels, filter to show only followed users
-        if (user && user.subscribedChannels && user.subscribedChannels.length > 0) {
-          // Filter to only show followed users
-          const followed = response.data
-            .filter((u: any) => user.subscribedChannels.includes(u.id))
-            .map((u: any) => {
-              // Determine if this is a channel or user
-              const isChannel = u.role === 'channel' || 
-                               u.role === 'Channel' ||
-                               u.isChannel === true ||
-                               u.type === 'channel' ||
-                               (u.username && u.username.toLowerCase().includes('channel')) ||
-                               false;
-              
-              return {
-                id: u.id,
-                username: u.username,
-                name: u.displayName || u.username,
-                avatar: u.avatar,
-                isLive: false,
-                type: isChannel ? 'channel' : 'user',
-              } as FollowedItem;
-            });
-          itemsToShow = followed;
-        } else {
-          // If no subscriptions, show all users from database
-          itemsToShow = response.data
-            .filter((u: any) => u.id !== user?.id) // Exclude current user
-            .slice(0, 20) // Limit to first 20 for performance
-            .map((u: any) => {
-              const isChannel = u.role === 'channel' || 
-                               u.role === 'Channel' ||
-                               u.isChannel === true ||
-                               u.type === 'channel' ||
-                               (u.username && u.username.toLowerCase().includes('channel')) ||
-                               false;
-              
-              return {
-                id: u.id,
-                username: u.username,
-                name: u.displayName || u.username,
-                avatar: u.avatar,
-                isLive: false,
-                type: isChannel ? 'channel' : 'user',
-              } as FollowedItem;
-            });
-        }
+        // Always show all users, but prioritize followed users first
+        // This way users can see both who they follow AND discover new users
+        const allUsers = response.data
+          .filter((u: any) => u.id !== user?.id) // Exclude current user
+          .map((u: any) => {
+            // Determine if this is a channel or user
+            const isChannel = u.role === 'channel' || 
+                             u.role === 'Channel' ||
+                             u.isChannel === true ||
+                             u.type === 'channel' ||
+                             (u.username && u.username.toLowerCase().includes('channel')) ||
+                             false;
+            
+            return {
+              id: u.id,
+              username: u.username,
+              name: u.displayName || u.username,
+              avatar: u.avatar,
+              isLive: false,
+              type: isChannel ? 'channel' : 'user',
+              isSubscribed: subscribedIds.includes(u.id), // Mark if subscribed
+            } as FollowedItem & {isSubscribed?: boolean};
+          });
+        
+        // Sort: subscribed users first, then others
+        itemsToShow = allUsers.sort((a, b) => {
+          const aSubscribed = subscribedIds.includes(a.id);
+          const bSubscribed = subscribedIds.includes(b.id);
+          if (aSubscribed && !bSubscribed) return -1;
+          if (!aSubscribed && bSubscribed) return 1;
+          return 0;
+        }).slice(0, 30); // Show up to 30 users (prioritizing followed ones)
         
         setFollowedItems(itemsToShow);
       }
@@ -107,17 +97,27 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
     }
   };
 
-  // Don't render if no user
-  if (!user) {
-    return null;
-  }
-
   // Show only followed users and channels from database
   const displayItems = followedItems;
+  
+  // Always show YourBuzz section, even if user data is still loading
+  // This ensures the UI is visible immediately
 
   const handleChannelPress = (channelId: string) => {
+    if (channelId === 'yourbuzz') {
+      if (onYourBuzzPress) {
+        onYourBuzzPress();
+      }
+      return;
+    }
     if (onChannelPress) {
       onChannelPress(channelId);
+    }
+  };
+
+  const handleYourBuzzPress = () => {
+    if (onYourBuzzPress) {
+      onYourBuzzPress();
     }
   };
 
@@ -128,6 +128,47 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress})
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}>
+        {/* YourBuzz - First item like Instagram Stories */}
+        {/* Always show YourBuzz, even if user is still loading */}
+        <TouchableOpacity
+          style={styles.channelItem}
+          onPress={handleYourBuzzPress}>
+          <View style={styles.avatarContainer}>
+            <View
+              style={[
+                styles.avatar,
+                {backgroundColor: theme.colors.primary},
+                userBuzzCount > 0 && styles.yourBuzzAvatar,
+              ]}>
+              {user?.avatar ? (
+                <Image source={{uri: user.avatar}} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {user?.displayName?.charAt(0).toUpperCase() || 
+                   user?.username?.charAt(0).toUpperCase() || 
+                   'Y'}
+                </Text>
+              )}
+              {userBuzzCount > 0 && (
+                <View style={styles.buzzCountBadge}>
+                  <Text style={styles.buzzCountText}>{userBuzzCount}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.addIcon}>
+              <Icon name="add" size={14} color="#FFFFFF" />
+            </View>
+          </View>
+          <Text
+            style={[
+              styles.channelName,
+              {color: theme.colors.text, fontWeight: '600'},
+            ]}
+            numberOfLines={1}>
+            YourBuzz
+          </Text>
+        </TouchableOpacity>
+        
         {displayItems.map((item, index) => (
           <TouchableOpacity
             key={item.id}
@@ -225,6 +266,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 24,
   },
+  yourBuzzAvatar: {
+    borderWidth: 2,
+    borderColor: '#E4405F',
+  },
   addIcon: {
     position: 'absolute',
     bottom: 0,
@@ -237,6 +282,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  buzzCountBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#E4405F',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  buzzCountText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   channelName: {
     fontSize: 12,

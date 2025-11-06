@@ -78,23 +78,50 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const login = async (username: string, password: string) => {
     try {
+      // Validate inputs
+      if (!username || !username.trim()) {
+        return {success: false, error: 'Please enter your username'};
+      }
+      if (!password || !password.trim()) {
+        return {success: false, error: 'Please enter your password'};
+      }
+
       setIsLoading(true);
-      const response = await ApiService.login(username, password);
+      console.log('Attempting login for username:', username);
+      const response = await ApiService.login(username.trim(), password);
+      console.log('Login response:', response);
       
       if (response.success && response.data) {
         const {user: userData, token, isAdmin: adminFlag} = response.data;
+        
+        // Validate that we got user data and token
+        if (!userData || !token) {
+          console.error('Login response missing user data or token');
+          return {success: false, error: 'Invalid response from server'};
+        }
+
+        // Store authentication data
         await AsyncStorage.setItem('authToken', token);
         await AsyncStorage.setItem('user', JSON.stringify(userData));
         await AsyncStorage.setItem('isAdmin', (adminFlag || false).toString());
+        
+        // Set user state - this will trigger navigation in App.tsx
         setUser(userData);
         setIsAdmin(adminFlag || false);
+        
+        console.log('Login successful, user set:', userData.username);
         return {success: true};
       } else {
-        return {success: false, error: response.error || 'Login failed'};
+        const errorMsg = response.error || 'Invalid username or password';
+        console.error('Login failed:', errorMsg);
+        return {success: false, error: errorMsg};
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      return {success: false, error: 'Network error. Please try again.'};
+      const errorMsg = error?.message?.includes('Network') 
+        ? 'Network error. Please check your connection and try again.'
+        : 'Login failed. Please try again.';
+      return {success: false, error: errorMsg};
     } finally {
       setIsLoading(false);
     }

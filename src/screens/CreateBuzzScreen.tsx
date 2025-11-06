@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,7 +54,11 @@ const CreateBuzzScreen: React.FC = () => {
     url: null,
   });
   const [includeLocation, setIncludeLocation] = useState(false);
-  const [userLocation, setUserLocation] = useState<{latitude: number; longitude: number; city?: string; country?: string} | null>(null);
+  const [userLocation, setUserLocation] = useState<{latitude: number; longitude: number; city?: string; country?: string; address?: string; name?: string} | null>(null);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
 
   const handleMediaPicker = () => {
     Alert.alert(
@@ -179,13 +186,12 @@ const CreateBuzzScreen: React.FC = () => {
       // Get current location
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
-        timeout: 10000,
-        maximumAge: 60000,
       });
 
       // Get reverse geocoding (city, country)
       let city = user?.city || 'Unknown';
       let country = user?.country || 'Unknown';
+      let address = 'Current Location';
       
       try {
         const reverseGeocode = await Location.reverseGeocodeAsync({
@@ -194,8 +200,17 @@ const CreateBuzzScreen: React.FC = () => {
         });
         
         if (reverseGeocode && reverseGeocode.length > 0) {
-          city = reverseGeocode[0].city || city;
-          country = reverseGeocode[0].country || country;
+          const addr = reverseGeocode[0];
+          city = addr.city || city;
+          country = addr.country || country;
+          // Build address string
+          const addressParts = [
+            addr.street,
+            addr.city,
+            addr.region,
+            addr.country,
+          ].filter(Boolean);
+          address = addressParts.join(', ') || 'Current Location';
         }
       } catch (geocodeError) {
         console.log('Geocoding failed, using fallback:', geocodeError);
@@ -207,10 +222,95 @@ const CreateBuzzScreen: React.FC = () => {
         longitude: location.coords.longitude,
         city,
         country,
+        address,
+        name: 'Current Location',
       });
     } catch (error) {
       console.error('Error getting location:', error);
       Alert.alert('Error', 'Failed to get current location. Please try again or create buzz without location.');
+    }
+  };
+
+  // Search for locations using OpenStreetMap Nominatim API
+  const searchLocation = async (query: string) => {
+    if (!query.trim() || query.length < 3) {
+      setLocationSearchResults([]);
+      return;
+    }
+
+    setIsSearchingLocation(true);
+    try {
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      const encodedQuery = encodeURIComponent(query);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodedQuery}&limit=10&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'BuzzIt-App', // Required by Nominatim
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Location search failed');
+      }
+
+      const data = await response.json();
+      
+      // Format results
+      const formattedResults = data.map((item: any) => ({
+        id: item.place_id,
+        name: item.display_name,
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        city: item.address?.city || item.address?.town || item.address?.village || '',
+        country: item.address?.country || '',
+        address: item.display_name,
+        type: item.type,
+      }));
+
+      setLocationSearchResults(formattedResults);
+    } catch (error) {
+      console.error('Error searching location:', error);
+      Alert.alert('Error', 'Failed to search locations. Please try again.');
+      setLocationSearchResults([]);
+    } finally {
+      setIsSearchingLocation(false);
+    }
+  };
+
+  // Debounce location search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (locationSearchQuery.trim().length >= 3) {
+        searchLocation(locationSearchQuery);
+      } else {
+        setLocationSearchResults([]);
+      }
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timeoutId);
+  }, [locationSearchQuery]);
+
+  const handleSelectLocation = (location: any) => {
+    setUserLocation({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      city: location.city || 'Unknown',
+      country: location.country || 'Unknown',
+      address: location.address,
+      name: location.name,
+    });
+    setLocationSearchQuery('');
+    setLocationSearchResults([]);
+    setShowLocationSearch(false);
+    setIncludeLocation(true);
+  };
+
+  const handleOpenLocationSearch = () => {
+    setShowLocationSearch(true);
+    if (!includeLocation) {
+      setIncludeLocation(true);
     }
   };
 
@@ -249,8 +349,10 @@ const CreateBuzzScreen: React.FC = () => {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Error', 'Please create a profile first');
+    // Check for user from either UserContext or AuthContext
+    const currentUser = user || authUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'Please login and create a profile first');
       return;
     }
 
@@ -270,9 +372,9 @@ const CreateBuzzScreen: React.FC = () => {
     setIsCreating(true);
 
     const newBuzz = {
-      userId: user.id,
-      username: user.username,
-      userAvatar: user.avatar,
+      userId: currentUser.id,
+      username: currentUser.username,
+      userAvatar: currentUser.avatar || null,
       content: buzzContent,
       media,
       interests: selectedInterests,
@@ -286,11 +388,24 @@ const CreateBuzzScreen: React.FC = () => {
     };
 
     // Save to backend first
+    console.log('Creating buzz:', {
+      userId: currentUser.id,
+      username: currentUser.username,
+      contentLength: buzzContent.length,
+      buzzType,
+      interestsCount: selectedInterests.length,
+    });
+    
     ApiService.createBuzz(newBuzz)
       .then((response) => {
+        console.log('Buzz creation response:', response);
         if (response.success && response.data) {
+          // Verify the buzz was saved to backend
+          const savedBuzz = response.data;
+          console.log('Buzz saved to backend with ID:', savedBuzz.id);
+          
           // Add to local state with the server response
-          addBuzz(response.data);
+          addBuzz(savedBuzz);
           
           // Reset form
           setContent('');
@@ -305,17 +420,23 @@ const CreateBuzzScreen: React.FC = () => {
           setMedia({type: null, url: null});
           setIncludeLocation(false);
           setUserLocation(null);
+          setLocationSearchQuery('');
+          setLocationSearchResults([]);
+          setShowLocationSearch(false);
           
-          Alert.alert('Success', 'Your buzz has been created and shared!');
+          Alert.alert('Success', `Your buzz has been created and saved to the database! (ID: ${savedBuzz.id})`);
         } else {
+          console.error('Buzz creation failed:', response.error);
           // Fallback: add to local state if API fails
+          // addBuzz will generate ID automatically
           addBuzz({
             ...newBuzz,
-            id: Date.now().toString(),
-            createdAt: new Date(),
             isLiked: false,
           });
-          Alert.alert('Warning', 'Buzz created locally but failed to sync with server. Please check your connection.');
+          Alert.alert(
+            'Warning', 
+            `Buzz created locally but failed to sync with server.\n\nError: ${response.error || 'Unknown error'}\n\nPlease check your connection and try again.`
+          );
         }
         setIsCreating(false);
       })
@@ -323,9 +444,9 @@ const CreateBuzzScreen: React.FC = () => {
         console.error('Error creating buzz:', error);
         // Fallback: add to local state
         const fallbackBuzz = {
-          userId: user.id,
-          username: user.username,
-          userAvatar: user.avatar,
+          userId: currentUser.id,
+          username: currentUser.username,
+          userAvatar: currentUser.avatar || null,
           content: buzzContent,
           media,
           interests: selectedInterests,
@@ -337,10 +458,9 @@ const CreateBuzzScreen: React.FC = () => {
           comments: 0,
           shares: 0,
         };
+        // addBuzz will generate ID automatically
         addBuzz({
           ...fallbackBuzz,
-          id: Date.now().toString(),
-          createdAt: new Date(),
           isLiked: false,
         });
         Alert.alert('Error', 'Failed to create buzz on server. Saved locally only.');
@@ -552,45 +672,149 @@ const CreateBuzzScreen: React.FC = () => {
           </View>
         </Animatable.View>
 
-        {/* Location Section */}
-        <Animatable.View animation="fadeInUp" delay={150} style={styles.section}>
-          <View style={styles.locationRow}>
-            <View style={styles.locationInfo}>
-              <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-                Add Location
-              </Text>
-              <Text style={[styles.locationDescription, {color: theme.colors.textSecondary}]}>
-                Include your current location with this buzz
-              </Text>
+        {/* Location Section - Only show for events */}
+        {buzzType === 'event' && (
+          <Animatable.View animation="fadeInUp" delay={150} style={styles.section}>
+            <View style={styles.locationRow}>
+              <View style={styles.locationInfo}>
+                <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+                  Add Event Location
+                </Text>
+                <Text style={[styles.locationDescription, {color: theme.colors.textSecondary}]}>
+                  Search and select a location for your event
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.locationToggle,
+                  {
+                    backgroundColor: includeLocation ? theme.colors.primary : theme.colors.border,
+                  },
+                ]}
+                onPress={() => {
+                  if (!includeLocation) {
+                    // Show location search instead of auto-getting current location
+                    handleOpenLocationSearch();
+                  } else {
+                    setIncludeLocation(false);
+                    setUserLocation(null);
+                  }
+                }}>
+                <Icon 
+                  name={includeLocation ? "my-location" : "location-off"} 
+                  size={20} 
+                  color="#FFFFFF" 
+                />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[
-                styles.locationToggle,
-                {
-                  backgroundColor: includeLocation ? theme.colors.primary : theme.colors.border,
-                },
-              ]}
-              onPress={() => {
-                if (!includeLocation) {
-                  getCurrentLocation();
-                }
-                setIncludeLocation(!includeLocation);
-              }}>
-              <Icon 
-                name={includeLocation ? "my-location" : "location-off"} 
-                size={20} 
-                color="#FFFFFF" 
-              />
-            </TouchableOpacity>
-          </View>
-          {includeLocation && userLocation && (
-            <View style={[styles.locationInfo, {backgroundColor: theme.colors.surface, padding: 12, borderRadius: 8, marginTop: 8}]}>
-              <Text style={[styles.locationText, {color: theme.colors.text}]}>
-                📍 {userLocation.city}, {userLocation.country}
-              </Text>
-            </View>
-          )}
-        </Animatable.View>
+
+            {/* Location Search Input */}
+            {includeLocation && (
+              <View style={styles.locationSearchContainer}>
+                <View style={[styles.locationSearchInputContainer, {backgroundColor: theme.colors.surface}]}>
+                  <Icon name="search" size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
+                  <TextInput
+                    style={[styles.locationSearchInput, {color: theme.colors.text}]}
+                    placeholder="Search for a location..."
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={locationSearchQuery}
+                    onChangeText={setLocationSearchQuery}
+                    onFocus={() => setShowLocationSearch(true)}
+                  />
+                  {isSearchingLocation && (
+                    <ActivityIndicator size="small" color={theme.colors.primary} style={styles.searchLoader} />
+                  )}
+                </View>
+
+                {/* Current Location Button */}
+                <TouchableOpacity
+                  style={[styles.currentLocationButton, {backgroundColor: theme.colors.surface}]}
+                  onPress={getCurrentLocation}>
+                  <Icon name="my-location" size={18} color={theme.colors.primary} />
+                  <Text style={[styles.currentLocationText, {color: theme.colors.primary}]}>
+                    Use Current Location
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Selected Location Display */}
+            {includeLocation && userLocation && (
+              <View style={[styles.selectedLocationContainer, {backgroundColor: theme.colors.surface}]}>
+                <Icon name="place" size={20} color={theme.colors.primary} />
+                <View style={styles.selectedLocationTextContainer}>
+                  <Text style={[styles.selectedLocationName, {color: theme.colors.text}]} numberOfLines={1}>
+                    {userLocation.name || userLocation.address || `${userLocation.city}, ${userLocation.country}`}
+                  </Text>
+                  {(userLocation.city || userLocation.country) && (
+                    <Text style={[styles.selectedLocationAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
+                      {userLocation.city}{userLocation.city && userLocation.country ? ', ' : ''}{userLocation.country}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setUserLocation(null);
+                    setLocationSearchQuery('');
+                    setShowLocationSearch(false);
+                  }}>
+                  <Icon name="close" size={20} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Location Search Results Modal */}
+            <Modal
+              visible={showLocationSearch && locationSearchResults.length > 0}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowLocationSearch(false)}>
+              <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
+                  <View style={styles.modalHeader}>
+                    <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
+                      Select Location
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowLocationSearch(false)}>
+                      <Icon name="close" size={24} color={theme.colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                  <FlatList
+                    data={locationSearchResults}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({item}) => (
+                      <TouchableOpacity
+                        style={[styles.locationResultItem, {backgroundColor: theme.colors.background}]}
+                        onPress={() => handleSelectLocation(item)}>
+                        <Icon name="place" size={24} color={theme.colors.primary} />
+                        <View style={styles.locationResultTextContainer}>
+                          <Text style={[styles.locationResultName, {color: theme.colors.text}]} numberOfLines={2}>
+                            {item.name}
+                          </Text>
+                          {item.city && (
+                            <Text style={[styles.locationResultAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
+                              {item.city}{item.country ? `, ${item.country}` : ''}
+                            </Text>
+                          )}
+                        </View>
+                        <Icon name="chevron-right" size={20} color={theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      locationSearchQuery.length >= 3 && !isSearchingLocation ? (
+                        <View style={styles.emptyResults}>
+                          <Text style={[styles.emptyResultsText, {color: theme.colors.textSecondary}]}>
+                            No locations found
+                          </Text>
+                        </View>
+                      ) : null
+                    }
+                  />
+                </View>
+              </View>
+            </Modal>
+          </Animatable.View>
+        )}
 
         {/* Interests Selection */}
         <Animatable.View animation="fadeInUp" delay={200} style={styles.section}>
@@ -807,6 +1031,108 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  locationSearchContainer: {
+    marginTop: 12,
+  },
+  locationSearchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  locationSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 4,
+  },
+  searchLoader: {
+    marginLeft: 8,
+  },
+  currentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  currentLocationText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  selectedLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 12,
+  },
+  selectedLocationTextContainer: {
+    flex: 1,
+  },
+  selectedLocationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  selectedLocationAddress: {
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  locationResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    gap: 12,
+  },
+  locationResultTextContainer: {
+    flex: 1,
+  },
+  locationResultName: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  locationResultAddress: {
+    fontSize: 14,
+  },
+  emptyResults: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyResultsText: {
+    fontSize: 16,
   },
   mediaButton: {
     flexDirection: 'row',

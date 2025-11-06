@@ -23,7 +23,15 @@ export const useConnectionStatus = (): ConnectionStatus => {
 
     try {
       // Test Railway connection first (production)
-      const railwayTest = await testRailwayConnection();
+      // Add timeout to prevent hanging
+      const railwayTestPromise = testRailwayConnection();
+      const railwayTest = await Promise.race([
+        railwayTestPromise,
+        new Promise<{success: boolean, url?: string, error?: string}>((resolve) => 
+          setTimeout(() => resolve({ success: false, error: 'Timeout' }), 5000)
+        )
+      ]);
+      
       if (railwayTest.success) {
         setStatus({
           isConnected: true,
@@ -34,7 +42,15 @@ export const useConnectionStatus = (): ConnectionStatus => {
       }
 
       // Fallback to local connection only if Railway fails
-      const localTest = await testNetworkConnection();
+      // Skip localhost test on Android (it doesn't work)
+      const localTestPromise = testNetworkConnection();
+      const localTest = await Promise.race([
+        localTestPromise,
+        new Promise<{success: boolean, url?: string, error?: string}>((resolve) => 
+          setTimeout(() => resolve({ success: false, error: 'Timeout' }), 3000)
+        )
+      ]);
+      
       if (localTest.success) {
         setStatus({
           isConnected: true,
@@ -52,6 +68,7 @@ export const useConnectionStatus = (): ConnectionStatus => {
       });
     } catch (error) {
       console.error('Connection check failed:', error);
+      // Always set status to prevent hanging
       setStatus({
         isConnected: false,
         connectionType: 'none',

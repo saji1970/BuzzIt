@@ -56,6 +56,8 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   useEffect(() => {
     if (visible && stream) {
+      // Check if stream is still live before loading
+      checkStreamStatus();
       loadComments();
       incrementViewer();
       startViewerUpdates();
@@ -65,13 +67,37 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         loadComments();
       }, 3000);
       
+      // Poll for stream status every 5 seconds to catch ended streams
+      const statusInterval = setInterval(() => {
+        checkStreamStatus();
+      }, 5000);
+      
       return () => {
         decrementViewer();
         stopViewerUpdates();
         clearInterval(commentInterval);
+        clearInterval(statusInterval);
       };
     }
   }, [visible, stream]);
+  
+  const checkStreamStatus = async () => {
+    try {
+      const response = await ApiService.getLiveStream(stream.id);
+      if (response.success && response.data) {
+        // If stream is no longer live, close the viewer
+        if (!response.data.isLive || response.data.endedAt) {
+          Alert.alert(
+            'Stream Ended',
+            'This live stream has ended.',
+            [{ text: 'OK', onPress: onClose }]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error checking stream status:', error);
+    }
+  };
 
   useEffect(() => {
     // Auto-scroll to bottom when new comment arrives
@@ -203,6 +229,24 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     return `${hours}h ago`;
   };
 
+  // Check if stream URL is valid (must be a full URL, not a relative path)
+  const isValidStreamUrl = (url: string): boolean => {
+    if (!url || url.trim() === '') return false;
+    // Check if it's a relative path (starts with /)
+    if (url.startsWith('/')) {
+      console.warn('Invalid stream URL (relative path):', url);
+      return false;
+    }
+    // Check if it's a valid URL format (http:// or https://)
+    try {
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch (e) {
+      console.warn('Invalid stream URL format:', url);
+      return false;
+    }
+  };
+
   const renderComment = ({item}: {item: StreamComment}) => (
     <View style={[styles.commentItem, {backgroundColor: theme.colors.surface}]}>
       <View style={styles.commentHeader}>
@@ -229,7 +273,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {stream.streamUrl && stream.isLive ? (
+          {stream.streamUrl && stream.streamUrl.trim() !== '' && stream.isLive && isValidStreamUrl(stream.streamUrl) ? (
             <Video
               ref={videoRef}
               source={{ uri: stream.streamUrl }}
@@ -238,13 +282,21 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               resizeMode="contain"
               shouldPlay={true}
               isLooping={false}
+              onLoadStart={() => {
+                console.log('Video loading started for stream:', stream.id);
+              }}
+              onLoad={() => {
+                console.log('Video loaded successfully for stream:', stream.id);
+              }}
               onError={(error) => {
                 console.error('Video playback error:', error);
-                Alert.alert(
-                  'Stream Error',
-                  'Unable to play stream. The broadcaster may be using a camera stream that requires a media server for viewing.',
-                  [{ text: 'OK' }]
-                );
+                // Don't show alert immediately - might be temporary network issue
+                // Video component will show error state
+              }}
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded && status.error) {
+                  console.error('Video playback status error:', status.error);
+                }
               }}
             />
           ) : stream.isLive ? (
@@ -252,8 +304,15 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               <Icon name="videocam" size={64} color="#FFFFFF" />
               <Text style={styles.placeholderText}>Live stream starting...</Text>
               <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7 }]}>
-                The broadcaster is using their camera. Stream will be available once connected to media server.
+                {stream.streamUrl && stream.streamUrl.startsWith('/') 
+                  ? 'Stream URL is not configured. The broadcaster needs to set up a proper streaming server URL.'
+                  : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
               </Text>
+              {stream.streamUrl && stream.streamUrl.startsWith('/') && (
+                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5 }]}>
+                  Current URL: {stream.streamUrl}
+                </Text>
+              )}
             </View>
           ) : (
             <View style={styles.placeholderVideo}>

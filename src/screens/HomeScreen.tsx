@@ -14,7 +14,7 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
@@ -31,13 +31,14 @@ import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
 import UserRecommendationCard, {UserRecommendation} from '../components/UserRecommendationCard';
 import ContactSyncService from '../components/ContactSyncService';
+import YourBuzzScreen from './YourBuzzScreen';
 
 const {width} = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
   const {theme} = useTheme();
-  const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked} = useUser();
+  const {user, buzzes, getBuzzesByInterests, likeBuzz, shareBuzz, isBlocked, subscribeToChannel, unsubscribeFromChannel} = useUser();
   const {isAuthenticated, isLoading: authLoading, user: authUser} = useAuth();
   const {features} = useFeatures();
   const [filteredBuzzes, setFilteredBuzzes] = useState<Buzz[]>([]);
@@ -56,6 +57,7 @@ const HomeScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [showYourBuzz, setShowYourBuzz] = useState(false);
 
   // Mock channel data (same as in SubscribedChannels)
   const mockChannels = [
@@ -68,16 +70,26 @@ const HomeScreen: React.FC = () => {
   // Removed showCreateProfile state - only show for first-time users
 
   useEffect(() => {
-    loadBuzzes();
-    loadLiveStreams();
-    loadUserRecommendations();
-  }, [user, buzzes, authUser]);
+    try {
+      // Load the appropriate feed based on current toggle state
+      if (useSmartFeed) {
+        loadSmartFeed();
+      } else {
+        loadBuzzes();
+      }
+      loadLiveStreams();
+      loadUserRecommendations();
+    } catch (error) {
+      console.error('Error in HomeScreen useEffect:', error);
+      // Prevent crash
+    }
+  }, [user, buzzes, authUser, useSmartFeed]);
 
-  // Refresh live streams periodically
+  // Refresh live streams periodically - more frequent to catch ended streams
   useEffect(() => {
     const interval = setInterval(() => {
       loadLiveStreams();
-    }, 30000); // Every 30 seconds
+    }, 10000); // Every 10 seconds - more frequent to catch ended streams
 
     return () => clearInterval(interval);
   }, [user, authUser]); // Recreate interval when user changes
@@ -85,17 +97,24 @@ const HomeScreen: React.FC = () => {
   // Refresh buzzes when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      loadBuzzes();
-    }, [user, buzzes])
+      // Load the appropriate feed based on current toggle state
+      if (useSmartFeed) {
+        loadSmartFeed();
+      } else {
+        loadBuzzes();
+      }
+    }, [user, buzzes, useSmartFeed])
   );
 
   const loadBuzzes = () => {
-    console.log('Loading buzzes, user:', user?.username, 'buzzes count:', buzzes?.length);
-    // Allow loading even if user is null - use empty interests array
-    if (!buzzes) {
-      console.log('No buzzes available yet');
-      return;
-    }
+    try {
+      console.log('Loading buzzes, user:', user?.username, 'buzzes count:', buzzes?.length);
+      // Allow loading even if user is null - use empty interests array
+      if (!buzzes) {
+        console.log('No buzzes available yet');
+        setFilteredBuzzes([]);
+        return;
+      }
     
     // Use user if available, otherwise use authUser, otherwise fallback
     const currentUser = user || authUser || {
@@ -114,7 +133,7 @@ const HomeScreen: React.FC = () => {
       blockedUsers: [],
     };
     
-    // First, filter out buzzes from blocked users and own buzzes
+    // First, filter out buzzes from blocked users and own buzzes (NORMAL FEED)
     const currentUserId = user?.id || authUser?.id;
     let unblockedBuzzes = buzzes.filter(buzz => 
       !isBlocked(buzz.userId) && buzz.userId !== currentUserId
@@ -141,23 +160,34 @@ const HomeScreen: React.FC = () => {
         unblockedBuzzes.some(b => b.id === buzz.id)
       );
     } else {
-      // If user has no interests, show all unblocked buzzes
+      // If user has no interests, show all unblocked buzzes (excluding own)
       filtered = unblockedBuzzes;
     }
     
-    // Sort by creation date (newest first)
+    // Sort by creation date (newest first) - Normal feed is chronological
     filtered.sort((a, b) => {
       const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
       const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
       return dateB.getTime() - dateA.getTime();
     });
     
-    setFilteredBuzzes(filtered);
+      setFilteredBuzzes(filtered);
+      console.log('Normal feed loaded:', filtered.length, 'buzzes (excluding own)');
+    } catch (error) {
+      console.error('Error loading buzzes:', error);
+      // Silently fail - don't crash the app
+      setFilteredBuzzes([]);
+    }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadBuzzes();
+    // Load the appropriate feed based on current toggle state
+    if (useSmartFeed) {
+      loadSmartFeed();
+    } else {
+      loadBuzzes();
+    }
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -266,41 +296,72 @@ const HomeScreen: React.FC = () => {
     try {
       setLoadingLiveStreams(true);
       const response = await ApiService.getLiveStreams();
-      if (response.success && response.data) {
+      if (response && response.success && response.data) {
         // Filter to only show streams from subscribed channels/users
         const currentUserData = user || authUser;
         const subscribedIds = currentUserData?.subscribedChannels || [];
         
-        // Map response data to LiveStream format
-        const mappedStreams: LiveStream[] = response.data.map((stream: any) => ({
-          id: stream.id,
-          userId: stream.userId,
-          username: stream.username,
-          displayName: stream.displayName,
-          title: stream.title,
-          description: stream.description,
-          streamUrl: stream.streamUrl || '', // Handle empty streamUrl
-          thumbnailUrl: stream.thumbnailUrl,
-          isLive: stream.isLive,
-          viewers: stream.viewers || 0,
-          category: stream.category,
-          startedAt: stream.startedAt,
-          tags: stream.tags || [],
-        }));
+        // Map response data to LiveStream format and FILTER OUT ENDED STREAMS
+        // Only show streams that are currently live (isLive === true)
+        // Also verify stream hasn't ended by checking if it exists and is actually live
+        const mappedStreams: LiveStream[] = response.data
+          .filter((stream: any) => {
+            // Only show streams that are explicitly marked as live
+            if (!stream.isLive) return false;
+            
+            // Additional check: if stream has an endedAt timestamp, don't show it
+            if (stream.endedAt) {
+              const endedAt = new Date(stream.endedAt);
+              const now = new Date();
+              if (endedAt < now) return false; // Stream has ended
+            }
+            
+            return true;
+          })
+          .map((stream: any) => ({
+            id: stream.id,
+            userId: stream.userId,
+            username: stream.username,
+            displayName: stream.displayName,
+            title: stream.title,
+            description: stream.description,
+            streamUrl: stream.streamUrl || '', // Handle empty streamUrl
+            thumbnailUrl: stream.thumbnailUrl,
+            isLive: stream.isLive,
+            viewers: stream.viewers || 0,
+            category: stream.category,
+            startedAt: stream.startedAt,
+            tags: stream.tags || [],
+            endedAt: stream.endedAt, // Include endedAt for additional checking
+          }));
         
+        // Show all live streams, but prioritize streams from subscribed channels
+        // This way users can see streams from people they follow AND discover new streams
+        let finalStreams: LiveStream[];
         if (subscribedIds.length > 0) {
-          // Only show streams from subscribed channels
-          const filteredStreams = mappedStreams.filter((stream: LiveStream) =>
+          // Separate streams: subscribed first, then others
+          const subscribedStreams = mappedStreams.filter((stream: LiveStream) =>
             subscribedIds.includes(stream.userId)
           );
-          setLiveStreams(filteredStreams);
+          const otherStreams = mappedStreams.filter((stream: LiveStream) =>
+            !subscribedIds.includes(stream.userId)
+          );
+          // Combine: subscribed streams first, then others
+          finalStreams = [...subscribedStreams, ...otherStreams];
         } else {
-          // If no subscriptions, show no streams
-          setLiveStreams([]);
+          // If no subscriptions, show all streams (for discovery)
+          finalStreams = mappedStreams;
         }
+        
+        // Update state - this will automatically remove ended streams (not in mappedStreams)
+        setLiveStreams(finalStreams);
+      } else {
+        // If API returns no data or error, clear all streams
+        setLiveStreams([]);
       }
     } catch (error) {
       console.error('Error loading live streams:', error);
+      // Silently fail - don't crash the app
       setLiveStreams([]);
     } finally {
       setLoadingLiveStreams(false);
@@ -364,27 +425,109 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleToggleSmartFeed = () => {
-    setUseSmartFeed(!useSmartFeed);
-    if (!useSmartFeed) {
+    const newSmartFeedState = !useSmartFeed;
+    setUseSmartFeed(newSmartFeedState);
+    // Reload feed based on new state
+    if (newSmartFeedState) {
       loadSmartFeed();
     } else {
       loadBuzzes();
     }
   };
 
-  const loadSmartFeed = async () => {
+  // Smart Feed Algorithm - Ranks buzzes based on multiple factors
+  const calculateSmartFeedScore = (buzz: Buzz, currentUser: any): number => {
+    let score = 0;
+    
+    // 1. Interest Match Score (0-40 points)
+    const userInterestIds = currentUser.interests?.map((i: any) => i.id) || [];
+    const buzzInterestIds = buzz.interests?.map((i: any) => i.id) || [];
+    const matchingInterests = buzzInterestIds.filter((id: string) => userInterestIds.includes(id));
+    const interestMatchRatio = buzzInterestIds.length > 0 
+      ? matchingInterests.length / buzzInterestIds.length 
+      : 0;
+    score += interestMatchRatio * 40;
+    
+    // 2. Engagement Score (0-30 points)
+    // Normalize engagement metrics (likes, comments, shares)
+    const totalEngagement = buzz.likes + buzz.comments + buzz.shares;
+    // Use logarithmic scale to prevent very popular posts from dominating
+    const engagementScore = Math.min(30, Math.log10(totalEngagement + 1) * 10);
+    score += engagementScore;
+    
+    // 3. Recency Score (0-20 points)
+    // Newer posts get higher scores
+    const now = new Date().getTime();
+    const buzzTime = buzz.createdAt instanceof Date 
+      ? buzz.createdAt.getTime() 
+      : new Date(buzz.createdAt).getTime();
+    const hoursAgo = (now - buzzTime) / (1000 * 60 * 60);
+    // Posts within 24 hours get full score, then decay
+    const recencyScore = hoursAgo < 24 ? 20 : Math.max(0, 20 - (hoursAgo - 24) * 0.5);
+    score += recencyScore;
+    
+    // 4. Followed User Bonus (0-10 points)
+    const subscribedChannels = currentUser.subscribedChannels || [];
+    if (subscribedChannels.includes(buzz.userId)) {
+      score += 10;
+    }
+    
+    // 5. User Interaction History (liked posts get slight boost)
+    if (buzz.isLiked) {
+      score += 2;
+    }
+    
+    return score;
+  };
+
+  const loadSmartFeed = () => {
     try {
-      setRefreshing(true);
-      const response = await ApiService.getSmartFeed(50);
-      if (response.success && response.data) {
-        setFilteredBuzzes(response.data.buzzes || []);
+      if (!buzzes || buzzes.length === 0) {
+        setFilteredBuzzes([]);
+        return;
       }
+      
+      const currentUser = user || authUser || {
+        id: 'temp-user',
+        username: 'User',
+        displayName: 'User',
+        email: '',
+        bio: '',
+        avatar: null,
+        interests: [],
+        followers: 0,
+        following: 0,
+        buzzCount: 0,
+        createdAt: new Date(),
+        subscribedChannels: [],
+        blockedUsers: [],
+      };
+      
+      const currentUserId = user?.id || authUser?.id;
+      
+      // Filter out blocked users and own buzzes
+      let eligibleBuzzes = buzzes.filter(buzz => 
+        !isBlocked(buzz.userId) && buzz.userId !== currentUserId
+      );
+      
+      // Calculate smart feed scores
+      const buzzesWithScores = eligibleBuzzes.map(buzz => ({
+        buzz,
+        score: calculateSmartFeedScore(buzz, currentUser),
+      }));
+      
+      // Sort by score (highest first)
+      buzzesWithScores.sort((a, b) => b.score - a.score);
+      
+      // Extract buzzes from sorted array
+      const smartFeedBuzzes = buzzesWithScores.map(item => item.buzz);
+      
+      setFilteredBuzzes(smartFeedBuzzes);
+      console.log('Smart feed loaded:', smartFeedBuzzes.length, 'buzzes');
     } catch (error) {
       console.error('Error loading smart feed:', error);
       // Fallback to regular feed
       loadBuzzes();
-    } finally {
-      setRefreshing(false);
     }
   };
 
@@ -503,18 +646,26 @@ const HomeScreen: React.FC = () => {
     // This is OK - we'll show an empty state in the render
   }
 
-  return (
-    <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+  // Render header component for FlatList
+  const renderHeader = () => (
+    <>
       {/* Buzz Banner - Instagram Style */}
       <View style={[styles.buzzBanner, {backgroundColor: theme.colors.surface}]}>
         <View style={styles.buzzBannerContent}>
-          <Text style={[styles.buzzText, {color: theme.colors.text}]}>Buzz</Text>
-          <View style={{flexDirection: 'row', gap: 12}}>
+          <Text style={[styles.buzzText, {color: theme.colors.text, fontWeight: 'bold', fontSize: 24}]}>Buzz</Text>
+          <View style={{flexDirection: 'row', gap: 12, alignItems: 'center'}}>
+            {/* Go Buzz Live Button - More Prominent */}
             <TouchableOpacity
               style={[styles.goLiveButton, {backgroundColor: theme.colors.primary}]}
               onPress={() => navigation.navigate('GoBuzzLive' as never)}>
-              <Icon name="videocam" size={20} color="#FFFFFF" />
-              <Text style={styles.goLiveText}>goBuzzLive</Text>
+              <LinearGradient
+                colors={['#E4405F', '#FF6B9D']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.goLiveGradient}>
+                <Icon name="videocam" size={20} color="#FFFFFF" />
+                <Text style={styles.goLiveText}>Go Buzz Live</Text>
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.searchIconButton}
@@ -525,9 +676,17 @@ const HomeScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Following Section - Instagram Style */}
+      {/* Following Section - Instagram Style with YourBuzz */}
       <View style={styles.followingContainer}>
-        <SubscribedChannels onChannelPress={handleBuzzerPress} />
+        <View style={styles.followingHeader}>
+          <Text style={[styles.followingHeaderText, {color: theme.colors.text}]}>
+            Follow Users & Subscribed Channels
+          </Text>
+        </View>
+        <SubscribedChannels 
+          onChannelPress={handleBuzzerPress}
+          onYourBuzzPress={() => setShowYourBuzz(true)}
+        />
       </View>
 
       {/* Smart Feed Toggle */}
@@ -580,6 +739,8 @@ const HomeScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recommendationsList}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
           />
         </View>
       )}
@@ -607,8 +768,8 @@ const HomeScreen: React.FC = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.liveStreamsList}
-              refreshing={loadingLiveStreams}
-              onRefresh={loadLiveStreams}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
             />
           ) : (
             <View style={[styles.emptyStreamsContainer, {backgroundColor: theme.colors.surface}]}>
@@ -620,13 +781,18 @@ const HomeScreen: React.FC = () => {
           )}
         </View>
       )}
+    </>
+  );
 
+  return (
+    <View style={[styles.container, {backgroundColor: theme.colors.background, flex: 1}]}>
       <FlatList
         data={filteredBuzzes}
         renderItem={renderBuzz}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={true}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -635,7 +801,12 @@ const HomeScreen: React.FC = () => {
             colors={[theme.colors.primary]}
           />
         }
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
+        removeClippedSubviews={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={10}
       />
 
       {selectedBuzz && (
@@ -654,6 +825,12 @@ const HomeScreen: React.FC = () => {
           onClose={handleCloseBuzzerProfile}
         />
       )}
+
+      {/* YourBuzz Screen */}
+      <YourBuzzScreen
+        visible={showYourBuzz}
+        onClose={() => setShowYourBuzz(false)}
+      />
 
       {selectedStream && (
         <StreamViewerScreen
@@ -801,11 +978,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   goLiveButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  goLiveGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     gap: 6,
   },
   goLiveText: {
@@ -818,6 +1003,19 @@ const styles = StyleSheet.create({
   },
   followingContainer: {
     backgroundColor: '#F0F0F0',
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  followingHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  followingHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    opacity: 0.7,
   },
   header: {
     padding: 20,
