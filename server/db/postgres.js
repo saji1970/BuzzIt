@@ -316,6 +316,30 @@ const initializeTables = async () => {
     `);
     console.log('  ✅ Channels table created');
 
+    // Add interests column if it doesn't exist (migration for existing tables)
+    try {
+      // Check if column exists first
+      const columnCheck = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'channels' AND column_name = 'interests'
+      `);
+      
+      if (columnCheck.rows.length === 0) {
+        // Column doesn't exist, add it
+        await client.query(`
+          ALTER TABLE channels 
+          ADD COLUMN interests JSONB DEFAULT '[]'
+        `);
+        console.log('  ✅ Added interests column to channels table');
+      } else {
+        console.log('  ✅ Interests column already exists in channels table');
+      }
+    } catch (error) {
+      // Log error but don't fail - column might already exist or table might not exist yet
+      console.log('  ℹ️  Interests column migration check:', error.message);
+    }
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_channels_user_id ON channels(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_channels_name ON channels(name)');
     console.log('  ✅ Created indexes on channels');
