@@ -1939,7 +1939,9 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       displayName: user.displayName,
       title: req.body.title || `${user.displayName}'s Live Stream`,
       description: req.body.description || '',
-      streamUrl: restreamPlaybackUrl || req.body.streamUrl || `rtmp://live.example.com/stream/${req.userId}`,
+      // Don't set a default RTMP URL - RTMP is for streaming TO a server, not playback
+      // Only set streamUrl if a valid playback URL is provided (HLS, DASH, or WebRTC)
+      streamUrl: restreamPlaybackUrl || req.body.streamUrl || '',
       thumbnailUrl: req.body.thumbnailUrl || user.avatar,
       isLive: true,
       viewers: 0,

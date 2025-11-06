@@ -317,14 +317,16 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
             <View style={styles.placeholderVideo}>
               <Icon name="videocam" size={64} color="#FFFFFF" />
               <Text style={styles.placeholderText}>Live stream starting...</Text>
-              <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7 }]}>
-                {stream.streamUrl && stream.streamUrl.startsWith('/') 
-                  ? 'Stream URL is not configured. The broadcaster needs to set up a proper streaming server URL.'
+              <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7, paddingHorizontal: 20 }]}>
+                {!stream.streamUrl || stream.streamUrl.trim() === ''
+                  ? 'The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
+                  : stream.streamUrl.startsWith('rtmp://')
+                  ? 'Streaming server is being configured. Please wait for the stream to connect.'
                   : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
               </Text>
-              {stream.streamUrl && stream.streamUrl.startsWith('/') && (
+              {stream.streamUrl && stream.streamUrl.includes('example.com') && (
                 <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5 }]}>
-                  Current URL: {stream.streamUrl}
+                  Note: A streaming server needs to be configured for live video playback.
                 </Text>
               )}
             </View>

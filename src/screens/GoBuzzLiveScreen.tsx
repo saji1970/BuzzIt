@@ -160,6 +160,15 @@ const GoBuzzLiveScreen: React.FC = () => {
         setIsStreaming(true);
         // Increment viewer when starting
         await ApiService.updateViewers(response.data.id, 'increment');
+        
+        // Show info about streaming (only once)
+        if (!response.data.streamUrl || response.data.streamUrl.trim() === '') {
+          Alert.alert(
+            'Stream Started',
+            'Your live stream has started! Note: For viewers to see your video, a streaming server needs to be configured. Currently, viewers will see a "stream starting" message.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
         Alert.alert('Error', response.error || 'Failed to start stream');
       }
