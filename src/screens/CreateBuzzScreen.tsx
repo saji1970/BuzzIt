@@ -396,75 +396,36 @@ const CreateBuzzScreen: React.FC = () => {
       interestsCount: selectedInterests.length,
     });
     
-    ApiService.createBuzz(newBuzz)
-      .then((response) => {
-        console.log('Buzz creation response:', response);
-        if (response.success && response.data) {
-          // Verify the buzz was saved to backend
-          const savedBuzz = response.data;
-          console.log('Buzz saved to backend with ID:', savedBuzz.id);
-          
-          // Add to local state with the server response
-          addBuzz(savedBuzz);
-          
-          // Reset form
-          setContent('');
-          setSelectedInterests([]);
-          setBuzzType(null);
-          setEventDate('');
-          setPollOptions([
-            {id: '1', text: 'Yes'},
-            {id: '2', text: 'No'},
-            {id: '3', text: "Don't Know"},
-          ]);
-          setMedia({type: null, url: null});
-          setIncludeLocation(false);
-          setUserLocation(null);
-          setLocationSearchQuery('');
-          setLocationSearchResults([]);
-          setShowLocationSearch(false);
-          
-          Alert.alert('Success', `Your buzz has been created and saved to the database! (ID: ${savedBuzz.id})`);
-        } else {
-          console.error('Buzz creation failed:', response.error);
-          // Fallback: add to local state if API fails
-          // addBuzz will generate ID automatically
-          addBuzz({
-            ...newBuzz,
-            isLiked: false,
-          });
-          Alert.alert(
-            'Warning', 
-            `Buzz created locally but failed to sync with server.\n\nError: ${response.error || 'Unknown error'}\n\nPlease check your connection and try again.`
-          );
-        }
+    // Use addBuzz which handles API call and state management
+    // This prevents duplicate API calls
+    addBuzz({
+      ...newBuzz,
+      isLiked: false,
+    }, false) // false = don't skip API call, let addBuzz handle it
+      .then(() => {
+        // Reset form
+        setContent('');
+        setSelectedInterests([]);
+        setBuzzType(null);
+        setEventDate('');
+        setPollOptions([
+          {id: '1', text: 'Yes'},
+          {id: '2', text: 'No'},
+          {id: '3', text: "Don't Know"},
+        ]);
+        setMedia({type: null, url: null});
+        setIncludeLocation(false);
+        setUserLocation(null);
+        setLocationSearchQuery('');
+        setLocationSearchResults([]);
+        setShowLocationSearch(false);
+        
         setIsCreating(false);
       })
       .catch((error: any) => {
         console.error('Error creating buzz:', error);
-        // Fallback: add to local state
-        const fallbackBuzz = {
-          userId: currentUser.id,
-          username: currentUser.username,
-          userAvatar: currentUser.avatar || null,
-          content: buzzContent,
-          media,
-          interests: selectedInterests,
-          location: includeLocation && userLocation ? userLocation : undefined,
-          buzzType,
-          eventDate: buzzType === 'event' ? eventDate : undefined,
-          pollOptions: buzzType === 'poll' ? pollOptions.filter(option => option.text.trim()) : undefined,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-        };
-        // addBuzz will generate ID automatically
-        addBuzz({
-          ...fallbackBuzz,
-          isLiked: false,
-        });
-        Alert.alert('Error', 'Failed to create buzz on server. Saved locally only.');
         setIsCreating(false);
+        Alert.alert('Error', 'Failed to create buzz. Please try again.');
       });
   };
 

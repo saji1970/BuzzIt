@@ -106,6 +106,20 @@ const HomeScreen: React.FC = () => {
     }, [user, buzzes, useSmartFeed])
   );
 
+  // Refresh buzzes more frequently to catch new posts (every 30 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Reload buzzes from context (which will trigger feed refresh)
+      if (useSmartFeed) {
+        loadSmartFeed();
+      } else {
+        loadBuzzes();
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user, buzzes, useSmartFeed]);
+
   const loadBuzzes = () => {
     try {
       console.log('Loading buzzes, user:', user?.username, 'buzzes count:', buzzes?.length);
@@ -295,8 +309,13 @@ const HomeScreen: React.FC = () => {
   const loadLiveStreams = async () => {
     try {
       setLoadingLiveStreams(true);
+      console.log('Loading live streams...');
       const response = await ApiService.getLiveStreams();
+      console.log('Live streams API response:', response);
+      
       if (response && response.success && response.data) {
+        console.log('Raw streams from API:', response.data.length);
+        
         // Filter to only show streams from subscribed channels/users
         const currentUserData = user || authUser;
         const subscribedIds = currentUserData?.subscribedChannels || [];
@@ -307,13 +326,19 @@ const HomeScreen: React.FC = () => {
         const mappedStreams: LiveStream[] = response.data
           .filter((stream: any) => {
             // Only show streams that are explicitly marked as live
-            if (!stream.isLive) return false;
+            if (!stream.isLive) {
+              console.log('Stream not live, filtering out:', stream.id);
+              return false;
+            }
             
             // Additional check: if stream has an endedAt timestamp, don't show it
             if (stream.endedAt) {
               const endedAt = new Date(stream.endedAt);
               const now = new Date();
-              if (endedAt < now) return false; // Stream has ended
+              if (endedAt < now) {
+                console.log('Stream has ended, filtering out:', stream.id);
+                return false; // Stream has ended
+              }
             }
             
             return true;
@@ -321,9 +346,9 @@ const HomeScreen: React.FC = () => {
           .map((stream: any) => ({
             id: stream.id,
             userId: stream.userId,
-            username: stream.username,
-            displayName: stream.displayName,
-            title: stream.title,
+            username: stream.username || 'Unknown',
+            displayName: stream.displayName || stream.username || 'Unknown',
+            title: stream.title || 'Live Stream',
             description: stream.description,
             streamUrl: stream.streamUrl && !stream.streamUrl.startsWith('/') ? stream.streamUrl : '', // Only use valid full URLs
             thumbnailUrl: stream.thumbnailUrl,
@@ -334,6 +359,8 @@ const HomeScreen: React.FC = () => {
             tags: stream.tags || [],
             endedAt: stream.endedAt, // Include endedAt for additional checking
           }));
+        
+        console.log('Mapped live streams:', mappedStreams.length);
         
         // Show all live streams, but prioritize streams from subscribed channels
         // This way users can see streams from people they follow AND discover new streams
@@ -348,15 +375,19 @@ const HomeScreen: React.FC = () => {
           );
           // Combine: subscribed streams first, then others
           finalStreams = [...subscribedStreams, ...otherStreams];
+          console.log('Subscribed streams:', subscribedStreams.length, 'Other streams:', otherStreams.length);
         } else {
           // If no subscriptions, show all streams (for discovery)
           finalStreams = mappedStreams;
+          console.log('No subscriptions, showing all streams:', finalStreams.length);
         }
         
         // Update state - this will automatically remove ended streams (not in mappedStreams)
         setLiveStreams(finalStreams);
+        console.log('Final live streams set:', finalStreams.length);
       } else {
         // If API returns no data or error, clear all streams
+        console.log('No live streams from API or error:', response?.error);
         setLiveStreams([]);
       }
     } catch (error) {
@@ -750,9 +781,8 @@ const HomeScreen: React.FC = () => {
         selectedInterests={selectedInterests}
       />
 
-      {/* Live Streams Section - Only show if user has subscriptions */}
-      {((user?.subscribedChannels && user.subscribedChannels.length > 0) || 
-        (authUser?.subscribedChannels && authUser.subscribedChannels.length > 0)) && (
+      {/* Live Streams Section - Always show if there are any live streams */}
+      {liveStreams.length > 0 && (
         <View style={styles.liveStreamsSection}>
           <View style={styles.sectionHeader}>
             <Icon name="videocam" size={20} color={theme.colors.primary} />
@@ -760,25 +790,33 @@ const HomeScreen: React.FC = () => {
               Live Now
             </Text>
           </View>
-          {liveStreams.length > 0 ? (
-            <FlatList
-              data={liveStreams}
-              renderItem={renderLiveStream}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.liveStreamsList}
-              nestedScrollEnabled={true}
-              scrollEnabled={true}
-            />
-          ) : (
-            <View style={[styles.emptyStreamsContainer, {backgroundColor: theme.colors.surface}]}>
-              <Icon name="videocam-off" size={48} color={theme.colors.textSecondary} />
-              <Text style={[styles.emptyStreamsText, {color: theme.colors.textSecondary}]}>
-                No live streams from your subscribed channels
-              </Text>
-            </View>
-          )}
+          <FlatList
+            data={liveStreams}
+            renderItem={renderLiveStream}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.liveStreamsList}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+          />
+        </View>
+      )}
+      
+      {/* Show message if loading streams */}
+      {loadingLiveStreams && liveStreams.length === 0 && (
+        <View style={styles.liveStreamsSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="videocam" size={20} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              Live Now
+            </Text>
+          </View>
+          <View style={[styles.emptyStreamsContainer, {backgroundColor: theme.colors.surface}]}>
+            <Text style={[styles.emptyStreamsText, {color: theme.colors.textSecondary}]}>
+              Loading live streams...
+            </Text>
+          </View>
         </View>
       )}
     </>

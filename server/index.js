@@ -1297,7 +1297,20 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
       locationCity: req.body.location?.city || null,
       locationCountry: req.body.location?.country || null,
       buzzType: req.body.buzzType || 'thought',
-      eventDate: req.body.eventDate || null,
+      eventDate: (() => {
+        // Validate eventDate - only accept valid date strings or null
+        const eventDateValue = req.body.eventDate;
+        if (!eventDateValue || typeof eventDateValue !== 'string' || eventDateValue.trim() === '') {
+          return null;
+        }
+        // Try to parse as date - if invalid, return null
+        const parsedDate = new Date(eventDateValue);
+        if (isNaN(parsedDate.getTime())) {
+          console.log('Invalid eventDate format, setting to null:', eventDateValue);
+          return null;
+        }
+        return parsedDate.toISOString();
+      })(),
       pollOptions: req.body.pollOptions || [],
     likes: 0,
     comments: 0,
@@ -1404,17 +1417,63 @@ app.patch('/api/buzzes/:id/share', verifyToken, (req, res) => {
   }
 });
 
-app.delete('/api/buzzes/:id', verifyToken, (req, res) => {
-  const buzzIndex = buzzes.findIndex(b => b.id === req.params.id);
-  if (buzzIndex !== -1) {
-    // Check if user owns the buzz
-    if (buzzes[buzzIndex].userId !== req.userId) {
-      return res.status(403).json({ error: 'Forbidden' });
+app.delete('/api/buzzes/:id', verifyToken, async (req, res) => {
+  try {
+    const buzzId = req.params.id;
+    
+    // Check in database first
+    if (db.isConnected()) {
+      try {
+        // Check if buzz exists and user owns it
+        const result = await db.query('SELECT user_id FROM buzzes WHERE id = $1', [buzzId]);
+        if (result.rows.length === 0) {
+          return res.status(404).json({ success: false, error: 'Buzz not found' });
+        }
+        
+        if (result.rows[0].user_id !== req.userId) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You can only delete your own buzzes' });
+        }
+        
+        // Delete from database
+        await db.query('DELETE FROM buzzes WHERE id = $1', [buzzId]);
+        
+        // Also remove from in-memory array
+        const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+        if (buzzIndex !== -1) {
+          buzzes.splice(buzzIndex, 1);
+        }
+        
+        res.json({ success: true, message: 'Buzz deleted successfully' });
+      } catch (dbError) {
+        console.error('Database delete error:', dbError);
+        // Fallback to in-memory array
+        const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+        if (buzzIndex !== -1) {
+          if (buzzes[buzzIndex].userId !== req.userId) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You can only delete your own buzzes' });
+          }
+          buzzes.splice(buzzIndex, 1);
+          res.json({ success: true, message: 'Buzz deleted successfully' });
+        } else {
+          res.status(404).json({ success: false, error: 'Buzz not found' });
+        }
+      }
+    } else {
+      // Fallback to in-memory array
+      const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+      if (buzzIndex !== -1) {
+        if (buzzes[buzzIndex].userId !== req.userId) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You can only delete your own buzzes' });
+        }
+        buzzes.splice(buzzIndex, 1);
+        res.json({ success: true, message: 'Buzz deleted successfully' });
+      } else {
+        res.status(404).json({ success: false, error: 'Buzz not found' });
+      }
     }
-    buzzes.splice(buzzIndex, 1);
-    res.json({ message: 'Buzz deleted' });
-  } else {
-    res.status(404).json({ error: 'Buzz not found' });
+  } catch (error) {
+    console.error('Delete buzz error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete buzz' });
   }
 });
 
@@ -1895,31 +1954,67 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
     let savedStream;
     if (db.isConnected()) {
       try {
-        const result = await db.query(`
-          INSERT INTO live_streams (
-            id, user_id, username, display_name, title, description, stream_url,
-            thumbnail_url, is_live, viewers, category, tags, channel_id,
-            restream_key, restream_rtmp_url, restream_playback_url
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          RETURNING *
-        `, [
-          newStreamData.id,
-          newStreamData.userId,
-          newStreamData.username,
-          newStreamData.displayName,
-          newStreamData.title,
-          newStreamData.description,
-          newStreamData.streamUrl,
-          newStreamData.thumbnailUrl,
-          newStreamData.isLive,
-          newStreamData.viewers,
-          newStreamData.category,
-          JSON.stringify(newStreamData.tags),
-          newStreamData.channelId,
-          newStreamData.restreamKey,
-          newStreamData.restreamRtmpUrl,
-          newStreamData.restreamPlaybackUrl,
-        ]);
+        // Only include channel_id if it exists and is not null/undefined
+        const hasChannelId = newStreamData.channelId && typeof newStreamData.channelId === 'string' && newStreamData.channelId.trim() !== '';
+        
+        // Build query dynamically based on whether channel_id exists
+        let query, params;
+        if (hasChannelId) {
+          query = `
+            INSERT INTO live_streams (
+              id, user_id, username, display_name, title, description, stream_url,
+              thumbnail_url, is_live, viewers, category, tags, channel_id,
+              restream_key, restream_rtmp_url, restream_playback_url
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING *
+          `;
+          params = [
+            newStreamData.id,
+            newStreamData.userId,
+            newStreamData.username,
+            newStreamData.displayName,
+            newStreamData.title,
+            newStreamData.description,
+            newStreamData.streamUrl,
+            newStreamData.thumbnailUrl,
+            newStreamData.isLive,
+            newStreamData.viewers,
+            newStreamData.category,
+            JSON.stringify(newStreamData.tags || []),
+            newStreamData.channelId,
+            newStreamData.restreamKey || null,
+            newStreamData.restreamRtmpUrl || null,
+            newStreamData.restreamPlaybackUrl || null,
+          ];
+        } else {
+          query = `
+            INSERT INTO live_streams (
+              id, user_id, username, display_name, title, description, stream_url,
+              thumbnail_url, is_live, viewers, category, tags,
+              restream_key, restream_rtmp_url, restream_playback_url
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            RETURNING *
+          `;
+          params = [
+            newStreamData.id,
+            newStreamData.userId,
+            newStreamData.username,
+            newStreamData.displayName,
+            newStreamData.title,
+            newStreamData.description,
+            newStreamData.streamUrl,
+            newStreamData.thumbnailUrl,
+            newStreamData.isLive,
+            newStreamData.viewers,
+            newStreamData.category,
+            JSON.stringify(newStreamData.tags || []),
+            newStreamData.restreamKey || null,
+            newStreamData.restreamRtmpUrl || null,
+            newStreamData.restreamPlaybackUrl || null,
+          ];
+        }
+        
+        const result = await db.query(query, params);
         
         const row = result.rows[0];
         savedStream = {

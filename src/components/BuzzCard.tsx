@@ -19,6 +19,7 @@ import {Buzz} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
 import {useAuth} from '../context/AuthContext';
 import SocialMediaShareModal from './SocialMediaShareModal';
+import ApiService from '../services/APIService';
 
 const {width} = Dimensions.get('window');
 
@@ -34,12 +35,14 @@ interface BuzzCardProps {
 interface MenuModalProps {
   visible: boolean;
   onClose: () => void;
-  onBlock: () => void;
-  onAbout: () => void;
-  onSave: () => void;
+  onBlock?: () => void;
+  onAbout?: () => void;
+  onSave?: () => void;
+  onRemove?: () => void;
+  isOwnBuzz?: boolean;
 }
 
-const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout, onSave}) => {
+const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout, onSave, onRemove, isOwnBuzz = false}) => {
   const {theme} = useTheme();
 
   return (
@@ -53,26 +56,39 @@ const MenuModal: React.FC<MenuModalProps> = ({visible, onClose, onBlock, onAbout
         activeOpacity={1}
         onPress={onClose}>
         <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onBlock}>
-            <Icon name="block" size={24} color="#E4405F" />
-            <Text style={[styles.menuItemText, {color: '#E4405F'}]}>Block Buzzer</Text>
-          </TouchableOpacity>
-          <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onAbout}>
-            <Icon name="info-outline" size={24} color={theme.colors.text} />
-            <Text style={[styles.menuItemText, {color: theme.colors.text}]}>About Buzzer</Text>
-          </TouchableOpacity>
-          <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onSave}>
-            <Icon name="bookmark-outline" size={24} color={theme.colors.text} />
-            <Text style={[styles.menuItemText, {color: theme.colors.text}]}>Save Buzz</Text>
-          </TouchableOpacity>
+          {isOwnBuzz ? (
+            // Show only "Remove Buzz" for own buzzes
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={onRemove}>
+              <Icon name="delete" size={24} color="#E4405F" />
+              <Text style={[styles.menuItemText, {color: '#E4405F'}]}>Remove Buzz</Text>
+            </TouchableOpacity>
+          ) : (
+            // Show regular options for other users' buzzes
+            <>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={onBlock}>
+                <Icon name="block" size={24} color="#E4405F" />
+                <Text style={[styles.menuItemText, {color: '#E4405F'}]}>Block Buzzer</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={onAbout}>
+                <Icon name="info-outline" size={24} color={theme.colors.text} />
+                <Text style={[styles.menuItemText, {color: theme.colors.text}]}>About Buzzer</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, {backgroundColor: theme.colors.border}]} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={onSave}>
+                <Icon name="bookmark-outline" size={24} color={theme.colors.text} />
+                <Text style={[styles.menuItemText, {color: theme.colors.text}]}>Save Buzz</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </TouchableOpacity>
     </Modal>
@@ -126,6 +142,36 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     Alert.alert('Saved', 'This buzz has been saved to your collection!');
   };
 
+  const handleRemove = () => {
+    setShowMenuModal(false);
+    Alert.alert(
+      'Remove Buzz',
+      'Are you sure you want to remove this buzz? This action cannot be undone.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await ApiService.deleteBuzz(buzz.id);
+              if (response.success) {
+                Alert.alert('Success', 'Buzz removed successfully');
+                // The buzz will be removed from the list when the parent component refreshes
+                // You may want to add a callback to refresh the list here
+              } else {
+                Alert.alert('Error', response.error || 'Failed to remove buzz');
+              }
+            } catch (error) {
+              console.error('Error removing buzz:', error);
+              Alert.alert('Error', 'Failed to remove buzz. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Countdown timer for scheduled streams/events
   useEffect(() => {
     if (buzz.eventDate) {
@@ -174,6 +220,36 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     return `${Math.floor(diffInSeconds / 86400)}d ago`;
   };
 
+  const formatDateTime = (date: Date | string) => {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
+    
+    // If less than 24 hours, show time only
+    if (diffInSeconds < 86400) {
+      const hours = dateObj.getHours().toString().padStart(2, '0');
+      const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    
+    // If same year, show date and time
+    if (dateObj.getFullYear() === now.getFullYear()) {
+      const month = dateObj.toLocaleDateString('en-US', { month: 'short' });
+      const day = dateObj.getDate();
+      const hours = dateObj.getHours().toString().padStart(2, '0');
+      const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+      return `${month} ${day}, ${hours}:${minutes}`;
+    }
+    
+    // Different year, show full date and time
+    const month = dateObj.toLocaleDateString('en-US', { month: 'short' });
+    const day = dateObj.getDate();
+    const year = dateObj.getFullYear();
+    const hours = dateObj.getHours().toString().padStart(2, '0');
+    const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+    return `${month} ${day}, ${year} ${hours}:${minutes}`;
+  };
+
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
       <Animatable.View
@@ -195,6 +271,14 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
             <Text style={[styles.username, {color: theme.colors.text}]}>
               {buzz.username}
             </Text>
+            <View style={styles.timeContainer}>
+              <Text style={[styles.timeAgo, {color: theme.colors.textSecondary}]}>
+                {formatTimeAgo(buzz.createdAt)}
+              </Text>
+              <Text style={[styles.dateTime, {color: theme.colors.textSecondary}]}>
+                • {formatDateTime(buzz.createdAt)}
+              </Text>
+            </View>
           </View>
           {!isOwnBuzz && (
             <TouchableOpacity
@@ -329,6 +413,8 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         onBlock={handleBlock}
         onAbout={handleAbout}
         onSave={handleSave}
+        onRemove={handleRemove}
+        isOwnBuzz={isOwnBuzz}
       />
     </Animatable.View>
     </TouchableOpacity>
@@ -397,10 +483,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  timeAgo: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+      timeAgo: {
+        fontSize: 12,
+        marginTop: 2,
+      },
+      timeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
+      },
+      dateTime: {
+        fontSize: 11,
+        marginLeft: 4,
+      },
   moreButton: {
     padding: 5,
   },

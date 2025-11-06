@@ -427,7 +427,8 @@ class ApiService {
   }
 
   async deleteBuzz(buzzId: string): Promise<ApiResponse<{ message: string }>> {
-    return this.makeRequest<{ message: string }>(`/api/admin/buzzes/${buzzId}`, {
+    // Use the regular user endpoint which checks ownership
+    return this.makeRequest<{ message: string }>(`/api/buzzes/${buzzId}`, {
       method: 'DELETE',
     });
   }

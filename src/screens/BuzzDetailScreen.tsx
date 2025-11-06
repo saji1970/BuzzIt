@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -38,6 +39,25 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
   const {likeBuzz, shareBuzz} = useUser();
   const [pan] = useState(new Animated.ValueXY());
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef<Video>(null);
+
+  // Cleanup video when component unmounts or buzz changes
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.unloadAsync().catch(() => {});
+      }
+    };
+  }, [buzz.id]);
+
+  // Reset video state when buzz changes
+  useEffect(() => {
+    setIsVideoPlaying(false);
+    if (videoRef.current) {
+      videoRef.current.unloadAsync().catch(() => {});
+    }
+  }, [buzz.id]);
 
   const handleShareClick = () => {
     shareBuzz(buzz.id);
@@ -206,9 +226,44 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
               {buzz.media.type === 'image' ? (
                 <Image source={{uri: buzz.media.url}} style={styles.mediaImage} resizeMode="contain" />
               ) : buzz.media.type === 'video' ? (
-                <View style={[styles.videoContainer, {backgroundColor: theme.colors.primary}]}>
-                  <Icon name="play-circle-filled" size={80} color="#FFFFFF" />
-                  <Text style={styles.videoText}>Video</Text>
+                <View style={styles.videoWrapper}>
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: buzz.media.url }}
+                    style={styles.video}
+                    useNativeControls={true}
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={isVideoPlaying}
+                    isLooping={false}
+                    isMuted={false}
+                    onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+                      if (status.isLoaded) {
+                        setIsVideoPlaying(status.isPlaying);
+                      }
+                    }}
+                    onError={(error) => {
+                      console.error('Video playback error:', error);
+                      Alert.alert('Video Error', 'Failed to load video. Please check your connection.');
+                    }}
+                  />
+                  {!isVideoPlaying && (
+                    <TouchableOpacity
+                      style={styles.playButtonOverlay}
+                      onPress={async () => {
+                        try {
+                          if (videoRef.current) {
+                            await videoRef.current.playAsync();
+                            setIsVideoPlaying(true);
+                          }
+                        } catch (error) {
+                          console.error('Error playing video:', error);
+                        }
+                      }}>
+                      <View style={[styles.playButton, {backgroundColor: theme.colors.primary}]}>
+                        <Icon name="play-arrow" size={60} color="#FFFFFF" />
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -379,17 +434,39 @@ const styles = StyleSheet.create({
     height: width * 0.8,
     borderRadius: 12,
   },
-  videoContainer: {
+  videoWrapper: {
     width: '100%',
     height: width * 0.8,
     borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  playButtonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  videoText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    marginTop: 10,
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
   },
   interestsSection: {
     flexDirection: 'row',

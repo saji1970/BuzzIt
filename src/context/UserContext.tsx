@@ -67,7 +67,7 @@ interface UserContextType {
   buzzes: Buzz[];
   interests: Interest[];
   setUser: (user: User | null) => void;
-  addBuzz: (buzz: Omit<Buzz, 'id' | 'createdAt'>) => void;
+  addBuzz: (buzz: Omit<Buzz, 'id' | 'createdAt'> | Buzz, skipApiCall?: boolean) => Promise<void>;
   likeBuzz: (buzzId: string) => void;
   shareBuzz: (buzzId: string) => void;
   updateUserInterests: (interests: Interest[]) => void;
@@ -271,11 +271,59 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
 
-  const addBuzz = async (buzzData: Omit<Buzz, 'id' | 'createdAt'>) => {
-    console.log('Adding buzz:', buzzData);
+  const addBuzz = async (buzzData: Omit<Buzz, 'id' | 'createdAt'> | Buzz, skipApiCall: boolean = false) => {
+    console.log('Adding buzz:', buzzData, 'skipApiCall:', skipApiCall);
+    
+    // Check if buzz already has an ID (means it was already created on server)
+    const isAlreadyCreated = 'id' in buzzData && buzzData.id;
+    
+    // If buzz already exists in state, don't add it again
+    if (isAlreadyCreated) {
+      setBuzzes(prevBuzzes => {
+        const exists = prevBuzzes.some(b => b.id === buzzData.id);
+        if (exists) {
+          console.log('Buzz already exists, skipping duplicate:', buzzData.id);
+          return prevBuzzes;
+        }
+        return prevBuzzes;
+      });
+    }
+    
     try {
+      if (skipApiCall || isAlreadyCreated) {
+        // Buzz was already created on server, just add to local state
+        const newBuzz: Buzz = isAlreadyCreated 
+          ? {
+              ...buzzData as Buzz,
+              createdAt: (buzzData as Buzz).createdAt ? new Date((buzzData as Buzz).createdAt) : new Date(),
+            }
+          : {
+              ...buzzData,
+              id: Date.now().toString(),
+              createdAt: new Date(),
+            } as Buzz;
+        
+        setBuzzes(prevBuzzes => {
+          // Check for duplicates before adding
+          const exists = prevBuzzes.some(b => b.id === newBuzz.id);
+          if (exists) {
+            console.log('Buzz already exists in state, skipping:', newBuzz.id);
+            return prevBuzzes;
+          }
+          const updatedBuzzes = [newBuzz, ...prevBuzzes];
+          AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+          return updatedBuzzes;
+        });
+        
+        // Refresh buzzes after a short delay to get latest from server
+        setTimeout(() => {
+          loadBuzzes();
+        }, 1000);
+        return Promise.resolve();
+      }
+      
       // Try to save to backend first - this is critical for other users to see the buzz
-      const response = await ApiService.createBuzz(buzzData);
+      const response = await ApiService.createBuzz(buzzData as Omit<Buzz, 'id' | 'createdAt'>);
       console.log('API response:', response);
       
       if (response.success && response.data) {
@@ -285,6 +333,12 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
           createdAt: response.data.createdAt ? new Date(response.data.createdAt) : new Date(),
         };
         setBuzzes(prevBuzzes => {
+          // Check for duplicates before adding
+          const exists = prevBuzzes.some(b => b.id === newBuzz.id);
+          if (exists) {
+            console.log('Buzz already exists in state, skipping:', newBuzz.id);
+            return prevBuzzes;
+          }
           const updatedBuzzes = [newBuzz, ...prevBuzzes];
           // Also save to local storage as backup
           AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
@@ -292,7 +346,7 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         });
         console.log('Buzz saved to server successfully');
         
-        // Refresh buzzes from server to ensure all users see the new buzz
+        // Refresh buzzes from server to ensure all users see the new buzz (faster refresh)
         setTimeout(() => {
           loadBuzzes();
         }, 500);
@@ -300,12 +354,17 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         // API failed - show error but still save locally for this user
         console.error('API failed to save buzz:', response.error);
         const newBuzz: Buzz = {
-          ...buzzData,
+          ...buzzData as Omit<Buzz, 'id' | 'createdAt'>,
           id: Date.now().toString(),
           createdAt: new Date(),
         };
         
         setBuzzes(prevBuzzes => {
+          // Check for duplicates
+          const exists = prevBuzzes.some(b => b.id === newBuzz.id);
+          if (exists) {
+            return prevBuzzes;
+          }
           const updatedBuzzes = [newBuzz, ...prevBuzzes];
           // Save to AsyncStorage as fallback
           AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
@@ -322,18 +381,23 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     } catch (error: any) {
       console.error('Error saving buzz:', error);
       // Network or other error - save locally but warn user
-      const newBuzz: Buzz = {
-        ...buzzData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-      };
-      
-      setBuzzes(prevBuzzes => {
-        const updatedBuzzes = [newBuzz, ...prevBuzzes];
-        // Save to AsyncStorage
-        AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
-        return updatedBuzzes;
-      });
+        const newBuzz: Buzz = {
+          ...buzzData as Omit<Buzz, 'id' | 'createdAt'>,
+          id: Date.now().toString(),
+          createdAt: new Date(),
+        };
+        
+        setBuzzes(prevBuzzes => {
+          // Check for duplicates
+          const exists = prevBuzzes.some(b => b.id === newBuzz.id);
+          if (exists) {
+            return prevBuzzes;
+          }
+          const updatedBuzzes = [newBuzz, ...prevBuzzes];
+          // Save to AsyncStorage
+          AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
+          return updatedBuzzes;
+        });
       
       Alert.alert(
         'Network Error',
