@@ -1954,65 +1954,33 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
     let savedStream;
     if (db.isConnected()) {
       try {
-        // Only include channel_id if it exists and is not null/undefined
-        const hasChannelId = newStreamData.channelId && typeof newStreamData.channelId === 'string' && newStreamData.channelId.trim() !== '';
-        
-        // Build query dynamically based on whether channel_id exists
-        let query, params;
-        if (hasChannelId) {
-          query = `
-            INSERT INTO live_streams (
-              id, user_id, username, display_name, title, description, stream_url,
-              thumbnail_url, is_live, viewers, category, tags, channel_id,
-              restream_key, restream_rtmp_url, restream_playback_url
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-            RETURNING *
-          `;
-          params = [
-            newStreamData.id,
-            newStreamData.userId,
-            newStreamData.username,
-            newStreamData.displayName,
-            newStreamData.title,
-            newStreamData.description,
-            newStreamData.streamUrl,
-            newStreamData.thumbnailUrl,
-            newStreamData.isLive,
-            newStreamData.viewers,
-            newStreamData.category,
-            JSON.stringify(newStreamData.tags || []),
-            newStreamData.channelId,
-            newStreamData.restreamKey || null,
-            newStreamData.restreamRtmpUrl || null,
-            newStreamData.restreamPlaybackUrl || null,
-          ];
-        } else {
-          query = `
-            INSERT INTO live_streams (
-              id, user_id, username, display_name, title, description, stream_url,
-              thumbnail_url, is_live, viewers, category, tags,
-              restream_key, restream_rtmp_url, restream_playback_url
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING *
-          `;
-          params = [
-            newStreamData.id,
-            newStreamData.userId,
-            newStreamData.username,
-            newStreamData.displayName,
-            newStreamData.title,
-            newStreamData.description,
-            newStreamData.streamUrl,
-            newStreamData.thumbnailUrl,
-            newStreamData.isLive,
-            newStreamData.viewers,
-            newStreamData.category,
-            JSON.stringify(newStreamData.tags || []),
-            newStreamData.restreamKey || null,
-            newStreamData.restreamRtmpUrl || null,
-            newStreamData.restreamPlaybackUrl || null,
-          ];
-        }
+        // Always exclude channel_id from INSERT since the column may not exist in the database
+        // This prevents errors if the database table hasn't been migrated yet
+        const query = `
+          INSERT INTO live_streams (
+            id, user_id, username, display_name, title, description, stream_url,
+            thumbnail_url, is_live, viewers, category, tags,
+            restream_key, restream_rtmp_url, restream_playback_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          RETURNING *
+        `;
+        const params = [
+          newStreamData.id,
+          newStreamData.userId,
+          newStreamData.username,
+          newStreamData.displayName,
+          newStreamData.title,
+          newStreamData.description,
+          newStreamData.streamUrl,
+          newStreamData.thumbnailUrl,
+          newStreamData.isLive,
+          newStreamData.viewers,
+          newStreamData.category,
+          JSON.stringify(newStreamData.tags || []),
+          newStreamData.restreamKey || null,
+          newStreamData.restreamRtmpUrl || null,
+          newStreamData.restreamPlaybackUrl || null,
+        ];
         
         const result = await db.query(query, params);
         
