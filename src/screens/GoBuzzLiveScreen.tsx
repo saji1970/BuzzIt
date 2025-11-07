@@ -18,6 +18,7 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
+import * as Clipboard from 'expo-clipboard';
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
@@ -56,6 +57,22 @@ const GoBuzzLiveScreen: React.FC = () => {
   
   // Get camera devices
   const device = useCameraDevice(cameraPosition);
+
+  const copyToClipboard = async (value: string | null | undefined, label: string) => {
+    if (!value) {
+      Alert.alert('Unavailable', `${label} is not configured.`);
+      return;
+    }
+    try {
+      await Clipboard.setStringAsync(value);
+      Alert.alert('Copied', `${label} copied to clipboard.`);
+    } catch (error) {
+      console.error('Clipboard error:', error);
+      Alert.alert('Error', `Unable to copy ${label}.`);
+    }
+  };
+
+  const getPlaybackUrl = () => currentStream?.ivsPlaybackUrl || currentStream?.streamUrl || '';
 
   // Request camera permission on mount and log camera status
   useEffect(() => {
@@ -160,12 +177,14 @@ const GoBuzzLiveScreen: React.FC = () => {
         setIsStreaming(true);
         // Increment viewer when starting
         await ApiService.updateViewers(response.data.id, 'increment');
-        
-        // Show info about streaming (only once)
-        if (!response.data.streamUrl || response.data.streamUrl.trim() === '') {
+
+        const playbackUrl = response.data.ivsPlaybackUrl || response.data.streamUrl || '';
+        if (!playbackUrl.trim()) {
           Alert.alert(
             'Stream Started',
-            'Your live stream has started! Note: For viewers to see your video, a streaming server needs to be configured. Currently, viewers will see a "stream starting" message.',
+            response.data.ivsIngestRtmpsUrl
+              ? 'Your live stream has started! Configure your encoder (OBS or mobile) with the RTMPS server and stream key shown below so viewers can see the video.'
+              : 'Your live stream has started! Configure a streaming server so viewers can see the video.',
             [{ text: 'OK' }]
           );
         }
@@ -295,7 +314,7 @@ const GoBuzzLiveScreen: React.FC = () => {
     if (!currentStream) return;
     
     try {
-      const shareUrl = `https://buzzit-production.up.railway.app/stream/${currentStream.id}`;
+      const shareUrl = getPlaybackUrl() || `https://buzzit-production.up.railway.app/stream/${currentStream.id}`;
       await Share.share({
         message: `Check out my live stream: "${currentStream.title}"\n${shareUrl}`,
         title: currentStream.title,
@@ -324,6 +343,70 @@ const GoBuzzLiveScreen: React.FC = () => {
       <Text style={styles.commentTime}>{formatTime(item.timestamp)}</Text>
     </View>
   );
+
+  const renderBroadcastInfo = () => {
+    if (!currentStream) return null;
+
+    const hasIvsCredentials =
+      !!currentStream.ivsIngestRtmpsUrl ||
+      !!currentStream.ivsStreamKey ||
+      !!currentStream.ivsSrtUrl;
+    const hasRestreamCredentials =
+      !!currentStream.restreamRtmpUrl ||
+      !!currentStream.restreamKey;
+
+    if (!hasIvsCredentials && !hasRestreamCredentials) {
+      return null;
+    }
+
+    const renderRow = (label: string, value?: string | null) => {
+      if (!value || value.trim() === '') return null;
+      return (
+        <View style={styles.broadcastRow} key={`${label}-${value}`}>
+          <View style={styles.broadcastTextContainer}>
+            <Text style={styles.broadcastInfoLabel}>{label}</Text>
+            <Text style={styles.broadcastInfoValue} selectable numberOfLines={3}>
+              {value}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={() => copyToClipboard(value, label)}>
+            <Icon name="content-copy" size={16} color="#FFFFFF" />
+            <Text style={styles.copyButtonText}>Copy</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    };
+
+    return (
+      <View style={styles.broadcastInfoContainer}>
+        <Text style={styles.broadcastInfoTitle}>Broadcast Credentials</Text>
+        <Text style={styles.broadcastInfoHint}>
+          Use these values inside your encoder (OBS, Larix, etc.) to send video to Buzz Live.
+        </Text>
+
+        {hasIvsCredentials && (
+          <View style={styles.broadcastSection}>
+            <Text style={styles.broadcastSectionTitle}>Amazon IVS</Text>
+            {renderRow('RTMPS Server', currentStream.ivsIngestRtmpsUrl)}
+            {renderRow('Stream Key', currentStream.ivsStreamKey)}
+            {renderRow('SRT URL', currentStream.ivsSrtUrl)}
+            {renderRow('SRT Passphrase', currentStream.ivsSrtPassphrase)}
+          </View>
+        )}
+
+        {hasRestreamCredentials && (
+          <View style={styles.broadcastSection}>
+            <Text style={styles.broadcastSectionTitle}>Restream</Text>
+            {renderRow('RTMP Server', currentStream.restreamRtmpUrl)}
+            {renderRow('Stream Key', currentStream.restreamKey)}
+            {renderRow('Playback URL', currentStream.restreamPlaybackUrl)}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // Show permission request screen
   if (!hasPermission) {
@@ -507,6 +590,7 @@ const GoBuzzLiveScreen: React.FC = () => {
         {/* Live Controls */}
         {isStreaming && (
           <>
+            {renderBroadcastInfo()}
             {/* Bottom Controls */}
             <View style={styles.bottomControls}>
               {/* Toggle Camera */}
@@ -803,7 +887,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   commentsContent: {
-    paddingBottom: 10,
+    padding: 12,
+    paddingBottom: 80,
   },
   commentItem: {
     padding: 8,
@@ -838,21 +923,23 @@ const styles = StyleSheet.create({
   },
   commentInputContainer: {
     flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
     alignItems: 'flex-end',
     gap: 8,
-    marginTop: 10,
   },
   commentInput: {
     flex: 1,
+    maxHeight: 100,
+    padding: 12,
     borderRadius: 20,
-    padding: 10,
-    fontSize: 12,
-    maxHeight: 60,
+    fontSize: 14,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -875,6 +962,69 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  broadcastInfoContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+  },
+  broadcastInfoTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  broadcastInfoHint: {
+    color: '#FFFFFF',
+    opacity: 0.7,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  broadcastSection: {
+    marginTop: 16,
+  },
+  broadcastSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  broadcastRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  broadcastTextContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
+  broadcastInfoLabel: {
+    color: '#B0B0B0',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  broadcastInfoValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  copyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
 

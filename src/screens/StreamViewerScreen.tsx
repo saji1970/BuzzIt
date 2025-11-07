@@ -53,6 +53,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [isLiked, setIsLiked] = useState(false);
   const videoRef = useRef<Video>(null);
   const commentsEndRef = useRef<View>(null);
+  const playbackUrl = stream.ivsPlaybackUrl || stream.streamUrl || '';
 
   useEffect(() => {
     if (visible && stream) {
@@ -287,10 +288,10 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {stream.streamUrl && stream.streamUrl.trim() !== '' && stream.isLive && isValidStreamUrl(stream.streamUrl) ? (
+          {playbackUrl && playbackUrl.trim() !== '' && stream.isLive && isValidStreamUrl(playbackUrl) ? (
             <Video
               ref={videoRef}
-              source={{ uri: stream.streamUrl }}
+              source={{ uri: playbackUrl }}
               style={styles.video}
               useNativeControls={true}
               resizeMode="contain"
@@ -318,13 +319,13 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               <Icon name="videocam" size={64} color="#FFFFFF" />
               <Text style={styles.placeholderText}>Live stream starting...</Text>
               <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7, paddingHorizontal: 20 }]}>
-                {!stream.streamUrl || stream.streamUrl.trim() === ''
+                {!playbackUrl || playbackUrl.trim() === ''
                   ? 'The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
-                  : stream.streamUrl.startsWith('rtmp://')
+                  : playbackUrl.startsWith('rtmp://')
                   ? 'Streaming server is being configured. Please wait for the stream to connect.'
                   : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
               </Text>
-              {stream.streamUrl && stream.streamUrl.includes('example.com') && (
+              {playbackUrl && playbackUrl.includes('example.com') && (
                 <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5 }]}>
                   Note: A streaming server needs to be configured for live video playback.
                 </Text>
