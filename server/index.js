@@ -1804,7 +1804,7 @@ app.get('/api/live-streams', async (req, res) => {
           displayName: row.display_name,
           title: row.title,
           description: row.description,
-          streamUrl: row.restream_playback_url || row.stream_url,
+          streamUrl: process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url,
           thumbnailUrl: row.thumbnail_url,
           isLive: row.is_live,
           viewers: row.viewers,
@@ -1816,6 +1816,11 @@ app.get('/api/live-streams', async (req, res) => {
           restreamPlaybackUrl: row.restream_playback_url,
           startedAt: row.started_at,
           endedAt: row.ended_at,
+          ivsIngestRtmpsUrl: process.env.IVS_INGEST_RTMPS_URL || null,
+          ivsStreamKey: process.env.IVS_STREAM_KEY || null,
+          ivsPlaybackUrl: process.env.IVS_PLAYBACK_URL || null,
+          ivsSrtUrl: process.env.IVS_SRT_URL || null,
+          ivsSrtPassphrase: process.env.IVS_SRT_PASSPHRASE || null,
         }));
       } catch (dbError) {
         console.error('Database live streams error:', dbError);
@@ -1848,7 +1853,7 @@ app.get('/api/live-streams/:id', async (req, res) => {
             displayName: row.display_name,
             title: row.title,
             description: row.description,
-            streamUrl: row.restream_playback_url || row.stream_url,
+            streamUrl: process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url,
             thumbnailUrl: row.thumbnail_url,
             isLive: row.is_live,
             viewers: row.viewers,
@@ -1860,6 +1865,11 @@ app.get('/api/live-streams/:id', async (req, res) => {
             restreamPlaybackUrl: row.restream_playback_url,
             startedAt: row.started_at,
             endedAt: row.ended_at,
+            ivsIngestRtmpsUrl: process.env.IVS_INGEST_RTMPS_URL || null,
+            ivsStreamKey: process.env.IVS_STREAM_KEY || null,
+            ivsPlaybackUrl: process.env.IVS_PLAYBACK_URL || null,
+            ivsSrtUrl: process.env.IVS_SRT_URL || null,
+            ivsSrtPassphrase: process.env.IVS_SRT_PASSPHRASE || null,
           };
         }
       } catch (dbError) {
@@ -1911,6 +1921,13 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
     }
 
     const streamId = generateId();
+
+    // Load IVS configuration from environment variables
+    const ivsIngestRtmpsUrl = process.env.IVS_INGEST_RTMPS_URL || null;
+    const ivsStreamKey = process.env.IVS_STREAM_KEY || null;
+    const ivsPlaybackUrl = process.env.IVS_PLAYBACK_URL || null;
+    const ivsSrtUrl = process.env.IVS_SRT_URL || null;
+    const ivsSrtPassphrase = process.env.IVS_SRT_PASSPHRASE || null;
     
     // Get Restream credentials if available
     let restreamKey = null;
@@ -1941,7 +1958,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       description: req.body.description || '',
       // Don't set a default RTMP URL - RTMP is for streaming TO a server, not playback
       // Only set streamUrl if a valid playback URL is provided (HLS, DASH, or WebRTC)
-      streamUrl: restreamPlaybackUrl || req.body.streamUrl || '',
+      streamUrl: ivsPlaybackUrl || restreamPlaybackUrl || req.body.streamUrl || '',
       thumbnailUrl: req.body.thumbnailUrl || user.avatar,
       isLive: true,
       viewers: 0,
@@ -1951,6 +1968,11 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       restreamKey: restreamKey,
       restreamRtmpUrl: restreamRtmpUrl,
       restreamPlaybackUrl: restreamPlaybackUrl,
+      ivsIngestRtmpsUrl,
+      ivsStreamKey,
+      ivsPlaybackUrl,
+      ivsSrtUrl,
+      ivsSrtPassphrase,
     };
 
     let savedStream;
@@ -2002,6 +2024,11 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           restreamRtmpUrl: row.restream_rtmp_url || null,
           restreamPlaybackUrl: row.restream_playback_url || null,
           startedAt: row.started_at,
+          ivsIngestRtmpsUrl,
+          ivsStreamKey,
+          ivsPlaybackUrl,
+          ivsSrtUrl,
+          ivsSrtPassphrase,
         };
       } catch (saveError) {
         console.error('Error saving live stream:', saveError);
