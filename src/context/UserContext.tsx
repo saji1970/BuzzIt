@@ -1,5 +1,5 @@
 import React, {createContext, useContext, useState, useEffect} from 'react';
-import {Alert} from 'react-native';
+import {Alert, Share} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../services/APIService';
 
@@ -45,6 +45,7 @@ export interface Buzz {
     type: 'image' | 'video' | null;
     url: string | null;
   };
+  localMediaUri?: string | null;
   interests: Interest[];
   location?: {
     latitude: number;
@@ -109,7 +110,6 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   const [interests] = useState<Interest[]>(defaultInterests);
 
   useEffect(() => {
-    // Load user and buzzes on app start
     loadUser();
     loadBuzzes();
   }, []);
@@ -276,6 +276,11 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
     
     // Check if buzz already has an ID (means it was already created on server)
     const isAlreadyCreated = 'id' in buzzData && buzzData.id;
+    const originalMedia = (buzzData as any)?.media;
+    const incomingLocalUri =
+      (buzzData as any)?.localMediaUri ||
+      (originalMedia?.localUri ?? (typeof originalMedia?.url === 'string' && (originalMedia.url.startsWith('file://') || originalMedia.url.startsWith('content://')) ? originalMedia.url : null));
+    const localMediaUri = incomingLocalUri || null;
     
     // If buzz already exists in state, don't add it again
     if (isAlreadyCreated) {
@@ -294,13 +299,15 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         // Buzz was already created on server, just add to local state
         const newBuzz: Buzz = isAlreadyCreated 
           ? {
-              ...buzzData as Buzz,
+              ...(buzzData as Buzz),
               createdAt: (buzzData as Buzz).createdAt ? new Date((buzzData as Buzz).createdAt) : new Date(),
+              localMediaUri: (buzzData as Buzz).localMediaUri ?? localMediaUri,
             }
           : {
-              ...buzzData,
+              ...(buzzData as Omit<Buzz, 'id' | 'createdAt'>),
               id: Date.now().toString(),
               createdAt: new Date(),
+              localMediaUri,
             } as Buzz;
         
         setBuzzes(prevBuzzes => {
@@ -328,9 +335,10 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
       
       if (response.success && response.data) {
         // API call successful - buzz is now on server
-        const newBuzz = {
+        const newBuzz: Buzz = {
           ...response.data,
           createdAt: response.data.createdAt ? new Date(response.data.createdAt) : new Date(),
+          localMediaUri,
         };
         setBuzzes(prevBuzzes => {
           // Check for duplicates before adding
@@ -354,9 +362,10 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         // API failed - show error but still save locally for this user
         console.error('API failed to save buzz:', response.error);
         const newBuzz: Buzz = {
-          ...buzzData as Omit<Buzz, 'id' | 'createdAt'>,
+          ...(buzzData as Omit<Buzz, 'id' | 'createdAt'>),
           id: Date.now().toString(),
           createdAt: new Date(),
+          localMediaUri,
         };
         
         setBuzzes(prevBuzzes => {
@@ -382,9 +391,10 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
       console.error('Error saving buzz:', error);
       // Network or other error - save locally but warn user
         const newBuzz: Buzz = {
-          ...buzzData as Omit<Buzz, 'id' | 'createdAt'>,
+          ...(buzzData as Omit<Buzz, 'id' | 'createdAt'>),
           id: Date.now().toString(),
           createdAt: new Date(),
+          localMediaUri,
         };
         
         setBuzzes(prevBuzzes => {
@@ -429,22 +439,69 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   const shareBuzz = async (buzzId: string) => {
-    const updatedBuzzes = buzzes.map(buzz => {
-      if (buzz.id === buzzId) {
+    const buzz = buzzes.find(item => item.id === buzzId);
+    if (!buzz) {
+      Alert.alert('Error', 'Unable to share this buzz right now.');
+      return;
+    }
+
+    const shareLines: string[] = [];
+    shareLines.push(`${buzz.username} on BuzzIt:`);
+    if (buzz.content) {
+      shareLines.push(buzz.content);
+    }
+    if (buzz.eventDate) {
+      shareLines.push(`Event Date: ${buzz.eventDate}`);
+    }
+    if (buzz.interests && buzz.interests.length > 0) {
+      const interestList = buzz.interests.map(interest => interest.name).join(', ');
+      shareLines.push(`Interests: ${interestList}`);
+    }
+
+    const message = shareLines.filter(Boolean).join('\n\n');
+
+    let shared = false;
+    try {
+      const result = await Share.share({
+        message,
+        url: buzz.media?.url || undefined,
+      });
+
+      if (result.action === Share.sharedAction) {
+        shared = true;
+      }
+    } catch (error) {
+      console.error('Error launching share sheet:', error);
+      Alert.alert('Error', 'Unable to open sharing options. Please try again later.');
+      return;
+    }
+
+    if (!shared) {
+      return;
+    }
+
+    const updatedBuzzes = buzzes.map(item => {
+      if (item.id === buzzId) {
         return {
-          ...buzz,
-          shares: buzz.shares + 1,
+          ...item,
+          shares: item.shares + 1,
         };
       }
-      return buzz;
+      return item;
     });
-    
+
     setBuzzes(updatedBuzzes);
-    
+
     try {
       await AsyncStorage.setItem('buzzes', JSON.stringify(updatedBuzzes));
     } catch (error) {
-      console.log('Error updating buzz:', error);
+      console.log('Error updating buzz cache:', error);
+    }
+
+    try {
+      await ApiService.shareBuzz(buzzId);
+    } catch (error) {
+      console.log('Error syncing share count:', error);
     }
   };
 

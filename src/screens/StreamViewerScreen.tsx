@@ -13,9 +13,9 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { Video } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import Video, {ResizeMode} from 'react-native-video';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -51,7 +51,6 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [newComment, setNewComment] = useState('');
   const [viewers, setViewers] = useState(stream.viewers || 0);
   const [isLiked, setIsLiked] = useState(false);
-  const videoRef = useRef<Video>(null);
   const commentsEndRef = useRef<View>(null);
   const playbackUrl = stream.ivsPlaybackUrl || stream.streamUrl || '';
 
@@ -290,13 +289,11 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         <View style={styles.videoContainer}>
           {playbackUrl && playbackUrl.trim() !== '' && stream.isLive && isValidStreamUrl(playbackUrl) ? (
             <Video
-              ref={videoRef}
               source={{ uri: playbackUrl }}
               style={styles.video}
-              useNativeControls={true}
-              resizeMode="contain"
-              shouldPlay={true}
-              isLooping={false}
+              resizeMode={ResizeMode.CONTAIN}
+              controls
+              repeat={false}
               onLoadStart={() => {
                 console.log('Video loading started for stream:', stream.id);
               }}
@@ -305,13 +302,6 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               }}
               onError={(error) => {
                 console.error('Video playback error:', error);
-                // Don't show alert immediately - might be temporary network issue
-                // Video component will show error state
-              }}
-              onPlaybackStatusUpdate={(status) => {
-                if (status.isLoaded && status.error) {
-                  console.error('Video playback status error:', status.error);
-                }
               }}
             />
           ) : stream.isLive ? (

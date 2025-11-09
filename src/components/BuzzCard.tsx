@@ -9,9 +9,9 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Video, ResizeMode } from 'expo-av';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
+import Video, {ResizeMode} from 'react-native-video';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -20,6 +20,7 @@ import {useFeatures} from '../context/FeatureContext';
 import {useAuth} from '../context/AuthContext';
 import SocialMediaShareModal from './SocialMediaShareModal';
 import ApiService from '../services/APIService';
+import {API_CONFIG} from '../config/API_CONFIG';
 
 const {width} = Dimensions.get('window');
 
@@ -250,155 +251,229 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     return `${month} ${day}, ${year} ${hours}:${minutes}`;
   };
 
+  const deriveRemoteMediaUrl = () => {
+    if (buzz.media?.url) {
+      return buzz.media.url;
+    }
+    const legacyMediaUrl = (buzz as any).mediaUrl || (buzz as any).mediaURI || (buzz as any).mediaUri;
+    if (typeof legacyMediaUrl === 'string') {
+      return legacyMediaUrl;
+    }
+    return null;
+  };
+
+  const inferredMediaUrl = deriveRemoteMediaUrl();
+
+  const resolveMediaUri = (uri: string | null) => {
+    if (!uri) {
+      return null;
+    }
+    if (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:')) {
+      return uri;
+    }
+    const baseUrl = API_CONFIG.getBackendURL().replace(/\/$/, '');
+    return `${baseUrl}${uri.startsWith('/') ? '' : '/'}${uri}`;
+  };
+
+  const hasLocalAsset = buzz.localMediaUri && (buzz.localMediaUri.startsWith('file://') || buzz.localMediaUri.startsWith('content://'));
+  const remoteMediaUrl = resolveMediaUri(inferredMediaUrl);
+  const mediaUri = hasLocalAsset
+    ? buzz.localMediaUri
+    : remoteMediaUrl || resolveMediaUri(buzz.localMediaUri || null);
+
+  const deriveMediaType = () => {
+    if (buzz.media?.type) {
+      return buzz.media.type;
+    }
+    const legacyType = (buzz as any).mediaType || (buzz as any).type;
+    if (legacyType && ['image', 'video'].includes(legacyType)) {
+      return legacyType;
+    }
+    if (mediaUri) {
+      const extension = mediaUri.split('?')[0].split('.').pop()?.toLowerCase();
+      if (extension && ['mp4', 'mov', 'm4v', 'avi', 'webm'].includes(extension)) {
+        return 'video';
+      }
+      return 'image';
+    }
+    return null;
+  };
+
+  const derivedMediaType = deriveMediaType();
+  const hasImage = derivedMediaType === 'image' && !!mediaUri;
+  const hasVideo = derivedMediaType === 'video' && !!mediaUri;
+
+  const renderAction = (
+    iconName: string,
+    label: string,
+    active: boolean,
+    onPressAction: () => void,
+  ) => (
+    <TouchableOpacity
+      style={[
+        styles.actionPill,
+        {backgroundColor: active ? theme.colors.primary : 'rgba(15,23,42,0.08)'}
+      ]}
+      onPress={onPressAction}
+      activeOpacity={0.85}
+    >
+      <Icon
+        name={iconName}
+        size={18}
+        color={active ? '#FFFFFF' : theme.colors.textSecondary}
+      />
+      <Text
+        style={[styles.actionLabel, {color: active ? '#FFFFFF' : theme.colors.textSecondary}]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
-      <Animatable.View
-        animation="fadeInUp"
-        style={[styles.container, {backgroundColor: theme.colors.surface}]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.userInfo}>
-          <View style={[styles.avatar, {backgroundColor: theme.colors.primary}]}>
-            {buzz.userAvatar ? (
-              <Image source={{uri: buzz.userAvatar}} style={styles.avatarImage} />
+    <>
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+        <Animatable.View
+          animation="fadeInUp"
+          style={[styles.card, {backgroundColor: theme.colors.surface}]}
+        >
+          <View style={styles.coverContainer}>
+            {hasImage ? (
+              <Image source={{uri: mediaUri as string}} style={styles.coverImage} />
+            ) : hasVideo ? (
+              <View style={styles.coverImage}>
+                <Video
+                  source={{uri: mediaUri as string}}
+                  style={styles.coverImage}
+                  resizeMode={ResizeMode.COVER}
+                  paused
+                  muted
+                />
+                <View style={styles.videoBadge}>
+                  <Icon name="play-arrow" size={18} color="#FFFFFF" />
+                </View>
+              </View>
             ) : (
-              <Text style={styles.avatarText}>
-                {buzz.username.charAt(0).toUpperCase()}
-              </Text>
+              <LinearGradient
+                colors={theme.gradients?.accent || [theme.colors.primary, theme.colors.secondary]}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 1}}
+                style={styles.coverPlaceholder}
+              >
+                <Icon name="bolt" size={30} color="rgba(255,255,255,0.9)" />
+              </LinearGradient>
             )}
-          </View>
-          <View style={styles.userDetails}>
-            <Text style={[styles.username, {color: theme.colors.text}]}>
-              {buzz.username}
-            </Text>
-            <View style={styles.timeContainer}>
-              <Text style={[styles.timeAgo, {color: theme.colors.textSecondary}]}>
-                {formatTimeAgo(buzz.createdAt)}
-              </Text>
-              <Text style={[styles.dateTime, {color: theme.colors.textSecondary}]}>
-                • {formatDateTime(buzz.createdAt)}
-              </Text>
+
+            <LinearGradient
+              colors={["rgba(15,23,42,0.05)", "rgba(15,23,42,0.75)"]}
+              style={styles.coverOverlay}
+            />
+
+            <TouchableOpacity
+              style={styles.overlayMenuButton}
+              onPress={() => setShowMenuModal(true)}
+            >
+              <Icon name="more-horiz" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <View style={styles.overlayFooter}>
+              <View style={styles.overlayUserInfo}>
+                <View style={[styles.overlayAvatar, {borderColor: 'rgba(255,255,255,0.35)'}]}>
+                  {buzz.userAvatar ? (
+                    <Image source={{uri: buzz.userAvatar}} style={styles.overlayAvatarImage} />
+                  ) : (
+                    <Text style={styles.overlayAvatarText}>
+                      {buzz.username.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.overlayTextContainer}>
+                  <Text style={styles.overlayName}>{buzz.username}</Text>
+                  <Text style={styles.overlayMeta}>
+                    {formatTimeAgo(buzz.createdAt)} • {formatDateTime(buzz.createdAt)}
+                  </Text>
+                </View>
+              </View>
+              {!isOwnBuzz && (
+                <TouchableOpacity
+                  style={[styles.followChip, isFollowing && {backgroundColor: '#FFFFFF'}]}
+                  onPress={handleFollow}
+                >
+                  <Text
+                    style={[
+                      styles.followChipText,
+                      isFollowing && {color: theme.colors.primary},
+                    ]}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
-          {!isOwnBuzz && (
-            <TouchableOpacity
-              style={[styles.followButton, isFollowing && styles.followingButton]}
-              onPress={handleFollow}>
-              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity style={styles.moreButton} onPress={() => setShowMenuModal(true)}>
-          <Icon name="more-vert" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
 
-      {/* Content */}
-      <View style={styles.content}>
-        <Text style={[styles.buzzText, {color: theme.colors.text}]} numberOfLines={3}>
-          {buzz.content}
-        </Text>
-
-        {/* Media */}
-        {buzz.media && buzz.media.url && (
-          <View style={styles.mediaContainer}>
-            {buzz.media.type === 'image' ? (
-              <Image source={{uri: buzz.media.url}} style={styles.media} />
-            ) : (
-              <Video
-                source={{ uri: buzz.media.url }}
-                style={styles.video}
-                useNativeControls={true}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={false}
-                isLooping={false}
-                isMuted={false}
-              />
-            )}
-          </View>
-        )}
-
-        {/* Countdown for scheduled streams/events */}
-        {buzz.eventDate && countdown && (
-          <View style={[styles.countdownContainer, {backgroundColor: theme.colors.primary + '20'}]}>
-            <Icon name="schedule" size={16} color={theme.colors.primary} />
-            <Text style={[styles.countdownText, {color: theme.colors.primary}]}>
-              ⏰ {countdown}
+          <View style={styles.body}>
+            <Text style={[styles.contentText, {color: theme.colors.text}]} numberOfLines={4}>
+              {buzz.content}
             </Text>
-          </View>
-        )}
 
-        {/* Interests */}
-        {buzz.interests.length > 0 && (
-          <View style={styles.interestsContainer}>
-            {buzz.interests.slice(0, 3).map((interest, index) => (
-              <View
-                key={interest.id}
-                style={[
-                  styles.interestTag,
-                  {backgroundColor: theme.colors.primary + '20'},
-                ]}>
-                <Text style={styles.interestEmoji}>{interest.emoji}</Text>
-                <Text style={[styles.interestName, {color: theme.colors.primary}]}>
-                  {interest.name}
-                </Text>
+            {buzz.eventDate && countdown ? (
+              <View style={[styles.countdownPill, {backgroundColor: theme.colors.primary + '20'}]}>
+                <Icon name="schedule" size={16} color={theme.colors.primary} />
+                <Text style={[styles.countdownText, {color: theme.colors.primary}]}>{countdown}</Text>
               </View>
-            ))}
-            {buzz.interests.length > 3 && (
-              <View style={[styles.interestTag, {backgroundColor: theme.colors.border}]}>
-                <Text style={[styles.interestName, {color: theme.colors.textSecondary}]}>
-                  +{buzz.interests.length - 3}
-                </Text>
+            ) : null}
+
+            {buzz.interests.length > 0 && (
+              <View style={styles.chipRow}>
+                {buzz.interests.slice(0, 3).map(interest => (
+                  <View
+                    key={interest.id}
+                    style={[styles.chip, {backgroundColor: theme.colors.primary + '18'}]}
+                  >
+                    <Text style={styles.chipEmoji}>{interest.emoji}</Text>
+                    <Text style={[styles.chipLabel, {color: theme.colors.primary}]}>
+                      {interest.name}
+                    </Text>
+                  </View>
+                ))}
+                {buzz.interests.length > 3 && (
+                  <View style={[styles.chip, {backgroundColor: theme.colors.border}]}> 
+                    <Text style={[styles.chipLabel, {color: theme.colors.textSecondary}]}>+{buzz.interests.length - 3}</Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
-        )}
-      </View>
 
-      {/* Actions */}
-      <View style={styles.actions}>
-        {features.buzzLikes && (
-          <TouchableOpacity style={styles.actionButton} onPress={onLike}>
-            <Icon
-              name={buzz.isLiked ? 'favorite' : 'favorite-border'}
-              size={20}
-              color={buzz.isLiked ? theme.colors.error : theme.colors.textSecondary}
-            />
-            <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
-              {buzz.likes}
-            </Text>
-          </TouchableOpacity>
-        )}
+          <View style={styles.actionsRow}>
+            {features.buzzLikes && renderAction(
+              buzz.isLiked ? 'favorite' : 'favorite-border',
+              `${buzz.likes}`,
+              buzz.isLiked,
+              onLike,
+            )}
 
-        <TouchableOpacity style={styles.actionButton} onPress={onPress}>
-          <Icon name="chat-bubble-outline" size={20} color={theme.colors.textSecondary} />
-          <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
-            {buzz.comments}
-          </Text>
-        </TouchableOpacity>
+            {renderAction(
+              'chat-bubble-outline',
+              `${buzz.comments}`,
+              false,
+              () => {
+                if (onPress) {
+                  onPress();
+                }
+              },
+            )}
 
-        {features.buzzShares && (
-          <TouchableOpacity style={styles.actionButton} onPress={handleShareClick}>
-            <Icon name="share" size={20} color={theme.colors.textSecondary} />
-            <Text style={[styles.actionText, {color: theme.colors.textSecondary}]}>
-              {buzz.shares}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.buzzButton}>
-          <LinearGradient
-            colors={[theme.colors.primary, theme.colors.accent]}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 0}}
-            style={styles.buzzButtonGradient}>
-            <Icon name="trending-up" size={16} color="#FFFFFF" />
-            <Text style={styles.buzzButtonText}>BUZZ IT</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+            {features.buzzShares && renderAction(
+              'share',
+              `${buzz.shares}`,
+              false,
+              handleShareClick,
+            )}
+          </View>
+        </Animatable.View>
+      </TouchableOpacity>
 
       <SocialMediaShareModal
         visible={showShareModal}
@@ -416,199 +491,191 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         onRemove={handleRemove}
         isOwnBuzz={isOwnBuzz}
       />
-    </Animatable.View>
-    </TouchableOpacity>
+    </>
   );
 };
 
+const COVER_HEIGHT = width * 0.9;
+
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  card: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: 'rgba(15,23,42,0.2)',
+    shadowOffset: {width: 0, height: 18},
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 12,
   },
-  countdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 6,
-  },
-  countdownText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    paddingBottom: 10,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  userDetails: {
-    flex: 1,
-  },
-  username: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-      timeAgo: {
-        fontSize: 12,
-        marginTop: 2,
-      },
-      timeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 2,
-      },
-      dateTime: {
-        fontSize: 11,
-        marginLeft: 4,
-      },
-  moreButton: {
-    padding: 5,
-  },
-  content: {
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-  },
-  buzzText: {
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 10,
-  },
-  mediaContainer: {
-    marginTop: 10,
-    borderRadius: 10,
+  coverContainer: {
+    position: 'relative',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
   },
-  media: {
+  coverImage: {
     width: '100%',
-    height: 200,
-    resizeMode: 'cover',
+    height: COVER_HEIGHT,
   },
-  video: {
+  coverPlaceholder: {
     width: '100%',
-    height: 200,
+    height: COVER_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  videoPlaceholder: {
-    width: '100%',
-    height: 200,
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayMenuButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(15,23,42,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  interestsContainer: {
+  videoBadge: {
+    position: 'absolute',
+    top: 18,
+    left: 18,
+    backgroundColor: 'rgba(15,23,42,0.4)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  overlayFooter: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  overlayUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  overlayAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    marginRight: 12,
+  },
+  overlayAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  overlayAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  overlayTextContainer: {
+    flex: 1,
+  },
+  overlayName: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  overlayMeta: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  followChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  followChipText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  body: {
+    paddingHorizontal: 22,
+    paddingVertical: 20,
+    gap: 14,
+  },
+  contentText: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  countdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  countdownText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
+    gap: 10,
   },
-  interestTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  interestEmoji: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  interestName: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  actionText: {
-    marginLeft: 5,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  buzzButton: {
-    marginLeft: 'auto',
-  },
-  buzzButtonGradient: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+    paddingVertical: 8,
+    borderRadius: 18,
+    gap: 6,
   },
-  buzzButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  followButton: {
-    backgroundColor: '#1DA1F2',
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  followingButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DBDBDB',
-  },
-  followButtonText: {
-    color: '#FFFFFF',
+  chipEmoji: {
     fontSize: 14,
+  },
+  chipLabel: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  followingButtonText: {
-    color: '#000000',
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 22,
+    paddingBottom: 20,
+  },
+  actionPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 999,
+    paddingVertical: 12,
+  },
+  actionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     width: width * 0.8,
@@ -618,17 +685,17 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
   },
   menuItemText: {
-    fontSize: 16,
-    marginLeft: 16,
-    fontWeight: '400',
+    fontSize: 15,
+    fontWeight: '600',
   },
   menuDivider: {
     height: 1,
-    marginHorizontal: 20,
+    opacity: 0.08,
+    marginVertical: 6,
   },
 });
 

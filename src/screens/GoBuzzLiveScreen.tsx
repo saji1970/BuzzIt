@@ -13,12 +13,12 @@ import {
   Platform,
   Share,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 // @ts-ignore - react-native-vision-camera will be installed
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-import { LinearGradient } from 'expo-linear-gradient';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
@@ -64,7 +64,7 @@ const GoBuzzLiveScreen: React.FC = () => {
       return;
     }
     try {
-      await Clipboard.setStringAsync(value);
+      Clipboard.setString(value);
       Alert.alert('Copied', `${label} copied to clipboard.`);
     } catch (error) {
       console.error('Clipboard error:', error);

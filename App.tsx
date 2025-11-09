@@ -1,10 +1,11 @@
 import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {NavigationContainer, DefaultTheme as NavigationDefaultTheme} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {StatusBar, View, Text} from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import {StatusBar, View, Text, StyleSheet, Platform} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import {ThemeProvider} from './src/context/ThemeContext';
+import {ThemeProvider, Theme, ThemeLayout} from './src/context/ThemeContext';
 import {UserProvider} from './src/context/UserContext';
 import {AuthProvider, useAuth} from './src/context/AuthContext';
 import {FeatureProvider} from './src/context/FeatureContext';
@@ -26,10 +27,12 @@ const MainTabs = () => {
   const {theme} = useTheme();
   const {isAdmin} = useAuth();
 
+  const layout = theme.layout;
+
   return (
     <Tab.Navigator
       screenOptions={({route}) => ({
-        tabBarIcon: ({focused, color, size}) => {
+        tabBarIcon: ({focused}) => {
           let iconName: string;
 
           switch (route.name) {
@@ -37,7 +40,7 @@ const MainTabs = () => {
               iconName = 'home';
               break;
             case 'Create':
-              iconName = 'add-circle';
+              iconName = 'add-circle-outline';
               break;
             case 'Profile':
               iconName = 'person';
@@ -52,21 +55,45 @@ const MainTabs = () => {
               iconName = 'home';
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          const baseStyle = [
+            styles.tabIconWrapper,
+            focused && {backgroundColor: theme.colors.primary + '1A'},
+          ];
+
+          return (
+            <View style={baseStyle}>
+              <Icon
+                name={iconName}
+                size={focused ? 22 : 20}
+                color={focused ? theme.colors.primary : theme.colors.textSecondary}
+              />
+            </View>
+          );
         },
-        tabBarActiveTintColor: theme.colors.accent,
+        tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 6,
         },
-        headerStyle: {
-          backgroundColor: theme.colors.primary,
+        tabBarStyle: getTabBarStyle(theme),
+        tabBarItemStyle: {
+          paddingVertical: 6,
         },
-        headerTintColor: theme.colors.text,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        tabBarBackground: () => (
+          <LinearGradient
+            colors={[
+              'rgba(255,255,255,0.96)',
+              'rgba(255,255,255,0.88)',
+            ]}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 1}}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ),
+        tabBarHideOnKeyboard: true,
+        headerShown: false,
       })}>
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Create" component={CreateBuzzScreen} />
@@ -81,25 +108,47 @@ const AppContent = () => {
   const {theme} = useTheme();
   const {isAuthenticated, isLoading} = useAuth();
 
+  const navTheme = React.useMemo(() => {
+    return {
+      ...NavigationDefaultTheme,
+      colors: {
+        ...NavigationDefaultTheme.colors,
+        background: 'transparent',
+        card: 'transparent',
+        border: 'transparent',
+        text: theme.colors.text,
+        primary: theme.colors.primary,
+      },
+    };
+  }, [theme]);
+
   if (isLoading) {
     return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background}}>
+      <LinearGradient
+        colors={theme.gradients?.background || [theme.colors.background, theme.colors.background]}
+        style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
         <StatusBar
+          translucent
           barStyle={theme.dark ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.colors.primary}
+          backgroundColor="transparent"
         />
         <Text style={{color: theme.colors.text, fontSize: 18}}>Loading...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <>
+    <LinearGradient
+      colors={theme.gradients?.background || [theme.colors.background, theme.colors.background]}
+      start={{x: 0, y: 0}}
+      end={{x: 0, y: 1}}
+      style={appGradientStyle}>
       <StatusBar
+        translucent
         barStyle={theme.dark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.colors.primary}
+        backgroundColor="transparent"
       />
-      <NavigationContainer>
+      <NavigationContainer theme={navTheme}>
         <Stack.Navigator screenOptions={{headerShown: false}}>
           {isAuthenticated ? (
             <>
@@ -114,7 +163,7 @@ const AppContent = () => {
           )}
         </Stack.Navigator>
       </NavigationContainer>
-    </>
+    </LinearGradient>
   );
 };
 
@@ -133,3 +182,40 @@ const App = () => {
 };
 
 export default App;
+
+const appGradientStyle = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+}).container;
+
+const getTabBarStyle = (theme: Theme) => {
+  const layout = theme.layout;
+  return {
+    position: 'absolute' as const,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+    paddingHorizontal: layout?.spacing?.lg || 18,
+    height: Platform.OS === 'ios' ? 88 : 78,
+    marginHorizontal: layout?.spacing?.xl || 24,
+    marginBottom: layout?.spacing?.xl || 24,
+    borderRadius: layout?.radii?.xl || 26,
+    paddingVertical: layout?.spacing?.sm || 8,
+    shadowColor: 'rgba(15,23,42,0.12)',
+    shadowOffset: {width: 0, height: 10},
+    shadowOpacity: 0.2,
+    shadowRadius: 22,
+  };
+};
+
+const styles = StyleSheet.create({
+  tabIconWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

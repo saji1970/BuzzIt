@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,7 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { Video } from 'expo-av';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -44,35 +43,6 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
   onUserPress,
 }) => {
   const {theme} = useTheme();
-  const [videoRef, setVideoRef] = useState<Video | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showControls, setShowControls] = useState(false);
-
-  useEffect(() => {
-    // Don't auto-play to prevent app freezing
-    // User can tap to play if needed
-    return () => {
-      if (videoRef) {
-        videoRef.unloadAsync().catch(() => {});
-      }
-    };
-  }, [stream.id]); // Only cleanup on stream change
-
-  const handlePlayPause = async () => {
-    if (!videoRef) return;
-
-    try {
-      if (isPlaying) {
-        await videoRef.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        await videoRef.playAsync();
-        setIsPlaying(true);
-      }
-    } catch (error) {
-      console.error('Play/pause error:', error);
-    }
-  };
 
   const formatViewers = (count: number): string => {
     if (count >= 1000) {
@@ -129,8 +99,7 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
       style={[styles.container, {backgroundColor: theme.colors.surface}]}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => onPress && onPress(stream)}
-        onLongPress={() => setShowControls(!showControls)}>
+        onPress={() => onPress && onPress(stream)}>
         {/* Video Player or Thumbnail */}
         <View style={styles.videoContainer}>
           {stream.streamUrl && stream.streamUrl.trim() !== '' && stream.isLive && isValidStreamUrl(stream.streamUrl) ? (
@@ -188,19 +157,6 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
             <Icon name="visibility" size={14} color="#FFFFFF" />
             <Text style={styles.viewerText}>{formatViewers(stream.viewers)}</Text>
           </View>
-
-          {/* Play/Pause Overlay */}
-          {showControls && (
-            <TouchableOpacity
-              style={styles.playButton}
-              onPress={handlePlayPause}>
-              <Icon
-                name={isPlaying ? 'pause' : 'play-arrow'}
-                size={40}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          )}
 
           {/* Duration */}
           {!stream.isLive && (

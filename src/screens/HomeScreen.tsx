@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   Dimensions,
   TextInput,
   Modal,
+  ScrollView,
+  Platform,
+  StatusBar,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
@@ -32,6 +36,7 @@ import ApiService from '../services/APIService';
 import UserRecommendationCard, {UserRecommendation} from '../components/UserRecommendationCard';
 import ContactSyncService from '../components/ContactSyncService';
 import YourBuzzScreen from './YourBuzzScreen';
+import ScreenContainer from '../components/ScreenContainer';
 
 const {width} = Dimensions.get('window');
 
@@ -53,21 +58,12 @@ const HomeScreen: React.FC = () => {
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
   const [useSmartFeed, setUseSmartFeed] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [showYourBuzz, setShowYourBuzz] = useState(false);
-
-  // Mock channel data (same as in SubscribedChannels)
-  const mockChannels = [
-    {id: '1', username: 'buzzuser', name: 'Your Story', avatar: null, type: 'channel'},
-    {id: '2', username: 'techguru', name: 'Tech Guru', avatar: null, type: 'channel'},
-    {id: '3', username: 'foodie', name: 'Food Lover', avatar: null, type: 'channel'},
-    {id: '4', username: 'adventurer', name: 'Adventure', avatar: null, type: 'channel'},
-    {id: '5', username: 'fitnesspro', name: 'Fitness Pro', avatar: null, type: 'channel'},
-  ];
-  // Removed showCreateProfile state - only show for first-time users
+  const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     try {
@@ -105,6 +101,71 @@ const HomeScreen: React.FC = () => {
       }
     }, [user, buzzes, useSmartFeed])
   );
+
+  const renderSearchResults = () => {
+    if (!searchQuery.trim()) {
+      return null;
+    }
+
+    return (
+      <View
+        style={[
+          styles.searchResultsContainer,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+        ]}
+      >
+        {searching ? (
+          <Text style={[styles.searchResultsLabel, {color: theme.colors.textSecondary}]}>
+            Searching...
+          </Text>
+        ) : searchResults.length === 0 ? (
+          <Text style={[styles.searchResultsLabel, {color: theme.colors.textSecondary}]}>
+            No matches found
+          </Text>
+        ) : (
+          searchResults.slice(0, 5).map(item => (
+            <TouchableOpacity
+              key={`${item.type}-${item.id || item.user?.id || item.username}`}
+              style={styles.searchResultItem}
+              activeOpacity={0.9}
+              onPress={() => {
+                const targetId = item.id || item.user?.id || item.userId || item.username;
+                setSearchQuery('');
+                setSearchResults([]);
+                if ((item.type === 'user' || item.type === 'channel') && targetId) {
+                  handleBuzzerPress(targetId);
+                }
+              }}
+            >
+              <View style={styles.searchResultAvatar}>
+                {item.avatar ? (
+                  <Image source={{uri: item.avatar}} style={styles.searchResultAvatarImage} />
+                ) : (
+                  <Text style={styles.searchResultAvatarText}>
+                    {item.displayName?.charAt(0)?.toUpperCase() || item.username?.charAt(0)?.toUpperCase() || '#'}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.searchResultInfo}>
+                <Text style={[styles.searchResultTitle, {color: theme.colors.text}]}>
+                  {item.displayName || item.searchName || item.username}
+                </Text>
+                {item.username ? (
+                  <Text style={[styles.searchResultSubtitle, {color: theme.colors.textSecondary}]}>
+                    @{item.username}
+                  </Text>
+                ) : null}
+              </View>
+              <Icon name="chevron-right" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+    );
+  };
 
   // Refresh buzzes more frequently to catch new posts (every 30 seconds)
   useEffect(() => {
@@ -147,10 +208,10 @@ const HomeScreen: React.FC = () => {
       blockedUsers: [],
     };
     
-    // First, filter out buzzes from blocked users and own buzzes (NORMAL FEED)
+    // First, filter out buzzes from blocked users (NORMAL FEED)
     const currentUserId = user?.id || authUser?.id;
     let unblockedBuzzes = buzzes.filter(buzz => 
-      !isBlocked(buzz.userId) && buzz.userId !== currentUserId
+      !isBlocked(buzz.userId)
     );
     console.log('Unblocked buzzes count (excluding own):', unblockedBuzzes.length);
     
@@ -184,9 +245,15 @@ const HomeScreen: React.FC = () => {
       const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
       return dateB.getTime() - dateA.getTime();
     });
+
+    if (currentUserId) {
+      const ownBuzzes = filtered.filter(buzz => buzz.userId === currentUserId);
+      const others = filtered.filter(buzz => buzz.userId !== currentUserId);
+      filtered = [...ownBuzzes, ...others];
+    }
     
       setFilteredBuzzes(filtered);
-      console.log('Normal feed loaded:', filtered.length, 'buzzes (excluding own)');
+      console.log('Normal feed loaded:', filtered.length, 'buzzes (including own)');
     } catch (error) {
       console.error('Error loading buzzes:', error);
       // Silently fail - don't crash the app
@@ -677,48 +744,80 @@ const HomeScreen: React.FC = () => {
     // This is OK - we'll show an empty state in the render
   }
 
-  // Render header component for FlatList
+  const renderHero = () => (
+    <View style={[styles.heroContainer, {paddingTop: insets.top + 12}]}>
+      <LinearGradient
+        colors={['#7EB3FF', '#4C7DFF']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.heroCard}
+      >
+        <View style={styles.heroHeaderRow}>
+          <View>
+            <Text style={styles.heroTitle}>Home</Text>
+            <Text style={styles.heroSubtitle}>buzz feed</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.heroRefreshButton}
+            activeOpacity={0.85}
+            onPress={() => {
+              scrollViewRef.current?.scrollTo({y: 0, animated: true});
+              onRefresh();
+            }}
+          >
+            <Icon name="refresh" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.heroChannels}>
+          <SubscribedChannels
+            variant="card"
+            onChannelPress={handleBuzzerPress}
+            onYourBuzzPress={() => setShowYourBuzz(true)}
+          />
+        </View>
+
+        <View style={styles.heroActionsRow}>
+          <View
+            style={[styles.searchInputContainer, styles.heroSearchInputContainer]}
+          >
+            <Icon name="search" size={18} color="rgba(255,255,255,0.8)" />
+            <TextInput
+              placeholder="Search"
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              style={[styles.searchInput, styles.heroSearchInput]}
+              value={searchQuery}
+              onChangeText={text => {
+                setSearchQuery(text);
+                handleSearch(text);
+              }}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={styles.heroBuzzLiveButton}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('GoBuzzLive' as never)}
+          >
+            <LinearGradient
+              colors={['#54A9FF', '#2F7BFF']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.heroBuzzLiveGradient}
+            >
+              <Icon name="videocam" size={18} color="#FFFFFF" />
+              <Text style={styles.heroBuzzLiveText}>BuzzLive</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+
   const renderHeader = () => (
     <>
-      {/* Buzz Banner - Instagram Style */}
-      <View style={[styles.buzzBanner, {backgroundColor: theme.colors.surface}]}>
-        <View style={styles.buzzBannerContent}>
-          <Text style={[styles.buzzText, {color: theme.colors.text, fontWeight: 'bold', fontSize: 24}]}>Buzz</Text>
-          <View style={{flexDirection: 'row', gap: 12, alignItems: 'center'}}>
-            {/* Go Buzz Live Button - More Prominent */}
-            <TouchableOpacity
-              style={[styles.goLiveButton, {backgroundColor: theme.colors.primary}]}
-              onPress={() => navigation.navigate('GoBuzzLive' as never)}>
-              <LinearGradient
-                colors={['#E4405F', '#FF6B9D']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={styles.goLiveGradient}>
-                <Icon name="videocam" size={20} color="#FFFFFF" />
-                <Text style={styles.goLiveText}>Go Buzz Live</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.searchIconButton}
-              onPress={() => setShowSearch(true)}>
-              <Icon name="search" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      {/* Following Section - Instagram Style with YourBuzz */}
-      <View style={styles.followingContainer}>
-        <View style={styles.followingHeader}>
-          <Text style={[styles.followingHeaderText, {color: theme.colors.text}]}>
-            Follow Users & Subscribed Channels
-          </Text>
-        </View>
-        <SubscribedChannels 
-          onChannelPress={handleBuzzerPress}
-          onYourBuzzPress={() => setShowYourBuzz(true)}
-        />
-      </View>
+      {renderHero()}
+      {renderSearchResults()}
 
       {/* Smart Feed Toggle */}
       <View style={styles.smartFeedContainer}>
@@ -726,16 +825,16 @@ const HomeScreen: React.FC = () => {
           style={[
             styles.smartFeedButton,
             {
-              backgroundColor: useSmartFeed 
-                ? theme.colors.primary 
+              backgroundColor: useSmartFeed
+                ? theme.colors.primary
                 : theme.colors.surface,
             },
           ]}
           onPress={handleToggleSmartFeed}>
-          <Icon 
-            name="auto-awesome" 
-            size={18} 
-            color={useSmartFeed ? '#FFFFFF' : theme.colors.text} 
+          <Icon
+            name="auto-awesome"
+            size={18}
+            color={useSmartFeed ? '#FFFFFF' : theme.colors.text}
           />
           <Text
             style={[
@@ -749,14 +848,16 @@ const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.feedHeadingRow}>
+        <Text style={[styles.feedHeading, {color: theme.colors.text}]}>buzz feed</Text>
+      </View>
+
       {/* User Recommendations */}
       {showRecommendations && userRecommendations.length > 0 && (
         <View style={styles.recommendationsSection}>
           <View style={styles.sectionHeader}>
             <Icon name="people" size={20} color={theme.colors.primary} />
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-              People You May Know
-            </Text>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>People You May Know</Text>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowRecommendations(false)}>
@@ -770,8 +871,7 @@ const HomeScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recommendationsList}
-            nestedScrollEnabled={true}
-            scrollEnabled={true}
+            nestedScrollEnabled
           />
         </View>
       )}
@@ -786,9 +886,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.liveStreamsSection}>
           <View style={styles.sectionHeader}>
             <Icon name="videocam" size={20} color={theme.colors.primary} />
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-              Live Now
-            </Text>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>BuzzLive Now</Text>
           </View>
           <FlatList
             data={liveStreams}
@@ -797,40 +895,22 @@ const HomeScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.liveStreamsList}
-            nestedScrollEnabled={true}
-            scrollEnabled={true}
           />
-        </View>
-      )}
-      
-      {/* Show message if loading streams */}
-      {loadingLiveStreams && liveStreams.length === 0 && (
-        <View style={styles.liveStreamsSection}>
-          <View style={styles.sectionHeader}>
-            <Icon name="videocam" size={20} color={theme.colors.primary} />
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-              Live Now
-            </Text>
-          </View>
-          <View style={[styles.emptyStreamsContainer, {backgroundColor: theme.colors.surface}]}>
-            <Text style={[styles.emptyStreamsText, {color: theme.colors.textSecondary}]}>
-              Loading live streams...
-            </Text>
-          </View>
         </View>
       )}
     </>
   );
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.colors.background, flex: 1}]}>
-      <FlatList
-        data={filteredBuzzes}
-        renderItem={renderBuzz}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContainer}
+    <ScreenContainer
+      floatingHeader={false}
+      contentStyle={{paddingHorizontal: 0}}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollContainer}
+        contentContainerStyle={{paddingBottom: 120}}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={true}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -839,221 +919,120 @@ const HomeScreen: React.FC = () => {
             colors={[theme.colors.primary]}
           />
         }
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmptyState}
-        removeClippedSubviews={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-      />
+      >
+        <View style={styles.sectionSpacing}>
+          {renderHeader()}
+
+          {filteredBuzzes.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            filteredBuzzes.map(item => (
+              <View key={item.id} style={{marginBottom: theme.layout?.spacing?.lg || 16}}>
+                <BuzzCard
+                  buzz={item}
+                  onPress={() => handleBuzzPress(item)}
+                  onLike={() => likeBuzz(item.id)}
+                  onShare={() => shareBuzz(item.id)}
+                  onFollow={handleFollow}
+                  onOpenProfile={() => handleBuzzerPress(item.userId)}
+                  onOpenStream={() => handleStreamPress({
+                    id: item.id,
+                    userId: item.userId,
+                    username: item.username,
+                    displayName: item.username,
+                    title: item.content,
+                    streamUrl: '',
+                    thumbnailUrl: item.media?.url || '',
+                    isLive: false,
+                    viewers: 0,
+                    category: '',
+                    startedAt: String(item.createdAt),
+                    tags: [],
+                  })}
+                />
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
 
       {selectedBuzz && (
+        <Modal transparent animationType="slide" visible={!!selectedBuzz} onRequestClose={handleCloseDetail}>
         <BuzzDetailScreen
           buzz={selectedBuzz}
           onClose={handleCloseDetail}
           onNext={handleNextBuzz}
           onPrevious={handlePreviousBuzz}
         />
+        </Modal>
       )}
 
       {selectedBuzzerId && (
-        <BuzzerProfileScreen
-          buzzerId={selectedBuzzerId}
-          visible={!!selectedBuzzerId}
-          onClose={handleCloseBuzzerProfile}
-        />
+        <Modal transparent animationType="slide" visible={!!selectedBuzzerId} onRequestClose={handleCloseBuzzerProfile}>
+          <BuzzerProfileScreen buzzerId={selectedBuzzerId} visible={!!selectedBuzzerId} onClose={handleCloseBuzzerProfile} />
+        </Modal>
       )}
-
-      {/* YourBuzz Screen */}
-      <YourBuzzScreen
-        visible={showYourBuzz}
-        onClose={() => setShowYourBuzz(false)}
-      />
 
       {selectedStream && (
-        <StreamViewerScreen
-          stream={selectedStream}
-          visible={!!selectedStream}
-          onClose={handleCloseStream}
-        />
+        <Modal transparent animationType="slide" visible={!!selectedStream} onRequestClose={handleCloseStream}>
+          <StreamViewerScreen stream={selectedStream} onClose={handleCloseStream} />
+        </Modal>
       )}
 
-      {/* Search Modal */}
-      <Modal
-        visible={showSearch}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowSearch(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
-                Search Users & Channels
-              </Text>
-              <TouchableOpacity onPress={() => setShowSearch(false)}>
-                <Icon name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={[styles.searchInputContainer, {backgroundColor: theme.colors.background}]}>
-              <Icon name="search" size={20} color={theme.colors.textSecondary} />
-              <TextInput
-                style={[styles.searchInput, {color: theme.colors.text}]}
-                placeholder="Search users or channels..."
-                placeholderTextColor={theme.colors.textSecondary}
-                value={searchQuery}
-                onChangeText={(text) => {
-                  setSearchQuery(text);
-                  handleSearch(text);
-                }}
-                autoFocus
-              />
-              {searching && <Icon name="sync" size={20} color={theme.colors.primary} />}
-            </View>
+      {showYourBuzz && (
+        <Modal transparent animationType="slide" visible={showYourBuzz} onRequestClose={() => setShowYourBuzz(false)}>
+          <YourBuzzScreen visible={showYourBuzz} onClose={() => setShowYourBuzz(false)} />
+        </Modal>
+      )}
 
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              renderItem={({item}) => (
-                <TouchableOpacity
-                  style={[styles.userResultItem, {backgroundColor: theme.colors.background}]}
-                  onPress={() => {
-                    if (item.type === 'channel') {
-                      // For channels, navigate to channel owner's profile or show channel details
-                      setSelectedBuzzerId(item.userId || item.id);
-                    } else {
-                      setSelectedBuzzerId(item.id);
-                    }
-                    setShowSearch(false);
-                  }}>
-                  <View style={[styles.userAvatar, {backgroundColor: theme.colors.primary}]}>
-                    {item.avatar ? (
-                      <Image source={{uri: item.avatar}} style={styles.userAvatarImage} />
-                    ) : (
-                      <Text style={styles.userAvatarText}>
-                        {item.type === 'channel' 
-                          ? (item.name?.charAt(0).toUpperCase() || '📺')
-                          : (item.username?.charAt(0).toUpperCase() || item.displayName?.charAt(0).toUpperCase() || '?')
-                        }
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.userResultInfo}>
-                    <View style={styles.userResultHeader}>
-                      <Text style={[styles.userResultName, {color: theme.colors.text}]} numberOfLines={1}>
-                        {item.type === 'channel' ? item.name : (item.displayName || item.username)}
-                      </Text>
-                      {item.type === 'channel' && (
-                        <View style={[styles.channelBadge, {backgroundColor: theme.colors.primary + '20'}]}>
-                          <Icon name="video-library" size={12} color={theme.colors.primary} />
-                          <Text style={[styles.channelBadgeText, {color: theme.colors.primary}]}>Channel</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.userResultUsername, {color: theme.colors.textSecondary}]} numberOfLines={1}>
-                      {item.type === 'channel' 
-                        ? `@${item.username || 'channel'}${item.description ? ' • ' + item.description.substring(0, 30) : ''}`
-                        : `@${item.username}`
-                      }
-                    </Text>
-                    {item.type === 'channel' && item.interests && item.interests.length > 0 && (
-                      <View style={styles.channelInterests}>
-                        {item.interests.slice(0, 3).map((interestId: string, idx: number) => {
-                          // Try to find interest name from available interests
-                          const interest = user?.interests?.find((i: any) => i.id === interestId);
-                          const interestName = interest?.name || interestId;
-                          return (
-                            <View key={idx} style={[styles.interestChip, {backgroundColor: theme.colors.primary + '15'}]}>
-                              <Text style={[styles.interestChipText, {color: theme.colors.primary, fontSize: 10}]}>
-                                {interest?.emoji || ''} {interestName}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
-                  <Icon name="chevron-right" size={24} color={theme.colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                searchQuery.trim() && !searching ? (
-                  <View style={styles.emptySearch}>
-                    <Icon name="person-search" size={48} color={theme.colors.textSecondary} />
-                    <Text style={[styles.emptySearchText, {color: theme.colors.textSecondary}]}>
-                      No users or channels found
-                    </Text>
-                  </View>
-                ) : null
-              }
-            />
-          </View>
-        </View>
-      </Modal>
-    </View>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
   },
-  buzzBanner: {
-    paddingTop: 50,
-    paddingBottom: 12,
+  sectionSpacing: {
+    paddingHorizontal: 0,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0',
+    marginTop: 18,
   },
-  buzzBannerContent: {
+  searchInputContainer: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
   },
-  buzzText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: -0.5,
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
   },
-  goLiveButton: {
-    borderRadius: 20,
+  buzzLiveButton: {
+    borderRadius: 24,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
-  goLiveGradient: {
+  buzzLiveGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     gap: 6,
   },
-  goLiveText: {
+  buzzLiveText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  searchIconButton: {
-    padding: 4,
-  },
-  followingContainer: {
-    backgroundColor: '#F0F0F0',
-    paddingTop: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  followingHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  followingHeaderText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    opacity: 0.7,
   },
   header: {
     padding: 20,
@@ -1169,58 +1148,54 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     padding: 4,
   },
-  searchContainer: {
-    paddingHorizontal: 15,
-    paddingTop: 8,
-    paddingBottom: 4,
+  searchResultsContainer: {
+    borderWidth: 1,
+    borderRadius: 18,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 8,
+    marginTop: 12,
   },
-  searchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  searchResultsLabel: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  searchButtonText: {
-    marginLeft: 8,
     fontSize: 14,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    height: '80%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  searchInputContainer: {
+  searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 20,
-    marginBottom: 16,
+    gap: 12,
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
+  searchResultAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(47,123,255,0.12)',
+  },
+  searchResultAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  searchResultAvatarText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#2F7BFF',
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  searchResultSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   userResultItem: {
     flexDirection: 'row',
@@ -1299,6 +1274,96 @@ const styles = StyleSheet.create({
   emptySearchText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  heroContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  heroCard: {
+    borderRadius: 28,
+    padding: 22,
+    paddingBottom: 16,
+    gap: 16,
+    shadowColor: 'rgba(0, 0, 0, 0.18)',
+    shadowOffset: {width: 0, height: 12},
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  heroHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    opacity: 0.85,
+    marginTop: 4,
+  },
+  heroRefreshButton: {
+    padding: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  heroChannels: {
+    marginTop: 16,
+  },
+  heroActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
+  },
+  heroSearchInputContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    borderWidth: 0,
+  },
+  heroSearchInput: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  heroBuzzLiveButton: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: 'rgba(0, 0, 0, 0.18)',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  heroBuzzLiveGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  heroBuzzLiveText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  feedHeadingRow: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  feedHeading: {
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });
 

@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   ScrollView,
   Alert,
   TextInput,
+  Platform,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Animatable from 'react-native-animatable';
+import LinearGradient from 'react-native-linear-gradient';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, User, Interest, Buzz} from '../context/UserContext';
@@ -20,6 +21,16 @@ import {useNavigation} from '@react-navigation/native';
 import ApiService from '../services/APIService';
 import BuzzCard from '../components/BuzzCard';
 import {FlatList} from 'react-native';
+import ScreenContainer from '../components/ScreenContainer';
+import {launchImageLibrary} from 'react-native-image-picker';
+import {
+  check,
+  request,
+  RESULTS,
+  PERMISSIONS,
+  Permission,
+  openSettings,
+} from 'react-native-permissions';
 
 const ProfileScreen: React.FC = () => {
   const {theme} = useTheme();
@@ -27,6 +38,7 @@ const ProfileScreen: React.FC = () => {
   const {logout, user: authUser, isAuthenticated} = useAuth();
   const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [showMyBuzzes, setShowMyBuzzes] = useState(false);
   const [editForm, setEditForm] = useState({
     username: '',
@@ -37,6 +49,7 @@ const ProfileScreen: React.FC = () => {
     country: '',
   });
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   useEffect(() => {
     const currentUser = user || authUser;
@@ -50,6 +63,7 @@ const ProfileScreen: React.FC = () => {
         country: currentUser.country || '',
       });
       setSelectedInterests(currentUser.interests || []);
+      setAvatarUri(currentUser.avatar || null);
     }
   }, [user, authUser]);
 
@@ -66,6 +80,7 @@ const ProfileScreen: React.FC = () => {
         country: currentUser.country || '',
       });
       setSelectedInterests(currentUser.interests || []);
+      setAvatarUri(currentUser.avatar || null);
     }
   }, [isEditing, user, authUser]);
 
@@ -77,6 +92,11 @@ const ProfileScreen: React.FC = () => {
 
     if (selectedInterests.length === 0) {
       Alert.alert('Error', 'Please select at least one interest');
+      return;
+    }
+
+    if (!avatarUri) {
+      Alert.alert('Add Profile Photo', 'Please add a profile photo or avatar before saving your profile.');
       return;
     }
 
@@ -95,6 +115,7 @@ const ProfileScreen: React.FC = () => {
         city: editForm.city.trim(),
         country: editForm.country.trim(),
         interests: selectedInterests,
+        avatar: avatarUri,
       });
 
       if (response.success && response.data) {
@@ -102,6 +123,7 @@ const ProfileScreen: React.FC = () => {
           ...currentUser,
           ...response.data,
           interests: selectedInterests,
+          avatar: avatarUri,
         };
 
         setUser(updatedUser);
@@ -119,6 +141,7 @@ const ProfileScreen: React.FC = () => {
           city: editForm.city.trim(),
           country: editForm.country.trim(),
           interests: selectedInterests,
+          avatar: avatarUri,
         };
 
         setUser(updatedUser);
@@ -174,11 +197,107 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
+  const ensureAvatarPermission = async (): Promise<boolean> => {
+    const permission: Permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.PHOTO_LIBRARY
+        : Platform.Version >= 33
+            ? PERMISSIONS.ANDROID.READ_MEDIA_IMAGES
+            : PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE;
+
+    try {
+      const currentStatus = await check(permission);
+      if (currentStatus === RESULTS.GRANTED || currentStatus === RESULTS.LIMITED) {
+        return true;
+      }
+
+      if (currentStatus === RESULTS.BLOCKED) {
+        Alert.alert(
+          'Media Permission Needed',
+          'Please enable photo library access in Settings to change your profile picture.',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {text: 'Open Settings', onPress: () => openSettings().catch(() => {})},
+          ],
+        );
+        return false;
+      }
+
+      const result = await request(permission);
+      return result === RESULTS.GRANTED || result === RESULTS.LIMITED;
+    } catch (error) {
+      console.error('Profile avatar permission error:', error);
+      Alert.alert('Permission Error', 'Unable to request photo library permission.');
+      return false;
+    }
+  };
+
+  const handleSelectAvatar = async () => {
+    const granted = await ensureAvatarPermission();
+    if (!granted) {
+      return;
+    }
+
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+      includeBase64: false,
+      quality: 0.8,
+    });
+
+    if (result.didCancel) {
+      return;
+    }
+
+    if (result.errorCode) {
+      console.error('Profile avatar picker error:', result.errorMessage);
+      Alert.alert('Error', result.errorMessage || 'Failed to open gallery. Please try again.');
+      return;
+    }
+
+    const asset = result.assets?.[0];
+    if (!asset || !asset.uri) {
+      Alert.alert('Error', 'No image selected. Please try again.');
+      return;
+    }
+
+    setAvatarUri(asset.uri);
+  };
+
+  const clearAvatarSelection = () => {
+    setAvatarUri(null);
+  };
+
   const renderProfileForm = () => (
     <Animatable.View animation="fadeInUp" style={styles.formContainer}>
       <Text style={[styles.formTitle, {color: theme.colors.text}]}>
         Edit Profile
       </Text>
+
+      <View style={styles.avatarEditSection}>
+        <TouchableOpacity
+          style={[styles.avatarEditPicker, {borderColor: theme.colors.border, backgroundColor: theme.colors.surface}]}
+          onPress={handleSelectAvatar}
+        >
+          {avatarUri ? (
+            <Image source={{uri: avatarUri}} style={styles.avatarEditPreview} />
+          ) : (
+            <View style={styles.avatarEditPlaceholder}>
+              <Icon name="add-a-photo" size={28} color={theme.colors.textSecondary} />
+            </View>
+          )}
+          <View style={styles.avatarEditTextContainer}>
+            <Text style={[styles.avatarEditTitle, {color: theme.colors.text}]}>Tap to {avatarUri ? 'change' : 'add'} profile photo</Text>
+            <Text style={[styles.avatarEditSubtitle, {color: theme.colors.textSecondary}]}>Required · square images recommended</Text>
+          </View>
+        </TouchableOpacity>
+        {avatarUri && (
+          <TouchableOpacity style={styles.avatarEditRemoveButton} onPress={clearAvatarSelection}>
+            <Icon name="delete" size={18} color={theme.colors.error || '#FF5252'} />
+            <Text style={[styles.avatarEditRemoveText, {color: theme.colors.error || '#FF5252'}]}>Remove photo</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.inputGroup}>
         <Text style={[styles.inputLabel, {color: theme.colors.text}]}>
@@ -534,41 +653,60 @@ const ProfileScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.secondary]}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 0}}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}>
-            <Icon name="logout" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => setIsEditing(!isEditing)}>
-            <Icon
-              name={isEditing ? 'close' : 'edit'}
-              size={24}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <ScreenContainer
+      title="Profile"
+      subtitle={currentUser?.displayName || currentUser?.username || 'Your profile'}
+      onBackPress={() => navigation.goBack()}
+      rightAction={
+        <TouchableOpacity
+          style={styles.headerActionButton}
+          onPress={() => {
+            if (isEditing) {
+              handleSaveProfile();
+            } else {
+              setIsEditing(true);
+            }
+          }}
+        >
+          <Text style={styles.headerActionText}>
+            {isEditing ? 'Save' : 'Edit'}
+          </Text>
+        </TouchableOpacity>
+      }
+      onScrollDownPress={() => scrollViewRef.current?.scrollToEnd({animated: true})}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {isEditing ? renderProfileForm() : renderProfileView()}
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 160,
+  },
+  headerActionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  headerActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
@@ -784,6 +922,60 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     textAlign: 'center',
+  },
+  avatarEditSection: {
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  avatarEditPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    justifyContent: 'flex-start',
+    padding: 14,
+    marginBottom: 12,
+  },
+  avatarEditPreview: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarEditPlaceholder: {
+    width: 72,
+    height: 72,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 36,
+  },
+  avatarEditTextContainer: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  avatarEditTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  avatarEditSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  avatarEditRemoveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FF5252',
+  },
+  avatarEditRemoveText: {
+    marginLeft: 5,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

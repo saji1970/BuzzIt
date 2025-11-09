@@ -242,6 +242,26 @@ const getBuzzesPaginated = async (page = 1, limit = 20, filters = {}) => {
   }
 };
 
+const deleteBuzzesOlderThan = async (days = 3) => {
+  if (!isConnected()) {
+    return { deleted: 0 };
+  }
+
+  const retention = Math.max(1, parseInt(days, 10) || 1);
+  const intervalValue = `${retention} days`;
+
+  try {
+    const result = await query(
+      'DELETE FROM buzzes WHERE created_at < NOW() - $1::interval RETURNING id',
+      [intervalValue],
+    );
+    return { deleted: result.rows.length };
+  } catch (error) {
+    console.error('Error deleting old buzzes:', error);
+    return { deleted: 0, error };
+  }
+};
+
 module.exports = {
   convertDbUserToObject,
   convertDbBuzzToObject,
@@ -253,5 +273,6 @@ module.exports = {
   getBuzzById,
   getAllBuzzes,
   getBuzzesPaginated,
+  deleteBuzzesOlderThan,
 };
 

@@ -7,6 +7,7 @@ const twilio = require('twilio');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const http = require('http');
+const multer = require('multer');
 // Load environment variables FIRST, before any other imports that might use them
 // Try loading from server directory first, then root directory
 const path = require('path');
@@ -71,6 +72,7 @@ const {
   getBuzzById,
   getAllBuzzes,
   getBuzzesPaginated,
+  deleteBuzzesOlderThan,
 } = require('./db/helpers');
 
 // Import services
@@ -105,6 +107,8 @@ app.use((req, res, next) => {
   }
   express.static(publicPath)(req, res, next);
 });
+
+app.use('/uploads', express.static(uploadsDir));
 
 // User login page route
 app.get('/user-login', (req, res) => {
@@ -323,6 +327,64 @@ let subscriptionPlans = [
 
 // User subscriptions
 let userSubscriptions = [];
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const defaultSettings = {
+  buzzRetentionDays: 3,
+  hiddenUsernames: ['adnub'],
+};
+
+let appSettings = { ...defaultSettings };
+
+const getHiddenUsernameSet = () => {
+  const list = Array.isArray(appSettings.hiddenUsernames) ? appSettings.hiddenUsernames : [];
+  return new Set(list.map(username => (username || '').toString().toLowerCase()));
+};
+
+const filterHiddenUsers = (userList = []) => {
+  const hiddenSet = getHiddenUsernameSet();
+  if (!hiddenSet.size) {
+    return userList;
+  }
+  return userList.filter(user => !hiddenSet.has((user?.username || '').toLowerCase()))
+    .map(user => ({ ...user }));
+};
+
+const pruneExpiredBuzzes = async () => {
+  const retentionDays = Math.max(1, parseInt(appSettings.buzzRetentionDays, 10) || defaultSettings.buzzRetentionDays);
+  const cutoff = Date.now() - retentionDays * DAY_IN_MS;
+
+  const beforeCount = buzzes.length;
+  buzzes = buzzes.filter(buzz => {
+    const createdAt = new Date(buzz.createdAt).getTime();
+    if (Number.isNaN(createdAt)) {
+      return true;
+    }
+    return createdAt >= cutoff;
+  });
+
+  if (beforeCount !== buzzes.length) {
+    console.log(`🧹 Pruned ${beforeCount - buzzes.length} expired in-memory buzz(es)`);
+  }
+
+  if (db.isConnected()) {
+    try {
+      const { deleted } = await deleteBuzzesOlderThan(retentionDays);
+      if (deleted > 0) {
+        console.log(`🧹 Pruned ${deleted} expired buzz(es) from database (retention ${retentionDays} day(s))`);
+      }
+    } catch (error) {
+      console.error('Error pruning database buzzes:', error);
+    }
+  }
+};
+
+setInterval(() => {
+  pruneExpiredBuzzes().catch(error => console.error('Scheduled prune error:', error));
+}, 60 * 60 * 1000);
+
+pruneExpiredBuzzes().catch(error => console.error('Initial prune error:', error));
 
 // Helper function to generate IDs
 const generateId = () => Date.now().toString();
@@ -842,11 +904,15 @@ app.get('/api/users', async (req, res) => {
       const { password, ...userWithoutPassword } = u;
       return userWithoutPassword;
     });
-    res.json(usersWithoutPasswords);
+    res.json(filterHiddenUsers(usersWithoutPasswords));
   } catch (error) {
     console.error('Get users error:', error);
     // Fallback to in-memory array
-  res.json(users);
+    const usersWithoutPasswords = users.map(u => {
+      const { password, ...userWithoutPassword } = u;
+      return userWithoutPassword;
+    });
+    res.json(filterHiddenUsers(usersWithoutPasswords));
   }
 });
 
@@ -1213,15 +1279,16 @@ app.get('/api/users/check-username/:username', async (req, res) => {
 // Buzz endpoints
 app.get('/api/buzzes', async (req, res) => {
   try {
-  const { userId, interests } = req.query;
+    await pruneExpiredBuzzes();
+    const { userId, interests } = req.query;
     let query = {};
 
-  if (userId) {
+    if (userId) {
       query.userId = userId;
-  }
+    }
 
-  if (interests) {
-    const interestArray = interests.split(',');
+    if (interests) {
+      const interestArray = interests.split(',');
       query['interests.id'] = { $in: interestArray };
     }
     
@@ -1274,6 +1341,30 @@ app.get('/api/buzzes/:id', async (req, res) => {
   }
 });
 
+app.post('/api/uploads', verifyToken, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const baseUrl = (MEDIA_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        url: fileUrl,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname,
+        size: req.file.size,
+      },
+    });
+  } catch (error) {
+    console.error('Media upload error:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload media' });
+  }
+});
+
 app.post('/api/buzzes', verifyToken, async (req, res) => {
   try {
     // Get user info
@@ -1281,17 +1372,21 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
     const username = user ? user.username : (req.body.username || 'anonymous');
     const displayName = user ? user.displayName : username;
     
+    const incomingMedia = (req.body && req.body.media) || {};
+    const mediaType = incomingMedia.type || req.body.mediaType || null;
+    const mediaUrl = incomingMedia.url || req.body.mediaUrl || null;
+
     const buzzId = generateId();
     const newBuzzData = {
       id: buzzId,
-    userId: req.userId,
+      userId: req.userId,
       username: username,
       displayName: displayName,
-    content: req.body.content,
+      content: req.body.content,
       type: req.body.type || 'text',
-      mediaType: req.body.media?.type || null,
-      mediaUrl: req.body.media?.url || null,
-    interests: req.body.interests || [],
+      mediaType,
+      mediaUrl,
+      interests: req.body.interests || [],
       locationLatitude: req.body.location?.latitude || null,
       locationLongitude: req.body.location?.longitude || null,
       locationCity: req.body.location?.city || null,
@@ -1373,9 +1468,17 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
         },
       };
     }
+
+    if (savedBuzz && !savedBuzz.media) {
+      savedBuzz.media = {
+        type: newBuzzData.mediaType,
+        url: newBuzzData.mediaUrl,
+      };
+    }
     
     // Also add to in-memory array for backwards compatibility
     buzzes.push(savedBuzz);
+    await pruneExpiredBuzzes();
     
     // Update user buzz count
     if (db.isConnected() && user) {
@@ -3060,6 +3163,62 @@ app.patch('/api/features', verifyAdmin, (req, res) => {
   } catch (error) {
     console.error('Update features error:', error);
     res.status(500).json({ error: 'Failed to update features' });
+  }
+});
+
+app.get('/api/settings', verifyAdmin, (req, res) => {
+  res.json({
+    success: true,
+    settings: appSettings,
+    defaults: defaultSettings,
+  });
+});
+
+app.patch('/api/settings', verifyAdmin, async (req, res) => {
+  try {
+    const { buzzRetentionDays, hiddenUsernames } = req.body || {};
+    const updates = {};
+
+    if (typeof buzzRetentionDays !== 'undefined') {
+      const retention = parseInt(buzzRetentionDays, 10);
+      if (Number.isNaN(retention) || retention < 1 || retention > 30) {
+        return res.status(400).json({ error: 'buzzRetentionDays must be a number between 1 and 30.' });
+      }
+      appSettings.buzzRetentionDays = retention;
+      updates.buzzRetentionDays = retention;
+    }
+
+    if (typeof hiddenUsernames !== 'undefined') {
+      let names = hiddenUsernames;
+      if (typeof names === 'string') {
+        names = names.split(',');
+      }
+      if (!Array.isArray(names)) {
+        return res.status(400).json({ error: 'hiddenUsernames must be an array of usernames or a comma separated string.' });
+      }
+      const sanitized = names
+        .map(value => (value ?? '').toString().trim())
+        .filter(Boolean);
+      appSettings.hiddenUsernames = Array.from(new Set(sanitized));
+      updates.hiddenUsernames = appSettings.hiddenUsernames;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid settings provided.' });
+    }
+
+    if (updates.buzzRetentionDays) {
+      await pruneExpiredBuzzes();
+    }
+
+    res.json({
+      success: true,
+      message: 'Settings updated successfully',
+      settings: appSettings,
+    });
+  } catch (error) {
+    console.error('Update settings error:', error);
+    res.status(500).json({ error: 'Failed to update settings.' });
   }
 });
 

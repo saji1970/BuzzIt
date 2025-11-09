@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,8 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import Video, {ResizeMode} from 'react-native-video';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -40,23 +40,10 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
   const [pan] = useState(new Animated.ValueXY());
   const [showShareModal, setShowShareModal] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const videoRef = useRef<Video>(null);
-
-  // Cleanup video when component unmounts or buzz changes
-  useEffect(() => {
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.unloadAsync().catch(() => {});
-      }
-    };
-  }, [buzz.id]);
 
   // Reset video state when buzz changes
   useEffect(() => {
     setIsVideoPlaying(false);
-    if (videoRef.current) {
-      videoRef.current.unloadAsync().catch(() => {});
-    }
   }, [buzz.id]);
 
   const handleShareClick = () => {
@@ -228,42 +215,31 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
               ) : buzz.media.type === 'video' ? (
                 <View style={styles.videoWrapper}>
                   <Video
-                    ref={videoRef}
                     source={{ uri: buzz.media.url }}
                     style={styles.video}
-                    useNativeControls={true}
                     resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay={isVideoPlaying}
-                    isLooping={false}
-                    isMuted={false}
-                    onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-                      if (status.isLoaded) {
-                        setIsVideoPlaying(status.isPlaying);
-                      }
-                    }}
+                    paused={!isVideoPlaying}
+                    repeat={false}
+                    muted={false}
                     onError={(error) => {
                       console.error('Video playback error:', error);
                       Alert.alert('Video Error', 'Failed to load video. Please check your connection.');
                     }}
+                    onEnd={() => setIsVideoPlaying(false)}
                   />
-                  {!isVideoPlaying && (
-                    <TouchableOpacity
-                      style={styles.playButtonOverlay}
-                      onPress={async () => {
-                        try {
-                          if (videoRef.current) {
-                            await videoRef.current.playAsync();
-                            setIsVideoPlaying(true);
-                          }
-                        } catch (error) {
-                          console.error('Error playing video:', error);
-                        }
-                      }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.playButtonOverlay,
+                      isVideoPlaying && styles.transparentOverlay,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => setIsVideoPlaying(prev => !prev)}>
+                    {!isVideoPlaying && (
                       <View style={[styles.playButton, {backgroundColor: theme.colors.primary}]}>
                         <Icon name="play-arrow" size={60} color="#FFFFFF" />
                       </View>
-                    </TouchableOpacity>
-                  )}
+                    )}
+                  </TouchableOpacity>
                 </View>
               ) : null}
             </View>
@@ -455,6 +431,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  transparentOverlay: {
+    backgroundColor: 'transparent',
   },
   playButton: {
     width: 80,

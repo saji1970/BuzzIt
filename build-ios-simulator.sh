@@ -71,8 +71,7 @@ echo ""
 # Check for CocoaPods
 if ! command -v pod >/dev/null 2>&1; then
     echo "⚠️  CocoaPods not found"
-    echo "   Expo will handle this automatically, but if you encounter issues:"
-    echo "   sudo gem install cocoapods"
+    echo "   Install via: sudo gem install cocoapods"
     echo ""
 fi
 
@@ -90,30 +89,26 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo ""
-echo "🔨 Building for iOS Simulator using Expo..."
-echo "-------------------------------------------"
+echo "🔨 Building for iOS Simulator with React Native CLI..."
+echo "------------------------------------------------------"
 echo ""
 echo "This will build and launch the app in the iOS Simulator"
 echo "This may take a few minutes on first build..."
 echo ""
 
-# Check if expo CLI is available
-if [ -f "node_modules/.bin/expo" ]; then
-    EXPO_CMD="./node_modules/.bin/expo"
-elif command -v expo >/dev/null 2>&1; then
-    EXPO_CMD="expo"
-elif command -v npx >/dev/null 2>&1; then
-    EXPO_CMD="npx expo"
-else
-    echo "❌ Expo CLI not found"
-    echo "Please install: npm install -g expo-cli"
-    exit 1
+# Make sure CocoaPods dependencies are installed
+if [ ! -d "ios/Pods" ]; then
+    echo "Installing CocoaPods dependencies..."
+    (cd ios && pod install)
 fi
 
-# Build for simulator using Expo
-# This will build and run on simulator automatically
-# The --no-build-cache flag ensures a fresh build
-$EXPO_CMD run:ios
+# Use React Native CLI to build and launch the app
+if command -v npx >/dev/null 2>&1; then
+    npx react-native run-ios "$@"
+else
+    echo "❌ npx not found. Please install Node.js (which includes npx)"
+    exit 1
+fi
 
 if [ $? -eq 0 ]; then
     echo ""

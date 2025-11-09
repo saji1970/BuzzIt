@@ -7,11 +7,13 @@ import {
   Switch,
   Alert,
   ScrollView,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import * as Location from 'expo-location';
+import Geolocation, {GeoPosition} from 'react-native-geolocation-service';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser} from '../context/UserContext';
@@ -35,16 +37,43 @@ const LocationSettingsScreen: React.FC = () => {
 
   const requestLocationPermission = async () => {
     try {
-      const {status} = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (locationPermission) {
+        return true;
+      }
+
+      if (Platform.OS === 'ios') {
+        const status = await Geolocation.requestAuthorization('whenInUse');
+        if (status === 'granted' || status === 'whenInUse') {
+          setLocationPermission(true);
+          return true;
+        }
+
         Alert.alert(
           'Permission Denied',
           'Location permission is required to show nearby buzzes. Please enable it in your device settings.'
         );
         return false;
       }
-      setLocationPermission(true);
-      return true;
+
+      const androidStatus = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Buzz it Location Permission',
+          message: 'Location permission is required to show nearby buzzes.',
+          buttonPositive: 'Allow',
+        }
+      );
+
+      if (androidStatus === PermissionsAndroid.RESULTS.GRANTED) {
+        setLocationPermission(true);
+        return true;
+      }
+
+      Alert.alert(
+        'Permission Denied',
+        'Location permission is required to show nearby buzzes. Please enable it in your device settings.'
+      );
+      return false;
     } catch (error) {
       console.error('Error requesting location permission:', error);
       Alert.alert('Error', 'Failed to request location permission');
@@ -55,13 +84,27 @@ const LocationSettingsScreen: React.FC = () => {
   const getCurrentLocation = async () => {
     try {
       const hasPermission = await requestLocationPermission();
-      if (!hasPermission) return;
+      if (!hasPermission) {
+        return;
+      }
 
-      const location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      Geolocation.getCurrentPosition(
+        (location: GeoPosition) => {
+          setCurrentLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('Error getting current location:', error);
+          Alert.alert('Error', 'Failed to get current location');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 10000,
+        }
+      );
     } catch (error) {
       console.error('Error getting current location:', error);
       Alert.alert('Error', 'Failed to get current location');

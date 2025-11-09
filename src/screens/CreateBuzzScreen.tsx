@@ -13,19 +13,30 @@ import {
   FlatList,
   Modal,
   ActivityIndicator,
+  Share,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
-import * as Sharing from 'expo-sharing';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Animatable from 'react-native-animatable';
+import {launchCamera, launchImageLibrary, Asset} from 'react-native-image-picker';
+import Geolocation, {GeoPosition} from 'react-native-geolocation-service';
+import {
+  check,
+  request,
+  openSettings,
+  RESULTS,
+  PERMISSIONS,
+  Permission,
+} from 'react-native-permissions';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
 import {useAuth} from '../context/AuthContext';
 import ApiService from '../services/APIService';
-import * as Location from 'expo-location';
+import ScreenContainer from '../components/ScreenContainer';
+import BuzzitButton from '../components/BuzzitButton';
 
 type BuzzType = 'event' | 'gossip' | 'thought' | 'poll';
 
@@ -39,6 +50,13 @@ const CreateBuzzScreen: React.FC = () => {
   const {user, addBuzz, interests} = useUser();
   const {features} = useFeatures();
   const {user: authUser} = useAuth();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const bottomOffset = Platform.select({
+    ios: insets.bottom + 48,
+    android: insets.bottom + 96,
+    default: insets.bottom + 64,
+  });
   const [isCreating, setIsCreating] = useState(false);
   const [content, setContent] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
@@ -49,16 +67,191 @@ const CreateBuzzScreen: React.FC = () => {
     {id: '2', text: 'No'},
     {id: '3', text: "Don't Know"},
   ]);
-  const [media, setMedia] = useState<{type: 'image' | 'video' | null; url: string | null}>({
-    type: null,
-    url: null,
-  });
+  const [media, setMedia] = useState<{
+    type: 'image' | 'video';
+    url: string;
+    mimeType: string;
+    fileName: string;
+  } | null>(null);
   const [includeLocation, setIncludeLocation] = useState(false);
   const [userLocation, setUserLocation] = useState<{latitude: number; longitude: number; city?: string; country?: string; address?: string; name?: string} | null>(null);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
+
+  type PermissionResolution = 'retry' | 'settings' | 'cancel';
+
+  const promptPermissionResolution = async (
+    title: string,
+    message: string,
+    allowRetry: boolean,
+  ): Promise<PermissionResolution> =>
+    new Promise(resolve => {
+      const buttons: Array<{text: string; onPress?: () => void; style?: 'cancel' | 'destructive' | 'default'}> = [
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            openSettings().catch(() => {});
+            resolve('settings');
+          },
+        },
+        {
+          text: 'Not Now',
+          style: 'cancel',
+          onPress: () => resolve('cancel'),
+        },
+      ];
+
+      if (allowRetry) {
+        buttons.unshift({text: 'Try Again', onPress: () => resolve('retry')});
+      }
+
+      Alert.alert(title, message, buttons, {cancelable: true});
+    });
+
+  const requestPermissionWithPrompt = async (
+    permission: Permission,
+    title: string,
+    message: string,
+  ): Promise<boolean> => {
+    try {
+      let attempts = 0;
+      while (attempts < 3) {
+        const status = await check(permission);
+
+        if (status === RESULTS.GRANTED || status === RESULTS.LIMITED) {
+          return true;
+        }
+
+        if (status === RESULTS.BLOCKED) {
+          await promptPermissionResolution(
+            title,
+            `${message}\n\nPlease enable this permission in your device settings.`,
+            false,
+          );
+          return false;
+        }
+
+        const result = await request(permission);
+
+        if (result === RESULTS.GRANTED || result === RESULTS.LIMITED) {
+          return true;
+        }
+
+        if (result === RESULTS.BLOCKED) {
+          await promptPermissionResolution(
+            title,
+            `${message}\n\nPlease enable this permission in your device settings.`,
+            false,
+          );
+          return false;
+        }
+
+        const decision = await promptPermissionResolution(title, message, true);
+
+        if (decision === 'retry') {
+          attempts += 1;
+          continue;
+        }
+
+        return false;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Permission request error:', error);
+      await promptPermissionResolution(title, message, true);
+      return false;
+    }
+  };
+
+  const ensureCameraPermission = async () => {
+    const permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.CAMERA
+        : PERMISSIONS.ANDROID.CAMERA;
+
+    return requestPermissionWithPrompt(
+      permission,
+      'Camera Permission Required',
+      'Camera access is required to capture photos.',
+    );
+  };
+
+  const ensurePhotoLibraryPermission = async () => {
+    const permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.PHOTO_LIBRARY
+        : Platform.Version >= 33
+            ? PERMISSIONS.ANDROID.READ_MEDIA_IMAGES
+            : PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE;
+
+    const baseGranted = await requestPermissionWithPrompt(
+      permission,
+      'Media Library Permission Required',
+      'Media library access is required to select photos or videos.',
+    );
+
+    if (!baseGranted) {
+      return false;
+    }
+
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      const videoGranted = await requestPermissionWithPrompt(
+        PERMISSIONS.ANDROID.READ_MEDIA_VIDEO,
+        'Media Library Permission Required',
+        'Media library access is required to select photos or videos.',
+      );
+
+      if (!videoGranted) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const ensureLocationPermission = async () => {
+    const permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
+        : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
+
+    return requestPermissionWithPrompt(
+      permission,
+      'Location Permission Required',
+      'Location access is required to add your current location.',
+    );
+  };
+
+  const applySelectedAsset = (asset?: Asset | null) => {
+    if (!asset || !asset.uri) {
+      Alert.alert('Error', 'No media selected. Please try again.');
+      return;
+    }
+
+    const inferredMimeType = asset.type ||
+      (asset.fileName?.toLowerCase().endsWith('.mp4') ? 'video/mp4' : undefined) ||
+      (asset.fileName?.toLowerCase().endsWith('.mov') ? 'video/quicktime' : undefined) ||
+      (asset.fileName?.toLowerCase().endsWith('.png') ? 'image/png' : undefined) ||
+      (asset.fileName?.toLowerCase().endsWith('.jpg') || asset.fileName?.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : undefined) ||
+      'image/jpeg';
+
+    const isVideo = inferredMimeType.startsWith('video/');
+    const extension = asset.fileName?.split('.').pop()?.toLowerCase()
+      || (isVideo ? inferredMimeType.split('/')[1] || 'mp4' : inferredMimeType.split('/')[1] || 'jpg');
+    const safeFileName = asset.fileName && asset.fileName.includes('.')
+      ? asset.fileName
+      : `buzz-${Date.now()}.${extension}`;
+
+    setMedia({
+      type: isVideo ? 'video' : 'image',
+      url: asset.uri,
+      mimeType: inferredMimeType,
+      fileName: safeFileName,
+    });
+  };
 
   const handleMediaPicker = () => {
     Alert.alert(
@@ -74,67 +267,64 @@ const CreateBuzzScreen: React.FC = () => {
 
   const openCamera = async () => {
     try {
-      // Request camera permissions
-      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-      if (cameraPermission.status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera permission is required to take photos. Please enable it in Settings.');
+      const granted = await ensureCameraPermission();
+      if (!granted) {
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Only images for camera on simulator
-        allowsEditing: true,
+      const result = await launchCamera({
+        mediaType: 'mixed',
+        includeBase64: false,
+        cameraType: 'back',
+        saveToPhotos: true,
         quality: 0.8,
-        aspect: [4, 3],
+        videoQuality: 'high',
       });
 
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setMedia({
-          type: 'image',
-          url: asset.uri || null,
-        });
-        Alert.alert('Success', 'Photo captured successfully!');
+      if (result.didCancel) {
+        return;
       }
-    } catch (error: any) {
+
+      if (result.errorCode) {
+        console.error('Camera error:', result.errorMessage);
+        Alert.alert('Error', result.errorMessage || 'Failed to open camera. Please try again.');
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      applySelectedAsset(asset);
+    } catch (error) {
       console.error('Camera error:', error);
-      // Check if it's a simulator error
-      if (error.message && error.message.includes('simulator')) {
-        Alert.alert(
-          'Camera Not Available',
-          'Camera is not available on the simulator. Please use the gallery option or test on a real device.',
-          [{text: 'OK'}]
-        );
-      } else {
-        Alert.alert('Error', 'Failed to open camera. Please try the gallery option instead.');
-      }
+      Alert.alert('Error', 'Failed to open the camera. Please try again or use the gallery option.');
     }
   };
 
   const openGallery = async () => {
     try {
-      // Request media library permissions
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Gallery permission is required to select media. Please enable it in Settings.');
+      const granted = await ensurePhotoLibraryPermission();
+      if (!granted) {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: true,
+      const result = await launchImageLibrary({
+        mediaType: 'mixed',
+        selectionLimit: 1,
+        includeBase64: false,
         quality: 0.8,
-        allowsMultipleSelection: false,
       });
 
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setMedia({
-          type: asset.type?.startsWith('video') ? 'video' : 'image',
-          url: asset.uri || null,
-        });
-        Alert.alert('Success', 'Media selected successfully!');
+      if (result.didCancel) {
+        return;
       }
+
+      if (result.errorCode) {
+        console.error('Gallery error:', result.errorMessage);
+        Alert.alert('Error', result.errorMessage || 'Failed to open gallery. Please try again.');
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      applySelectedAsset(asset);
     } catch (error) {
       console.error('Gallery error:', error);
       Alert.alert('Error', 'Failed to open gallery. Please try again.');
@@ -169,65 +359,65 @@ const CreateBuzzScreen: React.FC = () => {
 
   const getCurrentLocation = async () => {
     try {
-      // Check if location services are available
-      const isLocationEnabled = await Location.hasServicesEnabledAsync();
-      if (!isLocationEnabled) {
-        Alert.alert('Location Disabled', 'Please enable location services in your device settings');
+      const granted = await ensureLocationPermission();
+      if (!granted) {
         return;
       }
 
-      // Request location permission
-      const {status} = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to add location to your buzz');
-        return;
+      if (Platform.OS === 'ios') {
+        await Geolocation.requestAuthorization('whenInUse');
       }
 
-      // Get current location
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+      const position: GeoPosition = await new Promise((resolve, reject) => {
+        Geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 10000,
+        });
       });
 
-      // Get reverse geocoding (city, country)
-      let city = user?.city || 'Unknown';
-      let country = user?.country || 'Unknown';
-      let address = 'Current Location';
-      
+      const {latitude, longitude} = position.coords;
+      let city = user?.city || '';
+      let country = user?.country || '';
+      let address = '';
+      let name = 'Current Location';
+
       try {
-        const reverseGeocode = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        
-        if (reverseGeocode && reverseGeocode.length > 0) {
-          const addr = reverseGeocode[0];
-          city = addr.city || city;
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+          {
+            headers: {
+              'User-Agent': 'BuzzIt-App',
+            },
+          },
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const addr = data.address || {};
+          city = addr.city || addr.town || addr.village || city;
           country = addr.country || country;
-          // Build address string
-          const addressParts = [
-            addr.street,
-            addr.city,
-            addr.region,
-            addr.country,
-          ].filter(Boolean);
-          address = addressParts.join(', ') || 'Current Location';
+          address = data.display_name || address;
+          name = data.name || addr.road || name;
         }
-      } catch (geocodeError) {
-        console.log('Geocoding failed, using fallback:', geocodeError);
-        // Continue with fallback values
+      } catch (geoError) {
+        console.warn('Reverse geocoding failed, using fallback values:', geoError);
       }
 
       setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        city,
-        country,
-        address,
-        name: 'Current Location',
+        latitude,
+        longitude,
+        city: city || undefined,
+        country: country || undefined,
+        address: address || undefined,
+        name,
       });
     } catch (error) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'Failed to get current location. Please try again or create buzz without location.');
+      Alert.alert(
+        'Error',
+        'Failed to get current location. Please try again or create buzz without location.',
+      );
     }
   };
 
@@ -314,7 +504,7 @@ const CreateBuzzScreen: React.FC = () => {
     }
   };
 
-  const handleCreateBuzz = () => {
+  const handleCreateBuzz = async () => {
     // Check if buzz creation is enabled
     if (!features.buzzCreation) {
       Alert.alert('Feature Disabled', 'Buzz creation is currently disabled by admin.');
@@ -371,12 +561,42 @@ const CreateBuzzScreen: React.FC = () => {
 
     setIsCreating(true);
 
+    let uploadedMedia: { type: 'image' | 'video'; url: string } | null = null;
+    const localMediaUri = media?.url || null;
+
+    if (media?.url) {
+      try {
+        const uploadResponse = await ApiService.uploadMedia({
+          uri: media.url,
+          type: media.mimeType,
+          name: media.fileName,
+        });
+
+        if (uploadResponse.success && uploadResponse.data?.url) {
+          uploadedMedia = {
+            type: media.type,
+            url: uploadResponse.data.url,
+          };
+        } else {
+          setIsCreating(false);
+          Alert.alert('Upload Failed', uploadResponse.error || 'Unable to upload media. Please try again.');
+          return;
+        }
+      } catch (uploadError) {
+        console.error('Media upload error:', uploadError);
+        setIsCreating(false);
+        Alert.alert('Upload Failed', 'Unable to upload media. Please check your connection and try again.');
+        return;
+      }
+    }
+
     const newBuzz = {
       userId: currentUser.id,
       username: currentUser.username,
       userAvatar: currentUser.avatar || null,
       content: buzzContent,
-      media,
+      media: uploadedMedia,
+      localMediaUri,
       interests: selectedInterests,
       location: includeLocation && userLocation ? userLocation : undefined,
       buzzType,
@@ -413,7 +633,7 @@ const CreateBuzzScreen: React.FC = () => {
           {id: '2', text: 'No'},
           {id: '3', text: "Don't Know"},
         ]);
-        setMedia({type: null, url: null});
+        setMedia(null);
         setIncludeLocation(false);
         setUserLocation(null);
         setLocationSearchQuery('');
@@ -436,443 +656,435 @@ const CreateBuzzScreen: React.FC = () => {
     }
 
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        // Only share if we have a valid local file URI
-        if (media.url && !media.url.startsWith('http')) {
-          await Sharing.shareAsync(media.url);
-          Alert.alert('Success', 'Content shared successfully!');
-        } else {
-          // For text or remote URLs, use clipboard or show info
-          Alert.alert(
-            'Share Info',
-            'Copy to clipboard:\n\n' + content.substring(0, 100) + (content.length > 100 ? '...' : ''),
-            [
-              {text: 'OK'}
-            ]
-          );
-        }
-      } else {
-        Alert.alert('Error', 'Sharing is not available on this device');
+      const shareLines = [content.trim()];
+      if (media?.url && media.url.startsWith('http')) {
+        shareLines.push(media.url);
+      }
+
+      const result = await Share.share({
+        message: shareLines.filter(Boolean).join('\n\n'),
+        url: media?.url && media.url.startsWith('file://') ? media.url : undefined,
+      });
+
+      if (result.action === Share.sharedAction) {
+        Alert.alert('Success', 'Content shared successfully!');
       }
     } catch (error) {
       console.log('Share error:', error);
-      // Provide a fallback
-      Alert.alert(
-        'Share Your Buzz',
-        'Buzz Content:\n\n' + content,
-        [{text: 'OK'}]
-      );
+      Alert.alert('Error', 'Unable to open sharing options. Please try again later.');
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, {backgroundColor: theme.colors.background}]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.secondary]}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 0}}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>Create Buzz</Text>
-        <Text style={styles.headerSubtitle}>What's on your mind?</Text>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Buzz Type Selection */}
-        <Animatable.View animation="fadeInUp" style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            What type of buzz?
-          </Text>
-          <View style={styles.buzzTypeContainer}>
-            {(['event', 'gossip', 'thought', 'poll'] as BuzzType[]).map((type, index) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.buzzTypeButton,
-                  {
-                    backgroundColor: buzzType === type ? theme.colors.primary : theme.colors.surface,
-                    borderColor: buzzType === type ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
-                onPress={() => setBuzzType(type)}>
-                <Icon
-                  name={
-                    type === 'event' ? 'event' :
-                    type === 'gossip' ? 'chat' :
-                    type === 'thought' ? 'lightbulb' :
-                    type === 'poll' ? 'poll' :
-                    'send'
-                  }
-                  size={20}
-                  color={buzzType === type ? '#FFFFFF' : theme.colors.text}
-                />
-                <Text
-                  style={[
-                    styles.buzzTypeText,
-                    {color: buzzType === type ? '#FFFFFF' : theme.colors.text},
-                  ]}>
-                  {type === 'thought' ? 'Just a Thought' : 
-                   type === 'poll' ? 'Poll' :
-                   type.charAt(0).toUpperCase() + type.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {buzzType === 'event' && (
-            <Animatable.View animation="fadeIn" style={styles.eventDateContainer}>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.text,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                placeholder="Event Date (e.g., Dec 25, 2024 at 7 PM)"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={eventDate}
-                onChangeText={setEventDate}
-              />
-            </Animatable.View>
-          )}
-
-          {buzzType === 'poll' && (
-            <Animatable.View animation="fadeIn" style={styles.pollOptionsContainer}>
-              <Text style={[styles.pollLabel, {color: theme.colors.text}]}>
-                Poll Options
-              </Text>
-              {pollOptions.map((option, index) => (
-                <View key={option.id} style={styles.pollOptionRow}>
-                  <TextInput
-                    style={[
-                      styles.pollOptionInput,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        color: theme.colors.text,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                    placeholder={`Option ${index + 1}`}
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={option.text}
-                    onChangeText={(text) => handlePollOptionChange(option.id, text)}
-                  />
-                  {pollOptions.length > 2 && (
-                    <TouchableOpacity
-                      style={styles.removePollOptionButton}
-                      onPress={() => removePollOption(option.id)}>
-                      <Icon name="close" size={16} color={theme.colors.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-              <TouchableOpacity
-                style={[styles.addPollOptionButton, {borderColor: theme.colors.primary}]}
-                onPress={addPollOption}>
-                <Icon name="add" size={16} color={theme.colors.primary} />
-                <Text style={[styles.addPollOptionText, {color: theme.colors.primary}]}>
-                  Add Option
-                </Text>
-              </TouchableOpacity>
-            </Animatable.View>
-          )}
-        </Animatable.View>
-
-        {/* Content Input */}
-        <Animatable.View animation="fadeInUp" delay={50} style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            What's buzzing?
-          </Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: theme.colors.surface,
-                color: theme.colors.text,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            placeholder="Share what's on your mind..."
-            placeholderTextColor={theme.colors.textSecondary}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            maxLength={500}
-          />
-          <Text style={[styles.characterCount, {color: theme.colors.textSecondary}]}>
-            {content.length}/500
-          </Text>
-        </Animatable.View>
-
-        {/* Media Section */}
-        <Animatable.View animation="fadeInUp" delay={100} style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            Add Media
-          </Text>
-          <View style={styles.mediaSection}>
-            <TouchableOpacity
-              style={[styles.mediaButton, {backgroundColor: theme.colors.primary}]}
-              onPress={handleMediaPicker}>
-              <Icon name="add-a-photo" size={24} color="#FFFFFF" />
-              <Text style={styles.mediaButtonText}>Add Photo/Video</Text>
-            </TouchableOpacity>
-
-            {media.url && (
-              <Animatable.View animation="fadeIn" style={styles.mediaPreview}>
-                <Image source={{uri: media.url}} style={styles.mediaImage} />
+    <ScreenContainer
+      title="Create"
+      subtitle="Share a new buzz"
+      onBackPress={() => navigation.goBack()}
+      contentStyle={{paddingHorizontal: 0}}
+    >
+      <KeyboardAvoidingView
+        style={[styles.container, {backgroundColor: 'transparent'}]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{paddingBottom: 220 + (bottomOffset || 0)}}
+        >
+          {/* Buzz Type Selection */}
+          <Animatable.View animation="fadeInUp" style={styles.section}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              What type of buzz?
+            </Text>
+            <View style={styles.buzzTypeContainer}>
+              {(['event', 'gossip', 'thought', 'poll'] as BuzzType[]).map((type, index) => (
                 <TouchableOpacity
-                  style={styles.removeMediaButton}
-                  onPress={() => setMedia({type: null, url: null})}>
-                  <Icon name="close" size={20} color="#FFFFFF" />
+                  key={type}
+                  style={[
+                    styles.buzzTypeButton,
+                    {
+                      backgroundColor: buzzType === type ? theme.colors.primary : theme.colors.surface,
+                      borderColor: buzzType === type ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => setBuzzType(type)}>
+                  <Icon
+                    name={
+                      type === 'event' ? 'event' :
+                      type === 'gossip' ? 'chat' :
+                      type === 'thought' ? 'lightbulb' :
+                      type === 'poll' ? 'poll' :
+                      'send'
+                    }
+                    size={20}
+                    color={buzzType === type ? '#FFFFFF' : theme.colors.text}
+                  />
+                  <Text
+                    style={[
+                      styles.buzzTypeText,
+                      {color: buzzType === type ? '#FFFFFF' : theme.colors.text},
+                    ]}>
+                    {type === 'thought' ? 'Just a Thought' : 
+                     type === 'poll' ? 'Poll' :
+                     type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {buzzType === 'event' && (
+              <Animatable.View animation="fadeIn" style={styles.eventDateContainer}>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  placeholder="Event Date (e.g., Dec 25, 2024 at 7 PM)"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={eventDate}
+                  onChangeText={setEventDate}
+                />
+              </Animatable.View>
+            )}
+
+            {buzzType === 'poll' && (
+              <Animatable.View animation="fadeIn" style={styles.pollOptionsContainer}>
+                <Text style={[styles.pollLabel, {color: theme.colors.text}]}>
+                  Poll Options
+                </Text>
+                {pollOptions.map((option, index) => (
+                  <View key={option.id} style={styles.pollOptionRow}>
+                    <TextInput
+                      style={[
+                        styles.pollOptionInput,
+                        {
+                          backgroundColor: theme.colors.surface,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                      placeholder={`Option ${index + 1}`}
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={option.text}
+                      onChangeText={(text) => handlePollOptionChange(option.id, text)}
+                    />
+                    {pollOptions.length > 2 && (
+                      <TouchableOpacity
+                        style={styles.removePollOptionButton}
+                        onPress={() => removePollOption(option.id)}>
+                        <Icon name="close" size={16} color={theme.colors.error} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={[styles.addPollOptionButton, {borderColor: theme.colors.primary}]}
+                  onPress={addPollOption}>
+                  <Icon name="add" size={16} color={theme.colors.primary} />
+                  <Text style={[styles.addPollOptionText, {color: theme.colors.primary}]}>
+                    Add Option
+                  </Text>
                 </TouchableOpacity>
               </Animatable.View>
             )}
-          </View>
-        </Animatable.View>
-
-        {/* Location Section - Only show for events */}
-        {buzzType === 'event' && (
-          <Animatable.View animation="fadeInUp" delay={150} style={styles.section}>
-            <View style={styles.locationRow}>
-              <View style={styles.locationInfo}>
-                <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-                  Add Event Location
-                </Text>
-                <Text style={[styles.locationDescription, {color: theme.colors.textSecondary}]}>
-                  Search and select a location for your event
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.locationToggle,
-                  {
-                    backgroundColor: includeLocation ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
-                onPress={() => {
-                  if (!includeLocation) {
-                    // Show location search instead of auto-getting current location
-                    handleOpenLocationSearch();
-                  } else {
-                    setIncludeLocation(false);
-                    setUserLocation(null);
-                  }
-                }}>
-                <Icon 
-                  name={includeLocation ? "my-location" : "location-off"} 
-                  size={20} 
-                  color="#FFFFFF" 
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Location Search Input */}
-            {includeLocation && (
-              <View style={styles.locationSearchContainer}>
-                <View style={[styles.locationSearchInputContainer, {backgroundColor: theme.colors.surface}]}>
-                  <Icon name="search" size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
-                  <TextInput
-                    style={[styles.locationSearchInput, {color: theme.colors.text}]}
-                    placeholder="Search for a location..."
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={locationSearchQuery}
-                    onChangeText={setLocationSearchQuery}
-                    onFocus={() => setShowLocationSearch(true)}
-                  />
-                  {isSearchingLocation && (
-                    <ActivityIndicator size="small" color={theme.colors.primary} style={styles.searchLoader} />
-                  )}
-                </View>
-
-                {/* Current Location Button */}
-                <TouchableOpacity
-                  style={[styles.currentLocationButton, {backgroundColor: theme.colors.surface}]}
-                  onPress={getCurrentLocation}>
-                  <Icon name="my-location" size={18} color={theme.colors.primary} />
-                  <Text style={[styles.currentLocationText, {color: theme.colors.primary}]}>
-                    Use Current Location
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Selected Location Display */}
-            {includeLocation && userLocation && (
-              <View style={[styles.selectedLocationContainer, {backgroundColor: theme.colors.surface}]}>
-                <Icon name="place" size={20} color={theme.colors.primary} />
-                <View style={styles.selectedLocationTextContainer}>
-                  <Text style={[styles.selectedLocationName, {color: theme.colors.text}]} numberOfLines={1}>
-                    {userLocation.name || userLocation.address || `${userLocation.city}, ${userLocation.country}`}
-                  </Text>
-                  {(userLocation.city || userLocation.country) && (
-                    <Text style={[styles.selectedLocationAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
-                      {userLocation.city}{userLocation.city && userLocation.country ? ', ' : ''}{userLocation.country}
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setUserLocation(null);
-                    setLocationSearchQuery('');
-                    setShowLocationSearch(false);
-                  }}>
-                  <Icon name="close" size={20} color={theme.colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Location Search Results Modal */}
-            <Modal
-              visible={showLocationSearch && locationSearchResults.length > 0}
-              transparent={true}
-              animationType="slide"
-              onRequestClose={() => setShowLocationSearch(false)}>
-              <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
-                  <View style={styles.modalHeader}>
-                    <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
-                      Select Location
-                    </Text>
-                    <TouchableOpacity onPress={() => setShowLocationSearch(false)}>
-                      <Icon name="close" size={24} color={theme.colors.text} />
-                    </TouchableOpacity>
-                  </View>
-                  <FlatList
-                    data={locationSearchResults}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({item}) => (
-                      <TouchableOpacity
-                        style={[styles.locationResultItem, {backgroundColor: theme.colors.background}]}
-                        onPress={() => handleSelectLocation(item)}>
-                        <Icon name="place" size={24} color={theme.colors.primary} />
-                        <View style={styles.locationResultTextContainer}>
-                          <Text style={[styles.locationResultName, {color: theme.colors.text}]} numberOfLines={2}>
-                            {item.name}
-                          </Text>
-                          {item.city && (
-                            <Text style={[styles.locationResultAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
-                              {item.city}{item.country ? `, ${item.country}` : ''}
-                            </Text>
-                          )}
-                        </View>
-                        <Icon name="chevron-right" size={20} color={theme.colors.textSecondary} />
-                      </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={
-                      locationSearchQuery.length >= 3 && !isSearchingLocation ? (
-                        <View style={styles.emptyResults}>
-                          <Text style={[styles.emptyResultsText, {color: theme.colors.textSecondary}]}>
-                            No locations found
-                          </Text>
-                        </View>
-                      ) : null
-                    }
-                  />
-                </View>
-              </View>
-            </Modal>
           </Animatable.View>
-        )}
 
-        {/* Interests Selection */}
-        <Animatable.View animation="fadeInUp" delay={200} style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            Select Interests
-          </Text>
-          <View style={styles.interestsGrid}>
-            {interests.map((interest, index) => {
-              const isSelected = selectedInterests.some(i => i.id === interest.id);
-              return (
-                <Animatable.View
-                  key={interest.id}
-                  animation="fadeInUp"
-                  delay={300 + index * 50}>
+          {/* Content Input */}
+          <Animatable.View animation="fadeInUp" delay={50} style={styles.section}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              What's buzzing?
+            </Text>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: theme.colors.surface,
+                  color: theme.colors.text,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              placeholder="Share what's on your mind..."
+              placeholderTextColor={theme.colors.textSecondary}
+              value={content}
+              onChangeText={setContent}
+              multiline
+              maxLength={500}
+            />
+            <Text style={[styles.characterCount, {color: theme.colors.textSecondary}]}>
+              {content.length}/500
+            </Text>
+          </Animatable.View>
+
+          {/* Media Section */}
+          <Animatable.View animation="fadeInUp" delay={100} style={styles.section}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>Add Media</Text>
+            <View style={styles.mediaSection}>
+              <BuzzitButton
+                label="Add Photo/Video"
+                icon="add-a-photo"
+                onPress={handleMediaPicker}
+                style={styles.mediaButtonWrapper}
+              />
+
+              {media && (
+                <Animatable.View animation="fadeIn" style={styles.mediaPreview}>
+                  {media.type === 'image' ? (
+                    <Image source={{uri: media.url}} style={styles.mediaImage} />
+                  ) : (
+                    <View style={[styles.mediaImage, styles.mediaVideoPlaceholder]}>
+                      <Icon name="videocam" size={28} color="#FFFFFF" />
+                    </View>
+                  )}
                   <TouchableOpacity
-                    style={[
-                      styles.interestButton,
-                      {
-                        backgroundColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.surface,
-                        borderColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.border,
-                      },
-                    ]}
-                    onPress={() => toggleInterest(interest)}>
-                    <Text style={styles.interestEmoji}>{interest.emoji}</Text>
-                    <Text
-                      style={[
-                        styles.interestName,
-                        {
-                          color: isSelected
-                            ? '#FFFFFF'
-                            : theme.colors.text,
-                        },
-                      ]}>
-                      {interest.name}
-                    </Text>
-                    {isSelected && (
-                      <Icon
-                        name="check"
-                        size={16}
-                        color="#FFFFFF"
-                        style={styles.checkIcon}
-                      />
-                    )}
+                    style={styles.removeMediaButton}
+                    onPress={() => setMedia(null)}>
+                    <Icon name="close" size={20} color="#FFFFFF" />
                   </TouchableOpacity>
                 </Animatable.View>
-              );
-            })}
-          </View>
+              )}
+            </View>
+          </Animatable.View>
+
+          {/* Location Section - Only show for events */}
+          {buzzType === 'event' && (
+            <Animatable.View animation="fadeInUp" delay={150} style={styles.section}>
+              <View style={styles.locationRow}>
+                <View style={styles.locationInfo}>
+                  <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+                    Add Event Location
+                  </Text>
+                  <Text style={[styles.locationDescription, {color: theme.colors.textSecondary}]}>
+                    Search and select a location for your event
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.locationToggle,
+                    {
+                      backgroundColor: includeLocation ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    if (!includeLocation) {
+                      // Show location search instead of auto-getting current location
+                      handleOpenLocationSearch();
+                    } else {
+                      setIncludeLocation(false);
+                      setUserLocation(null);
+                    }
+                  }}>
+                  <Icon 
+                    name={includeLocation ? "my-location" : "location-off"} 
+                    size={20} 
+                    color="#FFFFFF" 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Location Search Input */}
+              {includeLocation && (
+                <View style={styles.locationSearchContainer}>
+                  <View style={[styles.locationSearchInputContainer, {backgroundColor: theme.colors.surface}]}>
+                    <Icon name="search" size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
+                    <TextInput
+                      style={[styles.locationSearchInput, {color: theme.colors.text}]}
+                      placeholder="Search for a location..."
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={locationSearchQuery}
+                      onChangeText={setLocationSearchQuery}
+                      onFocus={() => setShowLocationSearch(true)}
+                    />
+                    {isSearchingLocation && (
+                      <ActivityIndicator size="small" color={theme.colors.primary} style={styles.searchLoader} />
+                    )}
+                  </View>
+
+                  {/* Current Location Button */}
+                  <TouchableOpacity
+                    style={[styles.currentLocationButton, {backgroundColor: theme.colors.surface}]}
+                    onPress={getCurrentLocation}>
+                    <Icon name="my-location" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.currentLocationText, {color: theme.colors.primary}]}>
+                      Use Current Location
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Selected Location Display */}
+              {includeLocation && userLocation && (
+                <View style={[styles.selectedLocationContainer, {backgroundColor: theme.colors.surface}]}>
+                  <Icon name="place" size={20} color={theme.colors.primary} />
+                  <View style={styles.selectedLocationTextContainer}>
+                    <Text style={[styles.selectedLocationName, {color: theme.colors.text}]} numberOfLines={1}>
+                      {userLocation.name || userLocation.address || `${userLocation.city}, ${userLocation.country}`}
+                    </Text>
+                    {(userLocation.city || userLocation.country) && (
+                      <Text style={[styles.selectedLocationAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
+                        {userLocation.city}{userLocation.city && userLocation.country ? ', ' : ''}{userLocation.country}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setUserLocation(null);
+                      setLocationSearchQuery('');
+                      setShowLocationSearch(false);
+                    }}>
+                    <Icon name="close" size={20} color={theme.colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Location Search Results Modal */}
+              <Modal
+                visible={showLocationSearch && locationSearchResults.length > 0}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowLocationSearch(false)}>
+                <View style={styles.modalOverlay}>
+                  <View style={[styles.modalContent, {backgroundColor: theme.colors.surface}]}>
+                    <View style={styles.modalHeader}>
+                      <Text style={[styles.modalTitle, {color: theme.colors.text}]}>
+                        Select Location
+                      </Text>
+                      <TouchableOpacity onPress={() => setShowLocationSearch(false)}>
+                        <Icon name="close" size={24} color={theme.colors.text} />
+                      </TouchableOpacity>
+                    </View>
+                    <FlatList
+                      data={locationSearchResults}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({item}) => (
+                        <TouchableOpacity
+                          style={[styles.locationResultItem, {backgroundColor: theme.colors.background}]}
+                          onPress={() => handleSelectLocation(item)}>
+                          <Icon name="place" size={24} color={theme.colors.primary} />
+                          <View style={styles.locationResultTextContainer}>
+                            <Text style={[styles.locationResultName, {color: theme.colors.text}]} numberOfLines={2}>
+                              {item.name}
+                            </Text>
+                            {item.city && (
+                              <Text style={[styles.locationResultAddress, {color: theme.colors.textSecondary}]} numberOfLines={1}>
+                                {item.city}{item.country ? `, ${item.country}` : ''}
+                              </Text>
+                            )}
+                          </View>
+                          <Icon name="chevron-right" size={20} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                      ListEmptyComponent={
+                        locationSearchQuery.length >= 3 && !isSearchingLocation ? (
+                          <View style={styles.emptyResults}>
+                            <Text style={[styles.emptyResultsText, {color: theme.colors.textSecondary}]}>
+                              No locations found
+                            </Text>
+                          </View>
+                        ) : null
+                      }
+                    />
+                  </View>
+                </View>
+              </Modal>
+            </Animatable.View>
+          )}
+
+          {/* Interests Selection */}
+          <Animatable.View animation="fadeInUp" delay={200} style={styles.section}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
+              Select Interests
+            </Text>
+            <View style={styles.interestsGrid}>
+              {interests.map((interest, index) => {
+                const isSelected = selectedInterests.some(i => i.id === interest.id);
+                return (
+                  <Animatable.View
+                    key={interest.id}
+                    animation="fadeInUp"
+                    delay={300 + index * 50}>
+                    <TouchableOpacity
+                      style={[
+                        styles.interestButton,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.surface,
+                          borderColor: isSelected
+                            ? theme.colors.primary
+                            : theme.colors.border,
+                        },
+                      ]}
+                      onPress={() => toggleInterest(interest)}>
+                      <Text style={styles.interestEmoji}>{interest.emoji}</Text>
+                      <Text
+                        style={[
+                          styles.interestName,
+                          {
+                            color: isSelected
+                              ? '#FFFFFF'
+                              : theme.colors.text,
+                          },
+                        ]}>
+                        {interest.name}
+                      </Text>
+                      {isSelected && (
+                        <Icon
+                          name="check"
+                          size={16}
+                          color="#FFFFFF"
+                          style={styles.checkIcon}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </Animatable.View>
+                );
+              })}
+            </View>
+          </Animatable.View>
+
+          {/* Share Out Section */}
+          <Animatable.View animation="fadeInUp" delay={240} style={styles.section}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>Share Beyond Buzzit</Text>
+            <Text style={[styles.sectionSubtitle, {color: theme.colors.textSecondary}]}>Instantly send this buzz to other apps while you create.</Text>
+            <BuzzitButton
+              label="Share to Social"
+              icon="share"
+              variant="secondary"
+              onPress={handleShareToSocial}
+              style={styles.shareButtonInline}
+            />
+          </Animatable.View>
+        </ScrollView>
+
+        {/* Action Buttons */}
+        <Animatable.View
+          animation="fadeInUp"
+          delay={400}
+          style={[
+            styles.actionBar,
+            {
+              backgroundColor: theme.colors.surface,
+              paddingBottom: insets.bottom + 16,
+              marginBottom: Math.max((bottomOffset || 0) - 32, 24),
+            },
+          ]}>
+          <BuzzitButton
+            label="Create Buzz"
+            icon="trending-up"
+            onPress={handleCreateBuzz}
+            style={styles.fullWidthAction}
+          />
         </Animatable.View>
-      </ScrollView>
-
-      {/* Action Buttons */}
-      <Animatable.View
-        animation="fadeInUp"
-        delay={400}
-        style={[styles.actionBar, {backgroundColor: theme.colors.surface}]}>
-        <TouchableOpacity
-          style={[styles.shareButton, {backgroundColor: theme.colors.accent}]}
-          onPress={handleShareToSocial}>
-          <Icon name="share" size={20} color="#FFFFFF" />
-          <Text style={styles.shareButtonText}>Share to Social</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.createButton, {backgroundColor: theme.colors.primary}]}
-          onPress={handleCreateBuzz}>
-          <Icon name="trending-up" size={20} color="#FFFFFF" />
-          <Text style={styles.createButtonText}>Create Buzz</Text>
-        </TouchableOpacity>
-      </Animatable.View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 30,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.9,
   },
   content: {
     flex: 1,
@@ -885,6 +1097,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 10,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 14,
   },
   textInput: {
     borderWidth: 1,
@@ -902,6 +1119,7 @@ const styles = StyleSheet.create({
   mediaSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
   buzzTypeContainer: {
     flexDirection: 'row',
@@ -1095,18 +1313,11 @@ const styles = StyleSheet.create({
   emptyResultsText: {
     fontSize: 16,
   },
-  mediaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
+  mediaButtonWrapper: {
+    alignSelf: 'flex-start',
   },
-  mediaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  shareButtonInline: {
+    width: '100%',
   },
   mediaPreview: {
     marginLeft: 15,
@@ -1116,6 +1327,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 10,
+  },
+  mediaVideoPlaceholder: {
+    backgroundColor: 'rgba(47,123,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   removeMediaButton: {
     position: 'absolute',
@@ -1154,39 +1370,16 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   actionBar: {
-    flexDirection: 'row',
-    padding: 20,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#E6E6E6',
+    marginTop: 12,
+    marginBottom: 12,
   },
-  shareButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginRight: 10,
-  },
-  shareButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  createButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  fullWidthAction: {
+    width: '100%',
   },
 });
 

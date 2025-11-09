@@ -8,20 +8,22 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser} from '../context/UserContext';
 import {useAuth} from '../context/AuthContext';
 import {useNavigation} from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
+import ScreenContainer from '../components/ScreenContainer';
 
 const SettingsScreen: React.FC = () => {
   const {theme, setTheme, availableThemes} = useTheme();
   const {user, setUser} = useUser();
   const {logout} = useAuth();
   const navigation = useNavigation();
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   const handleLogout = () => {
     Alert.alert(
@@ -163,17 +165,17 @@ const SettingsScreen: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.secondary]}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 0}}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSubtitle}>Customize your experience</Text>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <ScreenContainer
+      title="Settings"
+      subtitle="Customize your experience"
+      onBackPress={() => navigation.goBack()}
+      onScrollDownPress={() => scrollViewRef.current?.scrollToEnd({animated: true})}
+    >
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Theme Selection */}
         <Animatable.View animation="fadeInUp" style={styles.section}>
           <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
@@ -283,7 +285,7 @@ const SettingsScreen: React.FC = () => {
           )}
         </Animatable.View>
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 };
 
@@ -292,24 +294,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 30,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    paddingTop: 60,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    marginBottom: 20,
+    shadowColor: 'rgba(0, 0, 0, 0.15)',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 5,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.9,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 6,
   },
   content: {
-    flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
   },
   section: {
     marginBottom: 30,

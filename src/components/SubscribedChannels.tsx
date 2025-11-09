@@ -8,7 +8,7 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser} from '../context/UserContext';
@@ -29,13 +29,19 @@ interface FollowedItem {
 interface SubscribedChannelsProps {
   onChannelPress?: (channelId: string) => void;
   onYourBuzzPress?: () => void;
+  variant?: 'default' | 'card';
 }
 
-const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, onYourBuzzPress}) => {
+const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({
+  onChannelPress,
+  onYourBuzzPress,
+  variant = 'default',
+}) => {
   const {theme} = useTheme();
   const {user, buzzes} = useUser();
   const [followedItems, setFollowedItems] = useState<FollowedItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const isCard = variant === 'card';
   
   // Get user's own buzz count
   const userBuzzCount = buzzes?.filter(buzz => buzz.userId === user?.id).length || 0;
@@ -122,7 +128,10 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      isCard && styles.cardContainer,
+    ]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -131,7 +140,7 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
         {/* YourBuzz - First item like Instagram Stories */}
         {/* Always show YourBuzz, even if user is still loading */}
         <TouchableOpacity
-          style={styles.channelItem}
+          style={[styles.channelItem, isCard && styles.cardChannelItem]}
           onPress={handleYourBuzzPress}>
           <View style={styles.avatarContainer}>
             <View
@@ -139,9 +148,10 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
                 styles.avatar,
                 {backgroundColor: theme.colors.primary},
                 userBuzzCount > 0 && styles.yourBuzzAvatar,
+                isCard && styles.cardAvatar,
               ]}>
               {user?.avatar ? (
-                <Image source={{uri: user.avatar}} style={styles.avatarImage} />
+                <Image source={{uri: user.avatar}} style={[styles.avatarImage, isCard && styles.cardAvatarImage]} />
               ) : (
                 <Text style={styles.avatarText}>
                   {user?.displayName?.charAt(0).toUpperCase() || 
@@ -163,6 +173,7 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
             style={[
               styles.channelName,
               {color: theme.colors.text, fontWeight: '600'},
+              isCard && styles.cardChannelName,
             ]}
             numberOfLines={1}>
             YourBuzz
@@ -172,7 +183,7 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
         {displayItems.map((item, index) => (
           <TouchableOpacity
             key={item.id}
-            style={styles.channelItem}
+            style={[styles.channelItem, isCard && styles.cardChannelItem]}
             onPress={() => handleChannelPress(item.id)}>
             <View
               style={[
@@ -183,9 +194,10 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
                 style={[
                   styles.avatar,
                   {backgroundColor: theme.colors.primary},
+                  isCard && styles.cardAvatar,
                 ]}>
                 {item.avatar ? (
-                  <Image source={{uri: item.avatar}} style={styles.avatarImage} />
+                  <Image source={{uri: item.avatar}} style={[styles.avatarImage, isCard && styles.cardAvatarImage]} />
                 ) : (
                   <Text style={styles.avatarText}>
                     {item.name.charAt(0).toUpperCase()}
@@ -196,7 +208,8 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({onChannelPress, 
             <Text
               style={[
                 styles.channelName,
-                {color: theme.colors.text},
+                  {color: theme.colors.text},
+                  isCard && styles.cardChannelName,
               ]}
               numberOfLines={1}>
               {item.name}
@@ -228,6 +241,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
+  cardContainer: {
+    borderBottomWidth: 0,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
   scrollView: {
     paddingHorizontal: 8,
   },
@@ -238,6 +256,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     alignItems: 'center',
     width: 70,
+  },
+  cardChannelItem: {
+    width: 60,
+    marginHorizontal: 4,
   },
   avatarContainer: {
     position: 'relative',
@@ -256,10 +278,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
+  cardAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
   avatarImage: {
     width: 64,
     height: 64,
     borderRadius: 32,
+  },
+  cardAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   avatarText: {
     color: '#FFFFFF',
@@ -307,6 +339,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
     maxWidth: 70,
+  },
+  cardChannelName: {
+    fontSize: 11,
+    maxWidth: 60,
   },
   typeIconContainer: {
     marginTop: 4,

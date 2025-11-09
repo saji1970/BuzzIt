@@ -1,5 +1,5 @@
-import * as Contacts from 'expo-contacts';
-import * as Linking from 'expo-linking';
+import Contacts, {Contact} from 'react-native-contacts';
+import {PermissionsAndroid, Platform} from 'react-native';
 
 /**
  * Contact Sync Service
@@ -12,12 +12,29 @@ class ContactSyncService {
    */
   async requestContactsPermission(): Promise<boolean> {
     try {
-      const ContactsModule = loadContactsModule();
-      if (!ContactsModule) {
-        return false;
+      if (Platform.OS === 'android' && Platform.Version >= 23) {
+        const permission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+        if (permission) {
+          return true;
+        }
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+          {
+            title: 'Buzzit Contacts Permission',
+            message: 'Buzzit needs access to your contacts to help you follow friends.',
+            buttonPositive: 'Allow',
+          },
+        );
+        return result === PermissionsAndroid.RESULTS.GRANTED;
       }
-      const { status } = await ContactsModule.requestPermissionsAsync();
-      return status === 'granted';
+
+      const currentStatus = await Contacts.checkPermission();
+      if (currentStatus === 'authorized') {
+        return true;
+      }
+
+      const requestedStatus = await Contacts.requestPermission();
+      return requestedStatus === 'authorized';
     } catch (error) {
       console.error('Error requesting contacts permission:', error);
       return false;
@@ -33,30 +50,18 @@ class ContactSyncService {
     phone?: string;
   }>> {
     try {
-      const ContactsModule = loadContactsModule();
-      if (!ContactsModule) {
-        console.warn('expo-contacts not available');
-        return [];
-      }
-
       const hasPermission = await this.requestContactsPermission();
       if (!hasPermission) {
         console.warn('Contacts permission not granted');
         return [];
       }
 
-      const { data } = await ContactsModule.getContactsAsync({
-        fields: [
-          ContactsModule.Fields.Name,
-          ContactsModule.Fields.Emails,
-          ContactsModule.Fields.PhoneNumbers,
-        ],
-      });
+      const contacts = await Contacts.getAll();
 
-      return data.map(contact => ({
-        name: contact.name || '',
-        email: contact.emails && contact.emails.length > 0 
-          ? contact.emails[0].email 
+      return contacts.map((contact: Contact) => ({
+        name: contact.displayName || '',
+        email: contact.emailAddresses && contact.emailAddresses.length > 0
+          ? contact.emailAddresses[0].email
           : undefined,
         phone: contact.phoneNumbers && contact.phoneNumbers.length > 0
           ? contact.phoneNumbers[0].number?.replace(/\s/g, '')
@@ -104,4 +109,3 @@ class ContactSyncService {
 }
 
 export default new ContactSyncService();
-

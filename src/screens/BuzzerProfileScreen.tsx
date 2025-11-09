@@ -11,8 +11,8 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
@@ -58,7 +58,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     if (visible && buzzerId) {
       loadBuzzerData();
     }
-  }, [visible, buzzerId]);
+  }, [visible, buzzerId, buzzes]);
 
   const loadBuzzerData = async () => {
     try {

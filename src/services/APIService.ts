@@ -78,25 +78,41 @@ class ApiService {
     const url = `${API_BASE_URL}${endpoint}`;
     try {
       const token = await AsyncStorage.getItem('authToken');
-      
+
       console.log('Making API request to:', url);
       console.log('API_BASE_URL:', API_BASE_URL);
       console.log('Endpoint:', endpoint);
-      
-      const config: RequestInit = {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-          ...options.headers,
-        },
-        ...options,
+
+      const isFormDataBody = options.body && typeof options.body === 'object' && typeof (options.body as any).append === 'function';
+
+      const headers: Record<string, string> = {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(options.headers as Record<string, string>),
       };
 
-      console.log('Request config:', JSON.stringify(config, null, 2));
+      if (!isFormDataBody && !headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const config: RequestInit = {
+        ...options,
+        headers,
+      };
+
+      if (isFormDataBody) {
+        console.log('Request config: FormData payload');
+      } else {
+        const logConfig = {
+          ...config,
+          body: typeof config.body === 'string' ? config.body : undefined,
+        };
+        console.log('Request config:', JSON.stringify(logConfig, null, 2));
+      }
+
       const response = await fetch(url, config);
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
-      
+
       let data;
       try {
         const text = await response.text();
@@ -349,6 +365,20 @@ class ApiService {
     return this.makeRequest<Buzz>('/api/buzzes', {
       method: 'POST',
       body: JSON.stringify(buzz),
+    });
+  }
+
+  async uploadMedia(file: { uri: string; type: string; name: string }): Promise<ApiResponse<{ url: string }>> {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      type: file.type,
+      name: file.name,
+    } as any);
+
+    return this.makeRequest<{ url: string }>('/api/uploads', {
+      method: 'POST',
+      body: formData,
     });
   }
 

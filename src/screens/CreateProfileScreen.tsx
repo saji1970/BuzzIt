@@ -9,12 +9,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useNavigation} from '@react-navigation/native';
+import {launchImageLibrary} from 'react-native-image-picker';
+import {
+  check,
+  request,
+  RESULTS,
+  PERMISSIONS,
+  Permission,
+  openSettings,
+} from 'react-native-permissions';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Interest} from '../context/UserContext';
@@ -39,6 +49,7 @@ const CreateProfileScreen: React.FC = () => {
   const [mobileVerificationEnabled, setMobileVerificationEnabled] = useState(false);
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [verificationIdState, setVerificationIdState] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   
   // Username validation state
   const [usernameChecked, setUsernameChecked] = useState(false);
@@ -144,6 +155,78 @@ const CreateProfileScreen: React.FC = () => {
     }
   };
 
+  const ensureAvatarPermission = async (): Promise<boolean> => {
+    const permission: Permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.PHOTO_LIBRARY
+        : Platform.Version >= 33
+            ? PERMISSIONS.ANDROID.READ_MEDIA_IMAGES
+            : PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE;
+
+    try {
+      const currentStatus = await check(permission);
+
+      if (currentStatus === RESULTS.GRANTED || currentStatus === RESULTS.LIMITED) {
+        return true;
+      }
+
+      if (currentStatus === RESULTS.BLOCKED) {
+        Alert.alert(
+          'Media Permission Needed',
+          'Please enable photo library access in Settings to add a profile picture.',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {text: 'Open Settings', onPress: () => openSettings().catch(() => {})},
+          ],
+        );
+        return false;
+      }
+
+      const result = await request(permission);
+      return result === RESULTS.GRANTED || result === RESULTS.LIMITED;
+    } catch (error) {
+      console.error('Avatar permission error:', error);
+      Alert.alert('Permission Error', 'Unable to request photo library permission.');
+      return false;
+    }
+  };
+
+  const handleSelectAvatar = async () => {
+    const granted = await ensureAvatarPermission();
+    if (!granted) {
+      return;
+    }
+
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+      includeBase64: false,
+      quality: 0.8,
+    });
+
+    if (result.didCancel) {
+      return;
+    }
+
+    if (result.errorCode) {
+      console.error('Avatar picker error:', result.errorMessage);
+      Alert.alert('Error', result.errorMessage || 'Failed to open gallery. Please try again.');
+      return;
+    }
+
+    const asset = result.assets?.[0];
+    if (!asset || !asset.uri) {
+      Alert.alert('Error', 'No image selected. Please try again.');
+      return;
+    }
+
+    setAvatarUri(asset.uri);
+  };
+
+  const clearAvatarSelection = () => {
+    setAvatarUri(null);
+  };
+
   const handleSendVerificationCode = async () => {
     // Check if mobile verification is enabled
     if (!mobileVerificationEnabled) {
@@ -187,6 +270,11 @@ const CreateProfileScreen: React.FC = () => {
   const handleVerifyAndCreate = async () => {
     if (!verificationCode.trim()) {
       Alert.alert('Error', 'Please enter the verification code');
+      return;
+    }
+
+    if (!avatarUri) {
+      Alert.alert('Add Profile Photo', 'Please add a profile photo or avatar before continuing.');
       return;
     }
 
@@ -235,6 +323,7 @@ const CreateProfileScreen: React.FC = () => {
         ...savedUser,
         interests: selectedInterests,
         displayName: buzzProfileName.trim(),
+        avatar: avatarUri,
       };
       
       // Update user with interests on backend
@@ -242,14 +331,20 @@ const CreateProfileScreen: React.FC = () => {
         const updateResponse = await ApiService.updateUser(savedUser.id, {
           interests: selectedInterests,
           displayName: buzzProfileName.trim(),
+          avatar: avatarUri,
         });
         
         if (updateResponse.success && updateResponse.data) {
           // Save updated user
+          const updatedUser = {
+            ...updateResponse.data,
+            avatar: avatarUri || updateResponse.data.avatar || null,
+          };
+
           await AsyncStorage.setItem('authToken', result.token);
-          await AsyncStorage.setItem('user', JSON.stringify(updateResponse.data));
-          setUser(updateResponse.data); // Update UserContext
-          setUserData(updateResponse.data); // Update AuthContext so isAuthenticated becomes true
+          await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+          setUser(updatedUser); // Update UserContext
+          setUserData(updatedUser); // Update AuthContext so isAuthenticated becomes true
           updateUserInterests(selectedInterests);
           
           Alert.alert('Success', 'Profile created and verified successfully! 🎉', [
@@ -330,6 +425,10 @@ const CreateProfileScreen: React.FC = () => {
       Alert.alert('Error', 'Please select at least one interest');
       return;
     }
+    if (!avatarUri) {
+      Alert.alert('Add Profile Photo', 'Please add a profile photo or avatar before creating your profile.');
+      return;
+    }
 
     try {
       // First, create user on the backend via API
@@ -343,7 +442,7 @@ const CreateProfileScreen: React.FC = () => {
         dateOfBirth: dateOfBirth.trim(),
         interests: selectedInterests,
         bio: '',
-        avatar: null,
+        avatar: avatarUri,
       });
 
       console.log('Create user response:', {
@@ -362,15 +461,19 @@ const CreateProfileScreen: React.FC = () => {
 
         if (loginResponse.success && loginResponse.data) {
           const {user: loggedInUser, token} = loginResponse.data;
+          const normalizedUser = {
+            ...loggedInUser,
+            avatar: avatarUri || loggedInUser.avatar || null,
+          };
           
           // Save token and user data
           await AsyncStorage.setItem('authToken', token);
-          await AsyncStorage.setItem('user', JSON.stringify(loggedInUser));
+          await AsyncStorage.setItem('user', JSON.stringify(normalizedUser));
           await AsyncStorage.setItem('isAdmin', (loginResponse.data.isAdmin || false).toString());
 
           // Update both UserContext and AuthContext
-          setUser(loggedInUser); // Update UserContext
-          setUserData(loggedInUser); // Update AuthContext so isAuthenticated becomes true
+          setUser(normalizedUser); // Update UserContext
+          setUserData(normalizedUser); // Update AuthContext so isAuthenticated becomes true
           updateUserInterests(selectedInterests);
 
           Alert.alert('Success', 'Profile created and logged in successfully! 🎉', [
@@ -383,9 +486,13 @@ const CreateProfileScreen: React.FC = () => {
         } else {
           // User created but login failed - still save user locally
           console.warn('User created but login failed:', loginResponse.error);
-          setUser(backendUser);
+          const backendUserWithAvatar = {
+            ...backendUser,
+            avatar: avatarUri || backendUser.avatar || null,
+          };
+          setUser(backendUserWithAvatar);
           updateUserInterests(selectedInterests);
-          await AsyncStorage.setItem('user', JSON.stringify(backendUser));
+          await AsyncStorage.setItem('user', JSON.stringify(backendUserWithAvatar));
           
           Alert.alert('Partial Success', 'Profile created on server, but automatic login failed. Please login manually.', [
             {
@@ -467,6 +574,34 @@ const CreateProfileScreen: React.FC = () => {
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
+
+        {/* Avatar Selection */}
+        <Animatable.View animation="fadeInUp" delay={50} style={styles.avatarSection}>
+          <Text style={[styles.label, {color: theme.colors.text}]}>Profile Photo *</Text>
+          <Text style={[styles.subLabel, {color: theme.colors.textSecondary}]}>Add a picture so others can recognize you.</Text>
+          <TouchableOpacity
+            style={[styles.avatarPicker, {borderColor: theme.colors.border, backgroundColor: theme.colors.surface}]}
+            onPress={handleSelectAvatar}
+          >
+            {avatarUri ? (
+              <Image source={{uri: avatarUri}} style={styles.avatarPreview} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="add-a-photo" size={28} color={theme.colors.textSecondary} />
+              </View>
+            )}
+            <View style={styles.avatarTextContainer}>
+              <Text style={[styles.avatarTitle, {color: theme.colors.text}]}>Tap to {avatarUri ? 'change' : 'add'} photo</Text>
+              <Text style={[styles.avatarSubtitle, {color: theme.colors.textSecondary}]}>Square images work best (JPEG or PNG)</Text>
+            </View>
+          </TouchableOpacity>
+          {avatarUri && (
+            <TouchableOpacity style={styles.avatarRemoveButton} onPress={clearAvatarSelection}>
+              <Icon name="delete" size={18} color={theme.colors.error || '#FF5252'} />
+              <Text style={[styles.avatarRemoveText, {color: theme.colors.error || '#FF5252'}]}>Remove photo</Text>
+            </TouchableOpacity>
+          )}
+        </Animatable.View>
         
         {/* Username - FIRST FIELD */}
         <Animatable.View animation="fadeInUp" delay={100}>
@@ -835,6 +970,53 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  avatarSection: {
+    marginBottom: 24,
+  },
+  avatarPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  avatarPreview: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  avatarTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  avatarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  avatarSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  avatarRemoveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  avatarRemoveText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

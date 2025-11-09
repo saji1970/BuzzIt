@@ -2,16 +2,16 @@
 
 buildscript {
     ext {
-        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '33.0.0'
+        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '35.0.0'
         minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '21')
-        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '33')
-        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '33')
-        kotlinVersion = findProperty('android.kotlinVersion') ?: '1.8.10'
-        frescoVersion = findProperty('expo.frescoVersion') ?: '2.5.0'
+        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '34')
+        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
+        kotlinVersion = findProperty('android.kotlinVersion') ?: '1.8.22'
+        frescoVersion = findProperty('reactNative.frescoVersion') ?: '2.5.0'
 
         // We use NDK 23 which has both M1 support and is the side-by-side NDK version from AGP.
         // ndkVersion = "23.1.7779620"  // Commented out to avoid installation issues
-        ndkVersion = null  // Set to null to skip NDK requirement
+        // ndkVersion = null  // Set to null to skip NDK requirement
     }
     repositories {
         google()
@@ -20,6 +20,7 @@ buildscript {
     dependencies {
         classpath('com.android.tools.build:gradle:7.4.2')
         classpath('com.facebook.react:react-native-gradle-plugin')
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }
 
@@ -37,5 +38,36 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+    }
+
+    configurations.all { config ->
+        config.resolutionStrategy {
+            force "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
+            force "org.jetbrains.kotlin:kotlin-stdlib-common:$kotlinVersion"
+            force "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+            force 'com.squareup.okio:okio:3.3.0'
+            force 'com.squareup.okio:okio-jvm:3.3.0'
+        }
+    }
+}
+
+subprojects { subproject ->
+    subproject.plugins.withId('org.jetbrains.kotlin.android') {
+        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach { task ->
+            task.kotlinOptions {
+                jvmTarget = '11'
+            }
+        }
+    }
+
+    if (subproject.name == 'react-native-image-picker') {
+        subproject.afterEvaluate {
+            dependencies {
+                implementation 'androidx.activity:activity:1.7.2'
+                implementation 'androidx.activity:activity-ktx:1.7.2'
+            }
+        }
     }
 }
