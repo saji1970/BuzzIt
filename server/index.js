@@ -81,6 +81,32 @@ const RecommendationEngine = require('./services/RecommendationEngine');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const MEDIA_BASE_URL = (
+  process.env.MEDIA_BASE_URL ||
+  process.env.PUBLIC_BASE_URL ||
+  process.env.APP_BASE_URL ||
+  ''
+);
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const originalExt = path.extname(file.originalname || '');
+    const inferredExt = originalExt || (file.mimetype ? `.${file.mimetype.split('/')[1]}` : '');
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${inferredExt}`;
+    cb(null, uniqueName);
+  },
+});
+
+const upload = multer({ storage });
+
 // Twilio configuration (optional for development)
 let twilioClient = null;
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
