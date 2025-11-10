@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const http = require('http');
 const multer = require('multer');
+const { getLiveStreamConfig } = require('./utils/liveStreamConfig');
 // Load environment variables FIRST, before any other imports that might use them
 // Try loading from server directory first, then root directory
 const path = require('path');
@@ -1931,6 +1932,21 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
 });
 
 // Live Stream endpoints
+app.get('/api/live-streams/config', (req, res) => {
+  try {
+    const config = getLiveStreamConfig();
+    res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    console.error('Live stream config check error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to inspect live stream configuration' });
+  }
+});
+
 app.get('/api/live-streams', async (req, res) => {
   try {
     let liveStreams = [];

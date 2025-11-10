@@ -6,7 +6,8 @@
   "scripts": {
     "start": "react-native start",
     "android": "react-native run-android",
-    "ios": "react-native run-ios"
+    "ios": "react-native run-ios",
+    "test": "node tests/checkLiveStreamConfig.test.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.18.2",
@@ -38,7 +39,8 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@react-native/metro-config": "^0.76.8",
-    "metro-react-native-babel-preset": "^0.76.8"
+    "metro-react-native-babel-preset": "^0.76.8",
+    "dotenv": "^16.4.5"
   },
   "private": true
 }
