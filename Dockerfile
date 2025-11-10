@@ -15,6 +15,9 @@ COPY server/*.js ./
 # Copy config directory
 COPY server/config ./config/
 
+# Copy utils directory (helpers)
+COPY server/utils ./utils/
+
 # Copy models directory (MongoDB models)
 COPY server/models ./models/
 
