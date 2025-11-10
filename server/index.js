@@ -1373,7 +1373,21 @@ app.post('/api/uploads', verifyToken, upload.single('file'), (req, res) => {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
-    const baseUrl = (MEDIA_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const host = req.get('host') || '';
+    const forwardedProtoHeader = (req.headers['x-forwarded-proto'] || '').toString();
+    const forwardedProto = forwardedProtoHeader.split(',')[0].trim();
+    let protocol = forwardedProto || req.protocol || 'https';
+
+    if (protocol === 'http' && /railway\.app$/i.test(host)) {
+      protocol = 'https';
+    }
+
+    let baseUrl = MEDIA_BASE_URL ? MEDIA_BASE_URL.trim() : `${protocol}://${host}`;
+    if (baseUrl.startsWith('http://') && /railway\.app/i.test(baseUrl) && process.env.FORCE_HTTPS_MEDIA_URL !== 'false') {
+      baseUrl = baseUrl.replace(/^http:\/\//i, 'https://');
+    }
+
+    baseUrl = baseUrl.replace(/\/$/, '');
     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
 
     res.json({

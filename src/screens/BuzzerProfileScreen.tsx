@@ -14,6 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
+import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
@@ -50,6 +51,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
 }) => {
   const {theme} = useTheme();
   const {buzzes, likeBuzz, shareBuzz, subscribeToChannel, unsubscribeFromChannel, blockUser, isSubscribed, isBlocked} = useUser();
+  const navigation = useNavigation<any>();
   const [buzzer, setBuzzer] = useState<Buzzer | null>(null);
   const [buzzerBuzzes, setBuzzerBuzzes] = useState<Buzz[]>([]);
   const [activeTab, setActiveTab] = useState<'grid' | 'reels' | 'tagged'>('grid');
@@ -89,6 +91,8 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
       }
     } catch (error) {
       console.error('Error loading buzzer data:', error);
+      setBuzzer(null);
+      return;
     }
 
     // Filter buzzes for this buzzer
@@ -214,20 +218,47 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     }
   };
 
-  if (!buzzer) return null;
+  const handleClose = () => {
+    setBuzzer(null);
+    setBuzzerBuzzes([]);
+    setActiveTab('grid');
+    onClose();
+  };
+
+  if (!visible) {
+    return null;
+  }
+
+  if (!buzzer) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleClose}
+      >
+        <View style={[styles.loadingContainer, {backgroundColor: theme.colors.background}]}>
+          <TouchableOpacity onPress={handleClose} style={styles.loadingBackButton}>
+            <Icon name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.loadingText, {color: theme.colors.textSecondary}]}>
+            Loading profile…
+          </Text>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={onClose}>
+      onRequestClose={handleClose}>
       <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
         {/* Header */}
         <View style={[styles.header, {backgroundColor: theme.colors.surface}]}>
-          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-            <Icon name="arrow-back" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerButtonPlaceholder} />
           <Text style={[styles.headerTitle, {color: theme.colors.text}]}>
             {buzzer.username}
           </Text>
@@ -241,7 +272,11 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
           </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{paddingBottom: 140}}
+        >
           {/* Profile Header */}
           <View style={styles.profileHeader}>
             <View style={styles.profileTop}>
@@ -429,12 +464,97 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
             {renderContent()}
           </View>
         </ScrollView>
+
+        <View
+          style={[
+            styles.footerNav,
+            {
+              backgroundColor: theme.colors.surface,
+              borderTopColor: theme.colors.border,
+            },
+          ]}
+        >
+          {[
+            {
+              key: 'home',
+              label: 'Home',
+              icon: 'home',
+              action: () => {
+                handleClose();
+                navigation.navigate('Home' as never);
+              },
+            },
+            {
+              key: 'create',
+              label: 'Create',
+              icon: 'add-circle-outline',
+              action: () => {
+                handleClose();
+                navigation.navigate('Create' as never);
+              },
+            },
+            {
+              key: 'profile',
+              label: 'Profile',
+              icon: 'person',
+              action: () => {
+                handleClose();
+                navigation.navigate('Profile' as never);
+              },
+            },
+            {
+              key: 'settings',
+              label: 'Settings',
+              icon: 'settings',
+              action: () => {
+                handleClose();
+                navigation.navigate('Settings' as never);
+              },
+            },
+          ].map(item => (
+            <TouchableOpacity
+              key={item.key}
+              style={styles.footerNavItem}
+              onPress={item.action}
+            >
+              <Icon
+                name={item.icon}
+                size={22}
+                color={theme.colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.footerNavLabel,
+                  {color: theme.colors.textSecondary},
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingBackButton: {
+    position: 'absolute',
+    top: 48,
+    left: 24,
+    padding: 8,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
   },
@@ -450,6 +570,10 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  headerButtonPlaceholder: {
+    width: 40,
+    height: 40,
   },
   headerTitle: {
     fontSize: 18,
@@ -671,6 +795,24 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     marginTop: 12,
+  },
+  footerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 28,
+    borderTopWidth: 1,
+  },
+  footerNavItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  footerNavLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

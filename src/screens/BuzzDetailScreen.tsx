@@ -19,6 +19,7 @@ import * as Animatable from 'react-native-animatable';
 import {useTheme} from '../context/ThemeContext';
 import {Buzz, useUser} from '../context/UserContext';
 import SocialMediaShareModal from '../components/SocialMediaShareModal';
+import {API_CONFIG} from '../config/API_CONFIG';
 
 const {width, height} = Dimensions.get('window');
 
@@ -45,6 +46,101 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
   useEffect(() => {
     setIsVideoPlaying(false);
   }, [buzz.id]);
+
+  const deriveRemoteMediaUrl = () => {
+    if (buzz.media?.url) {
+      return buzz.media.url;
+    }
+    const legacyMediaUrl = (buzz as any).mediaUrl || (buzz as any).mediaURI || (buzz as any).mediaUri;
+    if (typeof legacyMediaUrl === 'string') {
+      return legacyMediaUrl;
+    }
+    return null;
+  };
+
+  const inferredMediaUrl = deriveRemoteMediaUrl();
+
+  const resolveMediaUri = (uri: string | null) => {
+    if (!uri) {
+      return null;
+    }
+    if (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:')) {
+      const productionHost = API_CONFIG.PRODUCTION_BACKEND.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (uri.startsWith(`http://${productionHost}`)) {
+        return uri.replace(/^http:\/\//i, 'https://');
+      }
+      return uri;
+    }
+    const baseUrl = API_CONFIG.getBackendURL().replace(/\/$/, '');
+    return `${baseUrl}${uri.startsWith('/') ? '' : '/'}${uri}`;
+  };
+
+  const hasLocalAsset =
+    buzz.localMediaUri &&
+    (buzz.localMediaUri.startsWith('file://') || buzz.localMediaUri.startsWith('content://'));
+
+  const remoteMediaUrl = resolveMediaUri(inferredMediaUrl);
+  const mediaUri = hasLocalAsset
+    ? buzz.localMediaUri
+    : remoteMediaUrl || resolveMediaUri(buzz.localMediaUri || null);
+
+  const deriveMediaType = () => {
+    if (buzz.media?.type) {
+      return buzz.media.type;
+    }
+    const legacyType = (buzz as any).mediaType || (buzz as any).type;
+    if (legacyType && ['image', 'video'].includes(legacyType)) {
+      return legacyType;
+    }
+    if (mediaUri) {
+      const extension = mediaUri.split('?')[0].split('.').pop()?.toLowerCase();
+      if (extension && ['mp4', 'mov', 'm4v', 'avi', 'webm'].includes(extension)) {
+        return 'video';
+      }
+      return 'image';
+    }
+    return null;
+  };
+
+  const derivedMediaType = deriveMediaType();
+  const hasImage = derivedMediaType === 'image' && !!mediaUri;
+  const hasVideo = derivedMediaType === 'video' && !!mediaUri;
+
+  const normalizeInterests = () => {
+    if (!Array.isArray(buzz.interests)) {
+      return [];
+    }
+
+    return buzz.interests
+      .map(interest => {
+        if (!interest) {
+          return null;
+        }
+
+        if (typeof interest === 'string') {
+          return {
+            id: interest,
+            name: interest,
+            emoji: '',
+          };
+        }
+
+        if (typeof interest === 'object') {
+          const {id, name, emoji} = interest as any;
+          return {
+            id: id ?? name ?? '',
+            name: name ?? id ?? '',
+            emoji: emoji ?? '',
+          };
+        }
+
+        return null;
+      })
+      .filter((interest): interest is {id: string; name: string; emoji: string} => !!interest && !!interest.name);
+  };
+
+  const normalizedInterests = normalizeInterests();
+  const hasInterests = normalizedInterests.length > 0;
 
   const handleShareClick = () => {
     shareBuzz(buzz.id);
@@ -208,14 +304,14 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
           </Text>
 
           {/* Media */}
-          {buzz.media && buzz.media.url && (
+          {(hasImage || hasVideo) && mediaUri && (
             <View style={styles.mediaContainer}>
-              {buzz.media.type === 'image' ? (
-                <Image source={{uri: buzz.media.url}} style={styles.mediaImage} resizeMode="contain" />
-              ) : buzz.media.type === 'video' ? (
+              {hasImage ? (
+                <Image source={{uri: mediaUri as string}} style={styles.mediaImage} resizeMode="contain" />
+              ) : hasVideo ? (
                 <View style={styles.videoWrapper}>
                   <Video
-                    source={{ uri: buzz.media.url }}
+                    source={{uri: mediaUri as string}}
                     style={styles.video}
                     resizeMode={ResizeMode.CONTAIN}
                     paused={!isVideoPlaying}
@@ -246,9 +342,9 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
           )}
 
           {/* Interests */}
-          {buzz.interests.length > 0 && (
+          {hasInterests && (
             <View style={styles.interestsSection}>
-              {buzz.interests.map((interest) => (
+              {normalizedInterests.map(interest => (
                 <View
                   key={interest.id}
                   style={[
@@ -301,7 +397,7 @@ const BuzzDetailScreen: React.FC<BuzzDetailScreenProps> = ({
           visible={showShareModal}
           onClose={() => setShowShareModal(false)}
           buzzContent={buzz.content}
-          buzzMedia={buzz.media?.url || undefined}
+          buzzMedia={mediaUri ?? undefined}
         />
       </Animated.View>
     </View>

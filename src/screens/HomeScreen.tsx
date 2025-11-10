@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useMemo} from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,7 @@ import UserRecommendationCard, {UserRecommendation} from '../components/UserReco
 import ContactSyncService from '../components/ContactSyncService';
 import YourBuzzScreen from './YourBuzzScreen';
 import ScreenContainer from '../components/ScreenContainer';
+import BuzzLiveViewer from '../components/Buzzlive/BuzzLiveViewer';
 
 const {width} = Dimensions.get('window');
 
@@ -64,6 +65,22 @@ const HomeScreen: React.FC = () => {
   const [showYourBuzz, setShowYourBuzz] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+
+  const primaryLiveStream = useMemo(
+    () =>
+      liveStreams.find(stream => {
+        if (!stream.streamUrl) {
+          return false;
+        }
+        const trimmed = stream.streamUrl.trim();
+        if (!trimmed) {
+          return false;
+        }
+        // Prefer HLS streams
+        return trimmed.startsWith('http');
+      }) || null,
+    [liveStreams],
+  );
 
   useEffect(() => {
     try {
@@ -245,12 +262,6 @@ const HomeScreen: React.FC = () => {
       const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
       return dateB.getTime() - dateA.getTime();
     });
-
-    if (currentUserId) {
-      const ownBuzzes = filtered.filter(buzz => buzz.userId === currentUserId);
-      const others = filtered.filter(buzz => buzz.userId !== currentUserId);
-      filtered = [...ownBuzzes, ...others];
-    }
     
       setFilteredBuzzes(filtered);
       console.log('Normal feed loaded:', filtered.length, 'buzzes (including own)');
@@ -746,9 +757,9 @@ const HomeScreen: React.FC = () => {
 
   const renderHero = () => (
     <View style={[styles.heroContainer, {paddingTop: insets.top + 12}]}>
-      <LinearGradient
+              <LinearGradient
         colors={['#7EB3FF', '#4C7DFF']}
-        start={{x: 0, y: 0}}
+                start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.heroCard}
       >
@@ -757,7 +768,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.heroTitle}>Home</Text>
             <Text style={styles.heroSubtitle}>buzz feed</Text>
           </View>
-          <TouchableOpacity
+            <TouchableOpacity
             style={styles.heroRefreshButton}
             activeOpacity={0.85}
             onPress={() => {
@@ -766,16 +777,16 @@ const HomeScreen: React.FC = () => {
             }}
           >
             <Icon name="refresh" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+            </TouchableOpacity>
+      </View>
 
         <View style={styles.heroChannels}>
-          <SubscribedChannels
+        <SubscribedChannels 
             variant="card"
-            onChannelPress={handleBuzzerPress}
-            onYourBuzzPress={() => setShowYourBuzz(true)}
-          />
-        </View>
+          onChannelPress={handleBuzzerPress}
+          onYourBuzzPress={() => setShowYourBuzz(true)}
+        />
+      </View>
 
         <View style={styles.heroActionsRow}>
           <View
@@ -825,16 +836,16 @@ const HomeScreen: React.FC = () => {
           style={[
             styles.smartFeedButton,
             {
-              backgroundColor: useSmartFeed
-                ? theme.colors.primary
+              backgroundColor: useSmartFeed 
+                ? theme.colors.primary 
                 : theme.colors.surface,
             },
           ]}
           onPress={handleToggleSmartFeed}>
-          <Icon
-            name="auto-awesome"
-            size={18}
-            color={useSmartFeed ? '#FFFFFF' : theme.colors.text}
+          <Icon 
+            name="auto-awesome" 
+            size={18} 
+            color={useSmartFeed ? '#FFFFFF' : theme.colors.text} 
           />
           <Text
             style={[
@@ -888,6 +899,14 @@ const HomeScreen: React.FC = () => {
             <Icon name="videocam" size={20} color={theme.colors.primary} />
             <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>BuzzLive Now</Text>
           </View>
+          {primaryLiveStream && (
+            <BuzzLiveViewer
+              playbackUrl={primaryLiveStream.streamUrl}
+              placeholderImage={primaryLiveStream.thumbnailUrl || undefined}
+              title={primaryLiveStream.title || primaryLiveStream.displayName}
+              style={styles.liveViewerCard}
+            />
+          )}
           <FlatList
             data={liveStreams}
             renderItem={renderLiveStream}
@@ -1101,6 +1120,9 @@ const styles = StyleSheet.create({
   liveStreamsSection: {
     marginBottom: 16,
     paddingHorizontal: 15,
+  },
+  liveViewerCard: {
+    marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',

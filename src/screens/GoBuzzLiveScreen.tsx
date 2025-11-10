@@ -14,8 +14,6 @@ import {
   Share,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-// @ts-ignore - react-native-vision-camera will be installed
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -24,6 +22,10 @@ import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import ApiService from '../services/APIService';
+import BuzzLivePublisher, {
+  BuzzLivePublisherHandle,
+  BuzzLivePublisherStatus,
+} from '../components/Buzzlive/BuzzLivePublisher';
 
 const {width, height} = Dimensions.get('window');
 
@@ -41,6 +43,7 @@ const GoBuzzLiveScreen: React.FC = () => {
   const {user: currentUser} = useAuth();
   const navigation = useNavigation();
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<BuzzLivePublisherStatus>('idle');
   const [showSetup, setShowSetup] = useState(true);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -48,15 +51,11 @@ const GoBuzzLiveScreen: React.FC = () => {
   const [comments, setComments] = useState<StreamComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [currentStream, setCurrentStream] = useState<any>(null);
-  
-  // Camera state - React Native Vision Camera
-  const { hasPermission, requestPermission } = useCameraPermission();
-  const [isRecording, setIsRecording] = useState(false);
-  const [cameraPosition, setCameraPosition] = useState<'front' | 'back'>('back');
-  const cameraRef = useRef<Camera>(null);
-  
-  // Get camera devices
-  const device = useCameraDevice(cameraPosition);
+  const [activeServerStream, setActiveServerStream] = useState<any>(null);
+  const [publishUrl, setPublishUrl] = useState('');
+  const [publisherTrigger, setPublisherTrigger] = useState(0);
+  const [hasIncrementedViewerCount, setHasIncrementedViewerCount] = useState(false);
+  const publisherRef = useRef<BuzzLivePublisherHandle>(null);
 
   const copyToClipboard = async (value: string | null | undefined, label: string) => {
     if (!value) {
@@ -74,19 +73,57 @@ const GoBuzzLiveScreen: React.FC = () => {
 
   const getPlaybackUrl = () => currentStream?.ivsPlaybackUrl || currentStream?.streamUrl || '';
 
-  // Request camera permission on mount and log camera status
-  useEffect(() => {
-    console.log('Camera status:', {
-      hasPermission,
-      device: device ? device.name : 'null',
-      cameraPosition,
-    });
-    
-    if (!hasPermission) {
-      console.log('Requesting camera permission...');
-      requestPermission();
+  const buildRtmpIngestUrl = (stream: any): string => {
+    if (!stream) {
+      return '';
     }
-  }, [hasPermission, device, cameraPosition]);
+    const baseUrl =
+      stream?.ivsIngestRtmpsUrl ||
+      stream?.ivsIngestUrl ||
+      stream?.restreamRtmpUrl ||
+      '';
+    const streamKey = stream?.ivsStreamKey || stream?.ivsStreamKeyArn || stream?.restreamKey || '';
+
+    if (!baseUrl || !streamKey) {
+      return '';
+    }
+
+    let normalized = baseUrl.replace(/\/$/, '');
+    if (normalized.startsWith('rtmps://')) {
+      normalized = normalized.replace('rtmps://', 'rtmp://');
+    }
+
+    return `${normalized}/${streamKey}`;
+  };
+
+  const handlePublisherStatusChange = (status: BuzzLivePublisherStatus) => {
+    setStreamStatus(status);
+    if (status === 'live') {
+      if (!hasIncrementedViewerCount && currentStream) {
+        ApiService.updateViewers(currentStream.id, 'increment').catch(error =>
+          console.error('Error incrementing viewers:', error),
+        );
+        setHasIncrementedViewerCount(true);
+      }
+      if (!isStreaming) {
+        setIsStreaming(true);
+      }
+    } else if (status === 'idle' || status === 'error') {
+      if (hasIncrementedViewerCount && currentStream) {
+        ApiService.updateViewers(currentStream.id, 'decrement').catch(error =>
+          console.error('Error decrementing viewers:', error),
+        );
+      }
+      if (isStreaming) {
+        setIsStreaming(false);
+      }
+      setHasIncrementedViewerCount(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExistingLiveStream();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (isStreaming && currentStream) {
@@ -147,19 +184,73 @@ const GoBuzzLiveScreen: React.FC = () => {
     }
   };
 
+  const fetchExistingLiveStream = async () => {
+    if (!currentUser) {
+      return null;
+    }
+    try {
+      const response = await ApiService.getLiveStreams();
+      if (response.success && Array.isArray(response.data)) {
+        const mine = response.data.find(
+          stream =>
+            stream?.userId === currentUser.id ||
+            stream?.username?.toLowerCase() === currentUser.username?.toLowerCase(),
+        );
+        if (mine) {
+          setActiveServerStream(mine);
+          return mine;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking existing live stream:', error);
+    }
+    setActiveServerStream(null);
+    return null;
+  };
+
+  const resumeExistingStream = (stream: any) => {
+    setCurrentStream(stream);
+    setShowSetup(false);
+    setActiveServerStream(null);
+    const ingestUrl = buildRtmpIngestUrl(stream);
+    if (ingestUrl) {
+      setPublishUrl(ingestUrl);
+      setPublisherTrigger(prev => prev + 1);
+    } else {
+      setPublishUrl('');
+      setIsStreaming(true);
+    }
+    Alert.alert(
+      'Stream Resumed',
+      'We found your active BuzzLive session and reattached to it.',
+      [{text: 'OK'}],
+    );
+  };
+
+  const forceEndExistingStream = async (stream: any) => {
+    try {
+      const response = await ApiService.endLiveStream(stream.id);
+      if (!response.success) {
+        Alert.alert('Error', response.error || 'Failed to end the existing live stream.');
+      } else {
+        Alert.alert('Stream Ended', 'Your previous live stream was ended. You can start a new one now.');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to end the existing live stream.');
+    } finally {
+      setActiveServerStream(null);
+      setCurrentStream(null);
+      setPublishUrl('');
+      setIsStreaming(false);
+      setPublisherTrigger(0);
+      setStreamStatus('idle');
+    }
+  };
+
   const handleStartStream = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter a stream title');
       return;
-    }
-
-    // Request camera permission if not granted
-    if (!hasPermission) {
-      const result = await requestPermission();
-      if (!result) {
-        Alert.alert('Permission Required', 'Camera permission is needed to go live.');
-        return;
-      }
     }
 
     try {
@@ -172,11 +263,18 @@ const GoBuzzLiveScreen: React.FC = () => {
       if (response.success) {
         setCurrentStream(response.data);
         setShowSetup(false);
-        // Start recording first, then set streaming
-        await startRecording();
-        setIsStreaming(true);
-        // Increment viewer when starting
-        await ApiService.updateViewers(response.data.id, 'increment');
+        setActiveServerStream(null);
+        const ingestUrl = buildRtmpIngestUrl(response.data);
+        if (ingestUrl) {
+          setPublishUrl(ingestUrl);
+          setPublisherTrigger(prev => prev + 1);
+        } else {
+          setPublishUrl('');
+          Alert.alert(
+            'Streaming credentials unavailable',
+            'No RTMP ingest URL or stream key is configured. You can still use these credentials manually from the Broadcast Credentials section.',
+          );
+        }
 
         const playbackUrl = response.data.ivsPlaybackUrl || response.data.streamUrl || '';
         if (!playbackUrl.trim()) {
@@ -189,44 +287,36 @@ const GoBuzzLiveScreen: React.FC = () => {
           );
         }
       } else {
-        Alert.alert('Error', response.error || 'Failed to start stream');
+        const errorMessage = response.error || 'Failed to start stream';
+        if (errorMessage.toLowerCase().includes('active live stream')) {
+          const existingStream = (await fetchExistingLiveStream()) || activeServerStream;
+          if (existingStream) {
+            Alert.alert(
+              'Active Stream Detected',
+              'You already have an active BuzzLive session. Do you want to resume it or end it?',
+              [
+                {text: 'Cancel', style: 'cancel'},
+                {
+                  text: 'Resume',
+                  onPress: () => resumeExistingStream(existingStream),
+                },
+                {
+                  text: 'End Stream',
+                  style: 'destructive',
+                  onPress: () => forceEndExistingStream(existingStream),
+                },
+              ],
+            );
+          } else {
+            Alert.alert('Active Stream', 'We could not verify the active stream. Please try again.');
+          }
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to start stream');
     }
-  };
-
-  const startRecording = async () => {
-    if (device && !isRecording) {
-      try {
-        // Set recording state - camera will activate video/audio when isStreaming becomes true
-        setIsRecording(true);
-        console.log('Recording started with Vision Camera');
-        console.log('Camera device:', device.name, 'Position:', cameraPosition);
-      } catch (error) {
-        console.error('Error starting recording:', error);
-        setIsRecording(false);
-        Alert.alert('Error', 'Failed to start recording');
-      }
-    } else {
-      console.warn('Cannot start recording:', {device: !!device, isRecording, hasPermission});
-    }
-  };
-
-  const stopRecording = async () => {
-    if (isRecording) {
-      try {
-        setIsRecording(false);
-        // Stop recording when ending stream
-        console.log('Recording stopped');
-      } catch (error) {
-        console.error('Error stopping recording:', error);
-      }
-    }
-  };
-
-  const toggleCameraFacing = () => {
-    setCameraPosition(current => (current === 'back' ? 'front' : 'back'));
   };
 
   const handleEndStream = async () => {
@@ -241,13 +331,15 @@ const GoBuzzLiveScreen: React.FC = () => {
               onPress: async () => {
                 if (currentStream) {
                   try {
-                    // Stop recording first
-                    await stopRecording();
-                    setIsRecording(false);
-                    
+                    // Stop publishing first
+                    await publisherRef.current?.stop();
+                    setPublishUrl('');
+                    setPublisherTrigger(0);
+                    setStreamStatus('idle');
+
                     // End stream on backend
                     await ApiService.endLiveStream(currentStream.id);
-                    
+
                     // Clear all state
                     setIsStreaming(false);
                     setCurrentStream(null);
@@ -256,6 +348,9 @@ const GoBuzzLiveScreen: React.FC = () => {
                     setDescription('');
                     setComments([]);
                     setViewers(0);
+                    setActiveServerStream(null);
+                    setPublisherTrigger(0);
+                    setStreamStatus('idle');
                     
                     // Navigate back immediately
                     navigation.goBack();
@@ -264,7 +359,10 @@ const GoBuzzLiveScreen: React.FC = () => {
                     // Still navigate back even if API call fails
                     setIsStreaming(false);
                     setCurrentStream(null);
-                    setIsRecording(false);
+                    setActiveServerStream(null);
+                    setPublishUrl('');
+                    setPublisherTrigger(0);
+                    setStreamStatus('idle');
                     navigation.goBack();
                   }
                 } else {
@@ -408,101 +506,18 @@ const GoBuzzLiveScreen: React.FC = () => {
     );
   };
 
-  // Show permission request screen
-  if (!hasPermission) {
-    return (
-      <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
-        <Icon name="videocam-off" size={64} color="#FFFFFF" />
-        <Text style={styles.errorText}>Camera Permission Required</Text>
-        <Text style={styles.errorSubtext}>
-          We need camera access to enable live streaming with Vision Camera
-        </Text>
-        <TouchableOpacity
-          style={[styles.goLiveButton, {backgroundColor: '#FF0069', marginTop: 20}]}
-          onPress={async () => {
-            const granted = await requestPermission();
-            if (!granted) {
-              Alert.alert('Permission Denied', 'Camera permission is required for live streaming.');
-            }
-          }}>
-          <Text style={styles.goLiveButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.cancelButton, {backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 10}]}
-          onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Show error if no camera device available
-  if (!device) {
-    return (
-      <View style={[styles.container, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20}]}>
-        <Icon name="videocam-off" size={64} color="#FFFFFF" />
-        <Text style={styles.errorText}>Camera Not Available</Text>
-        <Text style={styles.errorSubtext}>
-          No camera device found. Please check your device.
-        </Text>
-        <TouchableOpacity
-          style={[styles.cancelButton, {backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 20}]}
-          onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: '#000'}]}>
       <StatusBar barStyle="light-content" />
-      
-      {/* Camera Preview - React Native Vision Camera */}
-      {/* Show camera preview when permission granted, but only activate video/audio when streaming */}
-      {hasPermission && device ? (
-        <Camera
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          device={device}
-          isActive={true} // Always active for preview
-          video={isStreaming} // Only enable video recording when streaming
-          audio={isStreaming} // Only enable audio recording when streaming
-          enableZoomGesture={false}
-          orientation="portrait"
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, {backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center'}]}>
-          {!hasPermission ? (
-            <View style={{alignItems: 'center', padding: 20}}>
-              <Icon name="videocam-off" size={64} color="#FFFFFF" />
-              <Text style={{color: '#FFFFFF', marginTop: 16, fontSize: 16, textAlign: 'center', marginBottom: 20}}>
-                Camera permission required
-              </Text>
-              <TouchableOpacity
-                style={[styles.goLiveButton, {backgroundColor: '#FF0069'}]}
-                onPress={async () => {
-                  const granted = await requestPermission();
-                  if (!granted) {
-                    Alert.alert('Permission Denied', 'Camera permission is required for live streaming.');
-                  }
-                }}>
-                <Text style={styles.goLiveButtonText}>Grant Permission</Text>
-              </TouchableOpacity>
-            </View>
-          ) : !device ? (
-            <View style={{alignItems: 'center', padding: 20}}>
-              <Icon name="videocam-off" size={64} color="#FFFFFF" />
-              <Text style={{color: '#FFFFFF', marginTop: 16, fontSize: 16, textAlign: 'center'}}>
-                Camera not available on this device
-              </Text>
-            </View>
-          ) : (
-            <Text style={{color: '#FFFFFF', fontSize: 16}}>Initializing camera...</Text>
-          )}
-        </View>
-      )}
-      
+      <BuzzLivePublisher
+        ref={publisherRef}
+        style={StyleSheet.absoluteFill}
+        rtmpUrl={publishUrl}
+        startTrigger={publishUrl ? publisherTrigger : null}
+        onStatusChange={handlePublisherStatusChange}
+        showControls={false}
+      />
+
       {/* Content View */}
       <View style={styles.contentView}>
         {/* Top Overlay */}
@@ -550,6 +565,29 @@ const GoBuzzLiveScreen: React.FC = () => {
             <View style={styles.setupContent}>
               <Text style={styles.setupTitle}>Go Buzz Live</Text>
               <Text style={styles.setupSubtitle}>Share what's happening with your audience</Text>
+              {!!activeServerStream && (
+                <View style={styles.activeStreamCallout}>
+                  <Icon name="info" size={18} color="#FFB020" />
+                  <View style={styles.activeStreamTextContainer}>
+                    <Text style={styles.activeStreamTitle}>You already have a live stream running</Text>
+                    <Text style={styles.activeStreamDescription}>
+                      Resume it or end it before starting a new session.
+                    </Text>
+                  </View>
+                  <View style={styles.activeStreamActions}>
+                    <TouchableOpacity
+                      style={styles.activeStreamResumeButton}
+                      onPress={() => resumeExistingStream(activeServerStream)}>
+                      <Text style={styles.activeStreamResumeText}>Resume</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.activeStreamEndButton}
+                      onPress={() => forceEndExistingStream(activeServerStream)}>
+                      <Text style={styles.activeStreamEndText}>End</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
 
               <TextInput
                 style={[styles.input, {backgroundColor: 'rgba(255,255,255,0.9)', color: '#000'}]}
@@ -574,7 +612,7 @@ const GoBuzzLiveScreen: React.FC = () => {
               <View style={styles.setupButtons}>
                 <TouchableOpacity
                   style={[styles.cancelButton, {backgroundColor: 'rgba(255,255,255,0.3)'}]}
-                  onPress={() => navigation.goBack()}>
+                onPress={() => navigation.goBack()}>
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -596,12 +634,12 @@ const GoBuzzLiveScreen: React.FC = () => {
               {/* Toggle Camera */}
               <TouchableOpacity
                 style={styles.controlButton}
-                onPress={toggleCameraFacing}>
+                onPress={() => publisherRef.current?.switchCamera()}>
                 <Icon name="flip-camera-ios" size={28} color="#FFFFFF" />
               </TouchableOpacity>
 
               {/* Recording Indicator */}
-              {isRecording && (
+              {streamStatus === 'live' && (
                 <View style={styles.recordingIndicator}>
                   <View style={styles.recordingDot} />
                   <Text style={styles.recordingText}>LIVE</Text>
@@ -782,6 +820,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
     marginBottom: 20,
+  },
+  activeStreamCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 176, 32, 0.15)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  activeStreamTextContainer: {
+    flex: 1,
+  },
+  activeStreamTitle: {
+    color: '#FFB020',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activeStreamDescription: {
+    color: '#FFDFA5',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  activeStreamActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  activeStreamResumeButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  activeStreamResumeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  activeStreamEndButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 176, 32, 0.2)',
+  },
+  activeStreamEndText: {
+    color: '#FFB020',
+    fontSize: 12,
+    fontWeight: '600',
   },
   input: {
     borderRadius: 12,

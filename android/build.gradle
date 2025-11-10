@@ -57,7 +57,7 @@ subprojects { subproject ->
     subproject.plugins.withId('org.jetbrains.kotlin.android') {
         subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach { task ->
             task.kotlinOptions {
-                jvmTarget = '11'
+                jvmTarget = '17'
             }
         }
     }
@@ -67,6 +67,19 @@ subprojects { subproject ->
             dependencies {
                 implementation 'androidx.activity:activity:1.7.2'
                 implementation 'androidx.activity:activity-ktx:1.7.2'
+            }
+        }
+    }
+
+    if (subproject.name == 'react-native-nodemediaclient') {
+        subproject.afterEvaluate {
+            if (subproject.extensions.findByName('android')) {
+                subproject.android {
+                    compileOptions {
+                        sourceCompatibility JavaVersion.VERSION_17
+                        targetCompatibility JavaVersion.VERSION_17
+                    }
+                }
             }
         }
     }

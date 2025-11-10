@@ -269,6 +269,10 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
       return null;
     }
     if (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:')) {
+      const productionHost = API_CONFIG.PRODUCTION_BACKEND.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (uri.startsWith(`http://${productionHost}`)) {
+        return uri.replace(/^http:\/\//i, 'https://');
+      }
       return uri;
     }
     const baseUrl = API_CONFIG.getBackendURL().replace(/\/$/, '');
@@ -302,6 +306,42 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const derivedMediaType = deriveMediaType();
   const hasImage = derivedMediaType === 'image' && !!mediaUri;
   const hasVideo = derivedMediaType === 'video' && !!mediaUri;
+
+  const normalizeInterests = () => {
+    if (!Array.isArray(buzz.interests)) {
+      return [];
+    }
+
+    return buzz.interests
+      .map(interest => {
+        if (!interest) {
+          return null;
+        }
+
+        if (typeof interest === 'string') {
+          return {
+            id: interest,
+            name: interest,
+            emoji: '',
+          };
+        }
+
+        if (typeof interest === 'object') {
+          const { id, name, emoji } = interest as any;
+          return {
+            id: id ?? name ?? '',
+            name: name ?? id ?? '',
+            emoji: emoji ?? '',
+          };
+        }
+
+        return null;
+      })
+      .filter((interest): interest is { id: string; name: string; emoji: string } => !!interest && !!interest.name);
+  };
+
+  const normalizedInterests = normalizeInterests();
+  const hasInterests = normalizedInterests.length > 0;
 
   const renderAction = (
     iconName: string,
@@ -424,9 +464,9 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
               </View>
             ) : null}
 
-            {buzz.interests.length > 0 && (
+            {hasInterests && (
               <View style={styles.chipRow}>
-                {buzz.interests.slice(0, 3).map(interest => (
+                {normalizedInterests.slice(0, 3).map(interest => (
                   <View
                     key={interest.id}
                     style={[styles.chip, {backgroundColor: theme.colors.primary + '18'}]}
@@ -437,9 +477,9 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                     </Text>
                   </View>
                 ))}
-                {buzz.interests.length > 3 && (
+                {normalizedInterests.length > 3 && (
                   <View style={[styles.chip, {backgroundColor: theme.colors.border}]}> 
-                    <Text style={[styles.chipLabel, {color: theme.colors.textSecondary}]}>+{buzz.interests.length - 3}</Text>
+                    <Text style={[styles.chipLabel, {color: theme.colors.textSecondary}]}>+{normalizedInterests.length - 3}</Text>
                   </View>
                 )}
               </View>
