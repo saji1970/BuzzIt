@@ -53,31 +53,48 @@ export const testRailwayConnection = async (): Promise<{success: boolean, url?: 
   for (const url of railwayUrls) {
     try {
       console.log(`Testing Railway connection to: ${url}`);
-      // Add timeout to prevent hanging
+      // Increase timeout to 15 seconds for slow connections
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
+      const timeoutId = setTimeout(() => {
+        console.log(`Request to ${url} timed out after 15 seconds`);
+        controller.abort();
+      }, 15000);
+
       const response = await fetch(url, {
         signal: controller.signal,
+        // Add headers to help with debugging
+        headers: {
+          'Accept': 'application/json',
+        },
       });
       clearTimeout(timeoutId);
-      
+
       console.log(`Railway test response status for ${url}:`, response.status);
-      
+      console.log(`Railway test response headers:`, JSON.stringify(response.headers));
+
       if (response.ok) {
         const data = await response.json();
         console.log(`Railway test response data for ${url}:`, data);
         return { success: true, url };
+      } else {
+        console.error(`Railway test failed with status ${response.status} for ${url}`);
       }
     } catch (error: any) {
-      // Ignore abort errors
-      if (error.name !== 'AbortError') {
-        console.error(`Railway test failed for ${url}:`, error);
+      console.error(`Railway test exception for ${url}:`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
+      // Don't stop on first error, try all URLs
+      if (error.name === 'AbortError') {
+        console.error('Request timed out - connection may be slow or blocked');
+      } else if (error.message?.includes('Network request failed')) {
+        console.error('Network request failed - check internet connection and firewall');
       }
     }
   }
-  
-  return { success: false, error: 'Railway connection failed' };
+
+  return { success: false, error: 'Railway connection failed - check internet connection' };
 };
 
 export const testExternalConnection = async (): Promise<boolean> => {
