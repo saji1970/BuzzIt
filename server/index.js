@@ -3107,7 +3107,7 @@ app.post('/api/live-streams/:id/comments', verifyToken, async (req, res) => {
 app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
   try {
     let stream = null;
-    
+
     if (db.isConnected()) {
       try {
         // First check if stream exists and get user ID
@@ -3115,9 +3115,16 @@ app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
         if (checkResult.rows.length === 0) {
           return res.status(404).json({ error: 'Live stream not found' });
         }
-        
+
         const row = checkResult.rows[0];
-        if (row.user_id !== req.userId) {
+
+        // Check if user is admin
+        const userResult = await db.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        const isAdmin = userResult.rows.length > 0 &&
+                        (userResult.rows[0].role === 'admin' || userResult.rows[0].role === 'super_admin');
+
+        // Allow stream owner or admin to end the stream
+        if (row.user_id !== req.userId && !isAdmin) {
           return res.status(403).json({ error: 'Forbidden' });
         }
         
