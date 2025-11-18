@@ -3321,29 +3321,29 @@ app.delete('/api/admin/buzzes/:id', verifyAdmin, async (req, res) => {
 // Legacy Mongoose code (commented out for reference)
 // const deletedBuzz = await Buzz.findOneAndDelete({ id: buzzId });
 // if (deletedBuzz) {
-      // Also remove from in-memory array
-    const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
-      if (buzzIndex !== -1) buzzes.splice(buzzIndex, 1);
-    
-      // Update user buzz count
-      await User.updateOne({ id: deletedBuzz.userId }, { $inc: { buzzCount: -1 } });
-    
-      res.json({ success: true, message: 'Buzz deleted successfully' });
-    } else {
-      // Fallback to in-memory array
-      const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
-      if (buzzIndex !== -1) {
-    buzzes.splice(buzzIndex, 1);
-    res.json({ success: true, message: 'Buzz deleted successfully' });
-      } else {
-        res.status(404).json({ error: 'Buzz not found' });
-      }
-    }
-  } catch (error) {
-    console.error('Delete buzz error:', error);
-    res.status(500).json({ error: 'Failed to delete buzz' });
-  }
-});
+//   // Also remove from in-memory array
+//   const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+//   if (buzzIndex !== -1) buzzes.splice(buzzIndex, 1);
+//
+//   // Update user buzz count
+//   await User.updateOne({ id: deletedBuzz.userId }, { $inc: { buzzCount: -1 } });
+//
+//   res.json({ success: true, message: 'Buzz deleted successfully' });
+// } else {
+//   // Fallback to in-memory array
+//   const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
+//   if (buzzIndex !== -1) {
+//     buzzes.splice(buzzIndex, 1);
+//     res.json({ success: true, message: 'Buzz deleted successfully' });
+//   } else {
+//     res.status(404).json({ error: 'Buzz not found' });
+//   }
+// }
+// } catch (error) {
+//   console.error('Delete buzz error:', error);
+//   res.status(500).json({ error: 'Failed to delete buzz' });
+// }
+// });
 
 // Remove duplicate users (admin only) - keeps the oldest user for each username
 app.post('/api/admin/users/remove-duplicates', verifyAdmin, (req, res) => {
