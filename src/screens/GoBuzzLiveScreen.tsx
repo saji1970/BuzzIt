@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Share,
+  BackHandler,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -24,12 +27,13 @@ const FALLBACK_IVS_STREAM_KEY =
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import ApiService from '../services/APIService';
 import BuzzLivePublisher, {
   BuzzLivePublisherHandle,
   BuzzLivePublisherStatus,
 } from '../components/Buzzlive/BuzzLivePublisher';
+import {useStreamManager} from '../hooks/useStreamManager';
 
 const {width, height} = Dimensions.get('window');
 
@@ -59,7 +63,11 @@ const GoBuzzLiveScreen: React.FC = () => {
   const [publishUrl, setPublishUrl] = useState('');
   const [publisherTrigger, setPublisherTrigger] = useState(0);
   const [hasIncrementedViewerCount, setHasIncrementedViewerCount] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const publisherRef = useRef<BuzzLivePublisherHandle>(null);
+  
+  // Production-ready stream management hook
+  const {endStream: endStreamWithManager, isEnding, error: streamError, reset: resetStreamManager} = useStreamManager();
 
   const copyToClipboard = async (value: string | null | undefined, label: string) => {
     if (!value) {
@@ -77,7 +85,8 @@ const GoBuzzLiveScreen: React.FC = () => {
 
   const getPlaybackUrl = () => currentStream?.ivsPlaybackUrl || currentStream?.streamUrl || '';
 
-  const isUsingFallbackConfig = !stream || (!stream?.ivsIngestRtmpsUrl && !stream?.ivsStreamKey);
+  const isUsingFallbackConfig =
+    !currentStream || (!currentStream?.ivsIngestRtmpsUrl && !currentStream?.ivsStreamKey);
 
   const buildRtmpIngestUrl = (stream: any): string => {
     if (!stream) {
@@ -137,7 +146,34 @@ const GoBuzzLiveScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchExistingLiveStream();
+    // Don't block UI - fetch in background
+    let mounted = true;
+    const loadStream = async () => {
+      if (!currentUser?.id) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        await fetchExistingLiveStream();
+      } catch (error) {
+        console.error('Error fetching existing stream:', error);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    // Use setTimeout to allow UI to render first
+    const timeoutId = setTimeout(() => {
+      loadStream();
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -165,6 +201,32 @@ const GoBuzzLiveScreen: React.FC = () => {
   }, [isStreaming, currentStream]);
 
   // Note: Auto-scroll functionality removed - FlatList handles scrolling automatically
+
+  // Intercept Android hardware back and navigation back while streaming
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (isStreaming || (currentStream && !showSetup)) {
+          handleEndStream();
+          return true; // prevent default back
+        }
+        return false;
+      };
+
+      const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      const beforeRemoveSub = navigation.addListener('beforeRemove', (e: any) => {
+        if (!isStreaming && !(currentStream && !showSetup)) return;
+        e.preventDefault();
+        handleEndStream();
+      });
+
+      return () => {
+        backSub.remove();
+        beforeRemoveSub();
+      };
+    }, [isStreaming, currentStream, showSetup, navigation, handleEndStream])
+  );
 
   const loadComments = async () => {
     if (!currentStream) return;
@@ -201,10 +263,20 @@ const GoBuzzLiveScreen: React.FC = () => {
 
   const fetchExistingLiveStream = async () => {
     if (!currentUser) {
+      setActiveServerStream(null);
       return null;
     }
     try {
-      const response = await ApiService.getLiveStreams();
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
+      );
+      
+      const response = await Promise.race([
+        ApiService.getLiveStreams(),
+        timeoutPromise,
+      ]) as any;
+      
       if (response.success && Array.isArray(response.data)) {
         const mine = response.data.find(
           stream =>
@@ -218,6 +290,7 @@ const GoBuzzLiveScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Error checking existing live stream:', error);
+      // Don't block UI on error - just continue
     }
     setActiveServerStream(null);
     return null;
@@ -283,8 +356,12 @@ const GoBuzzLiveScreen: React.FC = () => {
         if (ingestUrl) {
           setPublishUrl(ingestUrl);
           setPublisherTrigger(prev => prev + 1);
+          // Set streaming state immediately when stream is created
+          setIsStreaming(true);
         } else {
           setPublishUrl('');
+          // Still show controls even without ingest URL
+          setIsStreaming(true);
           Alert.alert(
             'Streaming credentials unavailable',
             'No RTMP ingest URL or stream key is configured. You can still use these credentials manually from the Broadcast Credentials section.',
@@ -297,6 +374,8 @@ const GoBuzzLiveScreen: React.FC = () => {
           if (!response.data.ivsIngestRtmpsUrl && FALLBACK_IVS_INGEST) {
             setIsStreaming(true);
           } else {
+            // Stream is created, show controls
+            setIsStreaming(true);
             Alert.alert(
               'Stream Started',
               response.data.ivsIngestRtmpsUrl
@@ -305,6 +384,9 @@ const GoBuzzLiveScreen: React.FC = () => {
               [{text: 'OK'}],
             );
           }
+        } else {
+          // Playback URL available, stream is ready
+          setIsStreaming(true);
         }
       } else {
         const errorMessage = response.error || 'Failed to start stream';
@@ -339,7 +421,46 @@ const GoBuzzLiveScreen: React.FC = () => {
     }
   };
 
-  const handleEndStream = async () => {
+  /**
+   * Clears all stream-related state
+   * Called after successful backend confirmation or as fallback
+   */
+  const clearStreamState = useCallback(() => {
+    // Clear publishing state
+    setPublishUrl('');
+    setPublisherTrigger(0);
+    setStreamStatus('idle');
+    setIsStreaming(false);
+
+    // Clear stream data
+    setCurrentStream(null);
+    setActiveServerStream(null);
+    setHasIncrementedViewerCount(false);
+
+    // Reset UI state
+    setShowSetup(true);
+    setTitle('');
+    setDescription('');
+    setComments([]);
+    setViewers(0);
+
+    // Reset stream manager
+    resetStreamManager();
+  }, [resetStreamManager]);
+
+  /**
+   * Production-ready stream end handler with proper cleanup order:
+   * 1. Stop publishing (local cleanup)
+   * 2. End stream on backend
+   * 3. Update state (after backend success)
+   * 4. Navigate back
+   */
+  const handleEndStream = useCallback(async () => {
+    // Prevent multiple simultaneous end operations
+    if (isEnding) {
+      return;
+    }
+
     Alert.alert(
       'End Stream',
       'Are you sure you want to end this live stream?',
@@ -348,52 +469,62 @@ const GoBuzzLiveScreen: React.FC = () => {
         {
           text: 'End Stream',
           style: 'destructive',
-              onPress: async () => {
-                if (currentStream) {
-                  try {
-                    // Stop publishing first
-                    await publisherRef.current?.stop();
-                    setPublishUrl('');
-                    setPublisherTrigger(0);
-                    setStreamStatus('idle');
+          onPress: async () => {
+            if (!currentStream) {
+              // No stream to end, just cleanup and navigate
+              clearStreamState();
+              navigation.goBack();
+              return;
+            }
 
-                    // End stream on backend
-                    await ApiService.endLiveStream(currentStream.id);
-
-                    // Clear all state
-                    setIsStreaming(false);
-                    setCurrentStream(null);
-                    setShowSetup(true);
-                    setTitle('');
-                    setDescription('');
-                    setComments([]);
-                    setViewers(0);
-                    setActiveServerStream(null);
-                    setPublisherTrigger(0);
-                    setStreamStatus('idle');
-                    
-                    // Navigate back immediately
-                    navigation.goBack();
-                  } catch (error: any) {
-                    console.error('Error ending stream:', error);
-                    // Still navigate back even if API call fails
-                    setIsStreaming(false);
-                    setCurrentStream(null);
-                    setActiveServerStream(null);
-                    setPublishUrl('');
-                    setPublisherTrigger(0);
-                    setStreamStatus('idle');
-                    navigation.goBack();
-                  }
-                } else {
-                  // No stream to end, just go back
-                  navigation.goBack();
-                }
+            // Use the stream manager for production-ready cleanup
+            const result = await endStreamWithManager({
+              streamId: currentStream.id,
+              publisherRef,
+              onSuccess: () => {
+                // Success callback - update state after backend confirms
+                clearStreamState();
+                navigation.goBack();
               },
+              onError: (error) => {
+                // Error callback - show user-friendly message with retry option
+                Alert.alert(
+                  'Error Ending Stream',
+                  error.message || 'Failed to end the stream. Please try again.',
+                  [
+                    {
+                      text: 'Retry',
+                      onPress: () => {
+                        // Retry ending the stream
+                        handleEndStream();
+                      },
+                      style: 'default',
+                    },
+                    {
+                      text: 'Cancel',
+                      style: 'cancel',
+                      onPress: () => {
+                        // Still cleanup local state even on error
+                        clearStreamState();
+                        navigation.goBack();
+                      },
+                    },
+                  ]
+                );
+              },
+            });
+
+            // If result indicates failure and no callback was called, handle it
+            if (!result.success) {
+              // Fallback: still cleanup and navigate even if callbacks weren't called
+              clearStreamState();
+              navigation.goBack();
+            }
+          },
         },
       ]
     );
-  };
+  }, [isEnding, currentStream, endStreamWithManager, clearStreamState, navigation]);
 
   const handleSendComment = async () => {
     if (!newComment.trim() || !currentStream) return;
@@ -538,6 +669,16 @@ const GoBuzzLiveScreen: React.FC = () => {
         showControls={false}
       />
 
+      {/* Loading Indicator - Show while checking for existing stream */}
+      {isLoading && !isStreaming && showSetup && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FF0069" />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </View>
+      )}
+
       {/* Content View */}
       <View style={styles.contentView}>
         {/* Top Overlay */}
@@ -545,7 +686,7 @@ const GoBuzzLiveScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
-              if (isStreaming) {
+              if (isStreaming || (currentStream && !showSetup)) {
                 handleEndStream();
               } else {
                 navigation.goBack();
@@ -573,6 +714,24 @@ const GoBuzzLiveScreen: React.FC = () => {
               style={styles.shareButton}
               onPress={handleShare}>
               <Icon name="share" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+
+          {/* Close Stream Button - Always visible when stream exists */}
+          {(isStreaming || (currentStream && !showSetup)) && (
+            <TouchableOpacity
+              style={[
+                styles.closeStreamButton,
+                isEnding && styles.closeStreamButtonDisabled,
+              ]}
+              onPress={handleEndStream}
+              activeOpacity={0.7}
+              disabled={isEnding}>
+              {isEnding ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Icon name="close" size={24} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -645,11 +804,30 @@ const GoBuzzLiveScreen: React.FC = () => {
           </LinearGradient>
         )}
 
-        {/* Live Controls */}
-        {isStreaming && (
+        {/* Loading Overlay - Show during stream end operation */}
+        {isEnding && (
+          <Modal
+            transparent
+            visible={isEnding}
+            animationType="fade"
+            onRequestClose={() => {}}>
+            <View style={styles.loadingOverlay}>
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#FF0069" />
+                <Text style={styles.loadingText}>Ending stream...</Text>
+                <Text style={styles.loadingSubtext}>
+                  Please wait while we end your live stream
+                </Text>
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {/* Live Controls - Show when streaming OR when stream is created (even if not live yet) */}
+        {(isStreaming || (currentStream && !showSetup)) && (
           <>
             {renderBroadcastInfo()}
-            {/* Bottom Controls */}
+            {/* Bottom Controls - Always visible when streaming */}
             <View style={styles.bottomControls}>
               {/* Toggle Camera */}
               <TouchableOpacity
@@ -666,61 +844,75 @@ const GoBuzzLiveScreen: React.FC = () => {
                 </View>
               )}
 
-              {/* End Stream Button */}
+              {/* End Stream Button - Always visible when stream exists */}
               <TouchableOpacity
-                style={[styles.endButton, {backgroundColor: '#FF0069'}]}
-                onPress={handleEndStream}>
-                <Icon name="stop" size={28} color="#FFFFFF" />
-                <Text style={styles.endButtonText}>End</Text>
+                style={[
+                  styles.endButton,
+                  {backgroundColor: '#FF0069'},
+                  isEnding && styles.endButtonDisabled,
+                ]}
+                onPress={handleEndStream}
+                activeOpacity={0.8}
+                disabled={isEnding}>
+                {isEnding ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Icon name="stop" size={28} color="#FFFFFF" />
+                    <Text style={styles.endButtonText}>End Stream</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
 
-            {/* Comments Sidebar */}
-            <View style={styles.commentsContainer}>
-              <View style={styles.commentsHeader}>
-                <Text style={styles.commentsTitle}>Live Comments</Text>
-                <Text style={styles.commentsCount}>{comments.length}</Text>
-              </View>
+            {/* Comments Sidebar - Only show when streaming */}
+            {isStreaming && (
+              <View style={styles.commentsContainer}>
+                <View style={styles.commentsHeader}>
+                  <Text style={styles.commentsTitle}>Live Comments</Text>
+                  <Text style={styles.commentsCount}>{comments.length}</Text>
+                </View>
 
-              <FlatList
-                data={comments}
-                renderItem={renderComment}
-                keyExtractor={item => item.id}
-                style={styles.commentsList}
-                contentContainerStyle={styles.commentsContent}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyComments}>
-                    <Text style={styles.emptyCommentsText}>
-                      No comments yet. Be the first!
-                    </Text>
-                  </View>
-                }
-              />
-
-              {/* Comment Input */}
-              <View style={styles.commentInputContainer}>
-                <TextInput
-                  style={[styles.commentInput, {backgroundColor: 'rgba(255,255,255,0.9)', color: '#000'}]}
-                  placeholder="Add a comment..."
-                  placeholderTextColor="#666"
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  multiline
-                  maxLength={500}
+                <FlatList
+                  data={comments}
+                  renderItem={renderComment}
+                  keyExtractor={item => item.id}
+                  style={styles.commentsList}
+                  contentContainerStyle={styles.commentsContent}
+                  showsVerticalScrollIndicator={false}
+                  ListEmptyComponent={
+                    <View style={styles.emptyComments}>
+                      <Text style={styles.emptyCommentsText}>
+                        No comments yet. Be the first!
+                      </Text>
+                    </View>
+                  }
                 />
-                <TouchableOpacity
-                  style={[styles.sendButton, {backgroundColor: '#FF0069'}]}
-                  onPress={handleSendComment}
-                  disabled={!newComment.trim()}>
-                  <Icon
-                    name="send"
-                    size={20}
-                    color={newComment.trim() ? '#FFFFFF' : '#999'}
+
+                {/* Comment Input */}
+                <View style={styles.commentInputContainer}>
+                  <TextInput
+                    style={[styles.commentInput, {backgroundColor: 'rgba(255,255,255,0.9)', color: '#000'}]}
+                    placeholder="Add a comment..."
+                    placeholderTextColor="#666"
+                    value={newComment}
+                    onChangeText={setNewComment}
+                    multiline
+                    maxLength={500}
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sendButton, {backgroundColor: '#FF0069'}]}
+                    onPress={handleSendComment}
+                    disabled={!newComment.trim()}>
+                    <Icon
+                      name="send"
+                      size={20}
+                      color={newComment.trim() ? '#FFFFFF' : '#999'}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            )}
           </>
         )}
       </View>
@@ -817,6 +1009,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  closeStreamButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 0, 105, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   setupContainer: {
     flex: 1,
@@ -939,7 +1140,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 20,
     paddingHorizontal: 20,
-    zIndex: 10,
+    zIndex: 20,
+    elevation: 10, // Android shadow
   },
   controlButton: {
     width: 56,
@@ -966,12 +1168,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 15,
     top: 100,
-    bottom: 100,
+    bottom: 120, // Leave space for bottom controls (20px bottom + 100px for controls)
     width: width * 0.35,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 15,
     padding: 12,
-    zIndex: 10,
+    zIndex: 15,
+    elevation: 5, // Android shadow
   },
   commentsHeader: {
     flexDirection: 'row',
@@ -1131,6 +1334,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    opacity: 0.7,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  endButtonDisabled: {
+    opacity: 0.6,
+  },
+  closeStreamButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

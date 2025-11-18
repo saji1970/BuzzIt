@@ -12,6 +12,8 @@ import Video from 'react-native-video';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
+import {getPlayableStreamUrl, isValidPlaybackStreamUrl} from '../../utils/streamUrl';
+
 interface BuzzLiveViewerProps {
   playbackUrl?: string;
   placeholderImage?: string;
@@ -29,9 +31,14 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
   const [buffering, setBuffering] = useState(false);
   const [errored, setErrored] = useState(false);
 
+  const playableUrl = useMemo(
+    () => getPlayableStreamUrl(playbackUrl),
+    [playbackUrl],
+  );
+
   const isPlayable = useMemo(
-    () => Boolean(playbackUrl && !errored),
-    [playbackUrl, errored],
+    () => Boolean(playableUrl && !errored),
+    [playableUrl, errored],
   );
 
   return (
@@ -57,7 +64,7 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
       {isPlayable ? (
         <View style={styles.videoWrapper}>
           <Video
-            source={{uri: playbackUrl as string}}
+            source={{uri: playableUrl as string}}
             style={StyleSheet.absoluteFill}
             resizeMode="cover"
             paused={paused}
@@ -65,7 +72,12 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
             muted={false}
             onBuffer={({isBuffering}) => setBuffering(isBuffering)}
             onError={error => {
-              console.error('BuzzLive viewer error', error);
+              console.error('BuzzLive viewer error', {
+                error,
+                playbackUrl,
+                playableUrl,
+                isValid: isValidPlaybackStreamUrl(playableUrl || undefined),
+              });
               setErrored(true);
             }}
             repeat

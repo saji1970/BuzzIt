@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buzz it - Live Stream</title>
+    <!-- Amazon IVS Player SDK -->
+    <script src="https://player.live-video.net/1.20.0/amazon-ivs-player.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            color: #fff;
+            text-align: center;
+        }
+
+        .video-placeholder p {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .video-placeholder .subtitle {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+            padding: 20px;
+            z-index: 10;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stream-info {
+            flex: 1;
+        }
+
+        .stream-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stream-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .live-badge {
+            background: #FF0069;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .viewer-count {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .stream-title {
+                font-size: 18px;
+            }
+
+            .stream-meta {
+                font-size: 12px;
+                flex-wrap: wrap;
+            }
+
+            .overlay {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="overlay">
+            <div class="header">
+                <div class="stream-info">
+                    <div class="stream-title" id="streamTitle">Loading stream...</div>
+                    <div class="stream-meta">
+                        <div class="live-badge">
+                            <span class="live-dot"></span>
+                            LIVE
+                        </div>
+                        <div class="viewer-count">
+                            👁️ <span id="viewerCount">0</span> viewers
+                        </div>
+                        <div id="streamerName"></div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="shareStream()">Share</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="video-container">
+            <video id="videoPlayer" class="video-player" controls style="display: none;"></video>
+            <div id="videoPlaceholder" class="video-placeholder">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading stream...</p>
+                    <p class="subtitle">Please wait while we connect to the stream</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script>
+        let ivsPlayer = null;
+        let streamId = null;
+        let currentStream = null;
+        let viewerUpdateInterval = null;
+
+        // Get stream ID from URL path (/stream/:id)
+        function getStreamIdFromUrl() {
+            const pathParts = window.location.pathname.split('/').filter(part => part.length > 0);
+            // Path should be: ['stream', 'id'] for /stream/:id
+            if (pathParts.length >= 2 && pathParts[0] === 'stream') {
+                return pathParts[1];
+            }
+            // Fallback: get last path segment
+            return pathParts[pathParts.length - 1] || null;
+        }
+
+        // Initialize stream ID
+        streamId = getStreamIdFromUrl();
+
+        // Load stream data
+        async function loadStream() {
+            try {
+                const response = await fetch(`/api/live-streams/${streamId}`);
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    currentStream = data.data;
+                    displayStreamInfo(data.data);
+                    
+                    // Increment viewer count
+                    await incrementViewer();
+                    
+                    // Start playback
+                    initializeStream(data.data);
+                    
+                    // Start viewer updates
+                    startViewerUpdates();
+                } else {
+                    showError('Stream not found or no longer available');
+                }
+            } catch (error) {
+                console.error('Error loading stream:', error);
+                showError('Failed to load stream. Please try again.');
+            }
+        }
+
+        function displayStreamInfo(stream) {
+            document.getElementById('streamTitle').textContent = stream.title || 'Live Stream';
+            document.getElementById('streamerName').textContent = stream.displayName || stream.username || 'Unknown';
+            document.getElementById('viewerCount').textContent = stream.viewers || 0;
+        }
+
+        function initializeIVSPlayer(playbackUrl) {
+            // Clean up existing player
+            if (ivsPlayer) {
+                try {
+                    ivsPlayer.delete();
+                } catch (e) {
+                    console.error('Error deleting IVS player:', e);
+                }
+                ivsPlayer = null;
+            }
+
+            const placeholder = document.getElementById('videoPlaceholder');
+            const videoElement = document.getElementById('videoPlayer');
+            
+            // Hide placeholder and show video
+            if (placeholder) placeholder.style.display = 'none';
+            if (videoElement) videoElement.style.display = 'block';
+
+            try {
+                // Check if IVS SDK is available
+                if (typeof IVSPlayer === 'undefined') {
+                    console.error('Amazon IVS Player SDK not loaded');
+                    // Fallback to regular video element
+                    if (videoElement && playbackUrl) {
+                        videoElement.src = playbackUrl;
+                        videoElement.play().catch(e => console.error('Error playing video:', e));
+                    }
+                    return;
+                }
+
+                // Create IVS player
+                const PlayerState = IVSPlayer.PlayerState;
+                const PlayerEventType = IVSPlayer.PlayerEventType;
+
+                ivsPlayer = IVSPlayer.create();
+                ivsPlayer.attachHTMLVideoElement(videoElement);
+                ivsPlayer.load(playbackUrl);
+
+                // Handle player events
+                ivsPlayer.addEventListener(PlayerEventType.PLAYING, () => {
+                    console.log('IVS Player: Playing');
+                    if (placeholder) placeholder.style.display = 'none';
+                    hideError();
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.ENDED, () => {
+                    console.log('IVS Player: Stream ended');
+                    showError('Stream has ended');
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.ERROR, (error) => {
+                    console.error('IVS Player error:', error);
+                    showError('Stream playback error. The stream may not be active.');
+                    // Fallback to regular video element
+                    if (videoElement && playbackUrl) {
+                        videoElement.src = playbackUrl;
+                        videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                    }
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.TEXT_METADATA_CUE, (cue) => {
+                    console.log('IVS Player metadata:', cue.text);
+                });
+
+            } catch (error) {
+                console.error('Error initializing IVS player:', error);
+                // Fallback to regular video element
+                if (videoElement && playbackUrl) {
+                    videoElement.src = playbackUrl;
+                    videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                }
+            }
+        }
+
+        function initializeStream(stream) {
+            // Prioritize IVS playback URL, then restream, then regular stream URL
+            const playbackUrl = stream.ivsPlaybackUrl || 
+                               stream.restreamPlaybackUrl || 
+                               stream.streamUrl || 
+                               '';
+
+            if (!playbackUrl) {
+                showError('No stream URL available. The stream may not be active yet.');
+                return;
+            }
+
+            // Check if it's an IVS stream (HLS .m3u8 URL)
+            if (playbackUrl.includes('.m3u8') || stream.ivsPlaybackUrl) {
+                initializeIVSPlayer(playbackUrl);
+            } else {
+                // Regular video stream
+                const videoElement = document.getElementById('videoPlayer');
+                const placeholder = document.getElementById('videoPlaceholder');
+                
+                if (videoElement) {
+                    videoElement.src = playbackUrl;
+                    videoElement.play().catch(e => {
+                        console.error('Error playing video:', e);
+                        showError('Failed to play stream. The stream may not be active.');
+                    });
+                    videoElement.style.display = 'block';
+                }
+                
+                if (placeholder) placeholder.style.display = 'none';
+            }
+        }
+
+        async function incrementViewer() {
+            try {
+                await fetch(`/api/live-streams/${streamId}/viewers`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action: 'increment' })
+                });
+            } catch (error) {
+                console.error('Error incrementing viewer:', error);
+            }
+        }
+
+        async function decrementViewer() {
+            try {
+                await fetch(`/api/live-streams/${streamId}/viewers`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action: 'decrement' })
+                });
+            } catch (error) {
+                console.error('Error decrementing viewer:', error);
+            }
+        }
+
+        function startViewerUpdates() {
+            viewerUpdateInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/live-streams/${streamId}`);
+                    const data = await response.json();
+
+                    if (data.success && data.data) {
+                        document.getElementById('viewerCount').textContent = data.data.viewers || 0;
+                        
+                        // Check if stream is still live
+                        if (!data.data.isLive) {
+                            showError('Stream has ended');
+                            stopViewerUpdates();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error updating viewer count:', error);
+                }
+            }, 5000);
+        }
+
+        function stopViewerUpdates() {
+            if (viewerUpdateInterval) {
+                clearInterval(viewerUpdateInterval);
+                viewerUpdateInterval = null;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            }
+            
+            const placeholder = document.getElementById('videoPlaceholder');
+            if (placeholder) {
+                placeholder.innerHTML = `
+                    <div class="loading">
+                        <p style="color: #ef4444; font-size: 18px; margin-bottom: 10px;">${message}</p>
+                        <p class="subtitle">Please refresh the page to try again</p>
+                    </div>
+                `;
+                placeholder.style.display = 'flex';
+            }
+        }
+
+        function hideError() {
+            const errorDiv = document.getElementById('errorMessage');
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        function shareStream() {
+            if (navigator.share) {
+                navigator.share({
+                    title: currentStream?.title || 'Live Stream',
+                    text: `Watch ${currentStream?.displayName || 'this'} live on Buzz it!`,
+                    url: window.location.href
+                }).catch(error => {
+                    console.error('Error sharing:', error);
+                });
+            } else {
+                // Fallback: copy to clipboard
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                    alert('Stream link copied to clipboard!');
+                }).catch(error => {
+                    console.error('Error copying to clipboard:', error);
+                });
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ivsPlayer) {
+                try {
+                    ivsPlayer.delete();
+                } catch (e) {
+                    console.error('Error deleting IVS player:', e);
+                }
+            }
+            decrementViewer();
+            stopViewerUpdates();
+        });
+
+        // Handle visibility change (pause when tab is hidden)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (ivsPlayer) {
+                    ivsPlayer.pause();
+                }
+            } else {
+                if (ivsPlayer && currentStream) {
+                    const playbackUrl = currentStream.ivsPlaybackUrl || 
+                                       currentStream.restreamPlaybackUrl || 
+                                       currentStream.streamUrl;
+                    if (playbackUrl) {
+                        ivsPlayer.play();
+                    }
+                }
+            }
+        });
+
+        // Load stream on page load
+        if (streamId) {
+            loadStream();
+        } else {
+            showError('Invalid stream ID');
+        }
+    </script>
+</body>
+</html>
+

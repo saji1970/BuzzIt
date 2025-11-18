@@ -25,7 +25,7 @@ const ScreenContainer: React.FC<ScreenContainerProps> = ({
   rightAction,
   headerChildren,
   children,
-  contentStyle,
+  contentStyle = {},
   floatingHeader = true,
 }) => {
   const {theme} = useTheme();

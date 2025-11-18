@@ -38,6 +38,7 @@ import ContactSyncService from '../components/ContactSyncService';
 import YourBuzzScreen from './YourBuzzScreen';
 import ScreenContainer from '../components/ScreenContainer';
 import BuzzLiveViewer from '../components/Buzzlive/BuzzLiveViewer';
+import {getPlayableStreamUrl} from '../utils/streamUrl';
 
 const {width} = Dimensions.get('window');
 
@@ -69,15 +70,10 @@ const HomeScreen: React.FC = () => {
   const primaryLiveStream = useMemo(
     () =>
       liveStreams.find(stream => {
-        if (!stream.streamUrl) {
-          return false;
-        }
-        const trimmed = stream.streamUrl.trim();
-        if (!trimmed) {
-          return false;
-        }
-        // Prefer HLS streams
-        return trimmed.startsWith('http');
+        const playable = getPlayableStreamUrl(
+          stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl,
+        );
+        return Boolean(playable);
       }) || null,
     [liveStreams],
   );
@@ -237,23 +233,25 @@ const HomeScreen: React.FC = () => {
       unblockedBuzzes = [];
     }
     
-    // Show all buzzes if no interests selected, otherwise filter by interests
+    // IMPORTANT: Show ALL buzzes from ALL users by default
+    // Only filter by interests if user explicitly selects interests to filter by
+    // This ensures users can see buzzes from everyone, not just matching interests
     let filtered: Buzz[];
     
     if (selectedInterests.length > 0) {
+      // User explicitly selected interests to filter - show only matching buzzes
       const interestObjects = currentUser.interests.filter(i => 
         selectedInterests.includes(i.id)
       );
       filtered = getBuzzesByInterests(interestObjects).filter(buzz => 
         unblockedBuzzes.some(b => b.id === buzz.id)
       );
-    } else if (currentUser.interests && currentUser.interests.length > 0) {
-      filtered = getBuzzesByInterests(currentUser.interests).filter(buzz => 
-        unblockedBuzzes.some(b => b.id === buzz.id)
-      );
+      console.log(`Filtering by ${selectedInterests.length} selected interests: ${filtered.length} buzzes`);
     } else {
-      // If user has no interests, show all unblocked buzzes (excluding own)
+      // No interests selected - show ALL unblocked buzzes from ALL users
+      // This is the default behavior to ensure visibility
       filtered = unblockedBuzzes;
+      console.log(`Showing all buzzes (no interest filter): ${filtered.length} buzzes from all users`);
     }
     
     // Sort by creation date (newest first) - Normal feed is chronological
@@ -421,27 +419,42 @@ const HomeScreen: React.FC = () => {
             
             return true;
           })
-          .map((stream: any) => ({
-            id: stream.id,
-            userId: stream.userId,
-            username: stream.username || 'Unknown',
-            displayName: stream.displayName || stream.username || 'Unknown',
-            title: stream.title || 'Live Stream',
-            description: stream.description,
-            streamUrl: stream.streamUrl && !stream.streamUrl.startsWith('/') ? stream.streamUrl : '', // Only use valid full URLs
-            thumbnailUrl: stream.thumbnailUrl,
-            isLive: stream.isLive,
-            viewers: stream.viewers || 0,
-            category: stream.category,
-            startedAt: stream.startedAt,
-            tags: stream.tags || [],
-            endedAt: stream.endedAt, // Include endedAt for additional checking
-          }));
+          .map((stream: any) => {
+            const normalizedStreamUrl = getPlayableStreamUrl(stream.streamUrl) || '';
+            const normalizedRestream = getPlayableStreamUrl(stream.restreamPlaybackUrl) || null;
+            const normalizedIvs = getPlayableStreamUrl(stream.ivsPlaybackUrl) || null;
+
+            return {
+              id: stream.id,
+              userId: stream.userId,
+              username: stream.username || 'Unknown',
+              displayName: stream.displayName || stream.username || 'Unknown',
+              title: stream.title || 'Live Stream',
+              description: stream.description,
+              streamUrl: normalizedStreamUrl,
+              thumbnailUrl: stream.thumbnailUrl,
+              isLive: stream.isLive,
+              viewers: stream.viewers || 0,
+              category: stream.category,
+              startedAt: stream.startedAt,
+              tags: stream.tags || [],
+              endedAt: stream.endedAt, // Include endedAt for additional checking
+              restreamPlaybackUrl: normalizedRestream,
+              ivsPlaybackUrl: normalizedIvs,
+            };
+          });
         
         console.log('Mapped live streams:', mappedStreams.length);
+        console.log('Stream details:', mappedStreams.map(s => ({
+          id: s.id,
+          username: s.username,
+          isLive: s.isLive,
+          hasPlaybackUrl: !!(s.ivsPlaybackUrl || s.restreamPlaybackUrl || s.streamUrl),
+        })));
         
-        // Show all live streams, but prioritize streams from subscribed channels
-        // This way users can see streams from people they follow AND discover new streams
+        // Show ALL live streams to all users (not just subscribed ones)
+        // This allows users to discover new streams from anyone
+        // Prioritize streams from subscribed channels, but show all streams
         let finalStreams: LiveStream[];
         if (subscribedIds.length > 0) {
           // Separate streams: subscribed first, then others
@@ -455,14 +468,16 @@ const HomeScreen: React.FC = () => {
           finalStreams = [...subscribedStreams, ...otherStreams];
           console.log('Subscribed streams:', subscribedStreams.length, 'Other streams:', otherStreams.length);
         } else {
-          // If no subscriptions, show all streams (for discovery)
+          // If no subscriptions, show ALL streams (for discovery)
           finalStreams = mappedStreams;
           console.log('No subscriptions, showing all streams:', finalStreams.length);
         }
         
+        // IMPORTANT: Show streams even if they don't have playback URLs yet
+        // Streams might be "starting" and will get playback URLs once streaming begins
         // Update state - this will automatically remove ended streams (not in mappedStreams)
         setLiveStreams(finalStreams);
-        console.log('Final live streams set:', finalStreams.length);
+        console.log('Final live streams set:', finalStreams.length, 'streams visible to all users');
       } else {
         // If API returns no data or error, clear all streams
         console.log('No live streams from API or error:', response?.error);
@@ -702,17 +717,7 @@ const HomeScreen: React.FC = () => {
   // Wait for auth check to complete first
   if (authLoading) {
     return (
-      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
-        <Text style={{color: theme.colors.text}}>Loading...</Text>
-      </View>
-    );
-  }
-  
-  // HomeScreen should only render when authenticated (navigation handles login/profile screens)
-  // But we'll still handle the case gracefully if somehow rendered while not authenticated
-  if (authLoading) {
-    return (
-      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}]}>
+      <View style={{flex: 1, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center'}}>
         <Text style={{color: theme.colors.text}}>Loading...</Text>
       </View>
     );
@@ -722,7 +727,7 @@ const HomeScreen: React.FC = () => {
   // But we'll show a message just in case
   if (!isAuthenticated) {
     return (
-      <View style={[styles.container, {backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center', padding: 20}]}>
+      <View style={{flex: 1, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center', padding: 20}}>
         <Text style={{color: theme.colors.text, fontSize: 16, textAlign: 'center'}}>
           Please login or create a profile to continue.
         </Text>
@@ -757,9 +762,9 @@ const HomeScreen: React.FC = () => {
 
   const renderHero = () => (
     <View style={[styles.heroContainer, {paddingTop: insets.top + 12}]}>
-              <LinearGradient
+      <LinearGradient
         colors={['#7EB3FF', '#4C7DFF']}
-                start={{x: 0, y: 0}}
+        start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.heroCard}
       >
@@ -768,7 +773,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.heroTitle}>Home</Text>
             <Text style={styles.heroSubtitle}>buzz feed</Text>
           </View>
-            <TouchableOpacity
+          <TouchableOpacity
             style={styles.heroRefreshButton}
             activeOpacity={0.85}
             onPress={() => {
@@ -777,16 +782,16 @@ const HomeScreen: React.FC = () => {
             }}
           >
             <Icon name="refresh" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.heroChannels}>
-        <SubscribedChannels 
+          <SubscribedChannels 
             variant="card"
-          onChannelPress={handleBuzzerPress}
-          onYourBuzzPress={() => setShowYourBuzz(true)}
-        />
-      </View>
+            onChannelPress={handleBuzzerPress}
+            onYourBuzzPress={() => setShowYourBuzz(true)}
+          />
+        </View>
 
         <View style={styles.heroActionsRow}>
           <View
@@ -825,10 +830,12 @@ const HomeScreen: React.FC = () => {
     </View>
   );
 
-  const renderHeader = () => (
-    <>
-      {renderHero()}
-      {renderSearchResults()}
+  const renderHeader = () => {
+    try {
+      return (
+        <>
+          {renderHero()}
+          {renderSearchResults()}
 
       {/* Smart Feed Toggle */}
       <View style={styles.smartFeedContainer}>
@@ -892,39 +899,68 @@ const HomeScreen: React.FC = () => {
         selectedInterests={selectedInterests}
       />
 
-      {/* Live Streams Section - Always show if there are any live streams */}
-      {liveStreams.length > 0 && (
-        <View style={styles.liveStreamsSection}>
-          <View style={styles.sectionHeader}>
-            <Icon name="videocam" size={20} color={theme.colors.primary} />
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>BuzzLive Now</Text>
+      {/* Live Stream Notification Banner - Show in buzz feed */}
+      {liveStreams.length > 0 && liveStreams[0] && (
+        <TouchableOpacity
+          style={[styles.liveStreamBanner, {backgroundColor: theme.colors.primary}]}
+          onPress={() => handleStreamPress(liveStreams[0])}
+          activeOpacity={0.8}>
+          <View style={styles.liveStreamBannerContent}>
+            <View style={styles.liveStreamBannerLeft}>
+              <View style={styles.liveStreamBannerIcon}>
+                <Icon name="videocam" size={20} color="#FFFFFF" />
+                <View style={styles.liveStreamBannerDot} />
+              </View>
+              <View style={styles.liveStreamBannerText}>
+                <Text style={styles.liveStreamBannerTitle}>
+                  {liveStreams[0].displayName || liveStreams[0].username} is live!
+                </Text>
+                <Text style={styles.liveStreamBannerSubtitle}>
+                  {liveStreams[0].viewers || 0} watching • Tap to join
+                </Text>
+              </View>
+            </View>
+            <Icon name="arrow-forward" size={24} color="#FFFFFF" />
           </View>
-          {primaryLiveStream && (
-            <BuzzLiveViewer
-              playbackUrl={primaryLiveStream.streamUrl}
-              placeholderImage={primaryLiveStream.thumbnailUrl || undefined}
-              title={primaryLiveStream.title || primaryLiveStream.displayName}
-              style={styles.liveViewerCard}
-            />
-          )}
-          <FlatList
-            data={liveStreams}
-            renderItem={renderLiveStream}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.liveStreamsList}
-          />
-        </View>
+        </TouchableOpacity>
       )}
-    </>
-  );
 
-  return (
-    <ScreenContainer
-      floatingHeader={false}
-      contentStyle={{paddingHorizontal: 0}}
-    >
+        </>
+      );
+    } catch (error) {
+      console.error('Error rendering header:', error);
+      return (
+        <View style={{padding: 20, alignItems: 'center'}}>
+          <Text style={{color: theme.colors.text}}>Error loading header</Text>
+        </View>
+      );
+    }
+  };
+
+  // Ensure we always render something, even if there's an error
+  let headerContent = null;
+  try {
+    headerContent = renderHeader();
+  } catch (error) {
+    console.error('Error in renderHeader:', error);
+    headerContent = (
+      <View style={{padding: 20, alignItems: 'center'}}>
+        <Icon name="error-outline" size={24} color={theme.colors.primary} />
+        <Text style={{color: theme.colors.text, marginTop: 8}}>Error loading header</Text>
+      </View>
+    );
+  }
+
+  // Add console log to verify component is rendering
+  console.log('HomeScreen rendering - isAuthenticated:', isAuthenticated, 'user:', user?.username, 'authUser:', authUser?.username);
+
+  // Fallback: If ScreenContainer fails, render a simple view
+  try {
+    return (
+      <ScreenContainer
+        floatingHeader={false}
+        contentStyle={{paddingHorizontal: 0}}
+      >
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollContainer}
@@ -940,7 +976,7 @@ const HomeScreen: React.FC = () => {
         }
       >
         <View style={styles.sectionSpacing}>
-          {renderHeader()}
+          {headerContent}
 
           {filteredBuzzes.length === 0 ? (
             renderEmptyState()
@@ -1004,8 +1040,24 @@ const HomeScreen: React.FC = () => {
         </Modal>
       )}
 
-    </ScreenContainer>
-  );
+      </ScreenContainer>
+    );
+  } catch (error) {
+    console.error('HomeScreen render error:', error);
+    // Ultimate fallback - render a simple view
+    return (
+      <View style={{flex: 1, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center', padding: 20}}>
+        <Icon name="home" size={48} color={theme.colors.primary} />
+        <Text style={{color: theme.colors.text, fontSize: 18, fontWeight: 'bold', marginTop: 16}}>Home</Text>
+        <Text style={{color: theme.colors.textSecondary, fontSize: 14, marginTop: 8, textAlign: 'center'}}>
+          {isAuthenticated ? 'Welcome back!' : 'Please login'}
+        </Text>
+        <Text style={{color: theme.colors.textSecondary, fontSize: 12, marginTop: 20, textAlign: 'center'}}>
+          Error: {error?.message || 'Unknown error'}
+        </Text>
+      </View>
+    );
+  }
 };
 
 const styles = StyleSheet.create({
@@ -1386,6 +1438,57 @@ const styles = StyleSheet.create({
   feedHeading: {
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  liveStreamBanner: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  liveStreamBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  liveStreamBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  liveStreamBannerIcon: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  liveStreamBannerDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF0069',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  liveStreamBannerText: {
+    flex: 1,
+  },
+  liveStreamBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  liveStreamBannerSubtitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    opacity: 0.9,
   },
 });
 

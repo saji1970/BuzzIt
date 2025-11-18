@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useMemo} from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
 import {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
+import {getPlayableStreamUrl, isValidPlaybackStreamUrl} from '../utils/streamUrl';
 
 const {width, height} = Dimensions.get('window');
 
@@ -34,8 +35,13 @@ interface StreamComment {
   timestamp: Date;
 }
 
+type AugmentedLiveStream = LiveStream & {
+  ivsPlaybackUrl?: string | null;
+  restreamPlaybackUrl?: string | null;
+};
+
 interface StreamViewerScreenProps {
-  stream: LiveStream;
+  stream: AugmentedLiveStream;
   visible: boolean;
   onClose: () => void;
 }
@@ -52,7 +58,23 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [viewers, setViewers] = useState(stream.viewers || 0);
   const [isLiked, setIsLiked] = useState(false);
   const commentsEndRef = useRef<View>(null);
-  const playbackUrl = stream.ivsPlaybackUrl || stream.streamUrl || '';
+  const playbackUrl = useMemo(() => {
+    const prioritized =
+      stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl || '';
+    const playable = getPlayableStreamUrl(prioritized) || '';
+    
+    console.log('[StreamViewer] Playback URL resolution:', {
+      streamId: stream.id,
+      ivsPlaybackUrl: stream.ivsPlaybackUrl,
+      restreamPlaybackUrl: stream.restreamPlaybackUrl,
+      streamUrl: stream.streamUrl,
+      prioritized,
+      playable,
+      isLive: stream.isLive,
+    });
+    
+    return playable;
+  }, [stream.ivsPlaybackUrl, stream.restreamPlaybackUrl, stream.streamUrl, stream.id, stream.isLive]);
 
   useEffect(() => {
     if (visible && stream) {
@@ -231,34 +253,33 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   // Check if stream URL is valid (must be a full URL, not a relative path)
   const isValidStreamUrl = (url: string): boolean => {
-    if (!url || url.trim() === '') return false;
-    // Check if it's a relative path (starts with /)
-    if (url.startsWith('/')) {
-      console.warn('Invalid stream URL (relative path):', url);
+    if (!url || url.trim() === '') {
+      console.warn('Empty stream URL');
       return false;
     }
-    // Check if it contains the backend URL (which means it's a relative path that was converted)
-    if (url.includes('buzzit-production.up.railway.app/stream/')) {
-      console.warn('Invalid stream URL (backend path, not streaming server):', url);
-      return false;
-    }
-    // Check if it's a valid URL format (http:// or https://)
-    try {
-      const urlObj = new URL(url);
-      // Only allow http/https protocols
-      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-        return false;
-      }
-      // Don't allow backend API URLs as stream URLs
-      if (urlObj.hostname.includes('buzzit-production.up.railway.app') && urlObj.pathname.startsWith('/stream/')) {
-        console.warn('Invalid stream URL (backend API path, not streaming server):', url);
-        return false;
-      }
+    
+    // Allow HLS (.m3u8) and DASH (.mpd) URLs
+    const isHls = url.includes('.m3u8');
+    const isDash = url.includes('.mpd');
+    const isHttp = url.startsWith('http://') || url.startsWith('https://');
+    
+    // For HLS/DASH streams, be more lenient with validation
+    if ((isHls || isDash) && isHttp) {
+      console.log('Valid HLS/DASH stream URL:', url);
       return true;
-    } catch (e) {
-      console.warn('Invalid stream URL format:', url);
-      return false;
     }
+    
+    const valid = isValidPlaybackStreamUrl(url);
+    if (!valid) {
+      console.warn('Invalid stream URL detected:', url);
+      console.warn('URL details:', {
+        hasProtocol: isHttp,
+        isHls,
+        isDash,
+        length: url.length,
+      });
+    }
+    return valid;
   };
 
   const renderComment = ({item}: {item: StreamComment}) => (
@@ -287,21 +308,34 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {playbackUrl && playbackUrl.trim() !== '' && stream.isLive && isValidStreamUrl(playbackUrl) ? (
+          {playbackUrl && stream.isLive && isValidStreamUrl(playbackUrl) ? (
             <Video
               source={{ uri: playbackUrl }}
               style={styles.video}
               resizeMode={ResizeMode.CONTAIN}
-              controls
+              controls={true}
               repeat={false}
+              paused={false}
+              muted={false}
+              playInBackground={false}
+              playWhenInactive={false}
+              ignoreSilentSwitch="ignore"
+              progressUpdateInterval={1000}
               onLoadStart={() => {
-                console.log('Video loading started for stream:', stream.id);
+                console.log('Video loading started for stream:', stream.id, 'URL:', playbackUrl);
               }}
               onLoad={() => {
                 console.log('Video loaded successfully for stream:', stream.id);
               }}
               onError={(error) => {
                 console.error('Video playback error:', error);
+                console.error('Failed URL:', playbackUrl);
+                console.error('Error details:', JSON.stringify(error, null, 2));
+              }}
+              onBuffer={({isBuffering}) => {
+                if (isBuffering) {
+                  console.log('Video buffering...');
+                }
               }}
             />
           ) : stream.isLive ? (

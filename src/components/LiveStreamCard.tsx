@@ -11,6 +11,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
+import {getPlayableStreamUrl} from '../utils/streamUrl';
 
 const {width} = Dimensions.get('window');
 
@@ -29,6 +30,8 @@ export interface LiveStream {
   startedAt: string | Date;
   tags?: string[];
   endedAt?: string | Date; // Track when stream ended
+  restreamPlaybackUrl?: string | null;
+  ivsPlaybackUrl?: string | null;
 }
 
 interface LiveStreamCardProps {
@@ -69,29 +72,9 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
     return null;
   }
 
-  // Check if stream URL is valid (must be a full URL, not a relative path)
-  const isValidStreamUrl = (url: string): boolean => {
-    if (!url || url.trim() === '') return false;
-    // Check if it's a relative path (starts with /)
-    if (url.startsWith('/')) return false;
-    // Check if it contains the backend URL (which means it's a relative path that was converted)
-    if (url.includes('buzzit-production.up.railway.app/stream/')) return false;
-    // Check if it's a valid URL format (http:// or https://)
-    try {
-      const urlObj = new URL(url);
-      // Only allow http/https protocols
-      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-        return false;
-      }
-      // Don't allow backend API URLs as stream URLs
-      if (urlObj.hostname.includes('buzzit-production.up.railway.app') && urlObj.pathname.startsWith('/stream/')) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
+  const playableUrl = getPlayableStreamUrl(
+    stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl,
+  );
 
   return (
     <Animatable.View
@@ -102,7 +85,7 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
         onPress={() => onPress && onPress(stream)}>
         {/* Video Player or Thumbnail */}
         <View style={styles.videoContainer}>
-          {stream.streamUrl && stream.streamUrl.trim() !== '' && stream.isLive && isValidStreamUrl(stream.streamUrl) ? (
+          {stream.isLive && playableUrl ? (
             <View style={styles.videoPlaceholder}>
               {stream.thumbnailUrl ? (
                 <Image

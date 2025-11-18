@@ -179,6 +179,19 @@ const CreateBuzzScreen: React.FC = () => {
     );
   };
 
+  const ensureMicrophonePermission = async () => {
+    const permission =
+      Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.MICROPHONE
+        : PERMISSIONS.ANDROID.RECORD_AUDIO;
+
+    return requestPermissionWithPrompt(
+      permission,
+      'Microphone Permission Required',
+      'Microphone access is required to record videos with audio.',
+    );
+  };
+
   const ensurePhotoLibraryPermission = async () => {
     const permission =
       Platform.OS === 'ios'
@@ -258,27 +271,37 @@ const CreateBuzzScreen: React.FC = () => {
       'Select Media',
       'Choose how you want to add media',
       [
-        {text: 'Camera', onPress: () => openCamera()},
+        {text: 'Take Photo', onPress: () => openCamera('photo')},
+        {text: 'Record Video', onPress: () => openCamera('video')},
         {text: 'Gallery', onPress: () => openGallery()},
         {text: 'Cancel', style: 'cancel'},
       ]
     );
   };
 
-  const openCamera = async () => {
+  const openCamera = async (mediaType: 'photo' | 'video' = 'photo') => {
     try {
       const granted = await ensureCameraPermission();
       if (!granted) {
         return;
       }
 
+      // For video, also check microphone permission
+      if (mediaType === 'video') {
+        const micGranted = await ensureMicrophonePermission();
+        if (!micGranted) {
+          return;
+        }
+      }
+
       const result = await launchCamera({
-        mediaType: 'mixed',
+        mediaType: mediaType === 'video' ? 'video' : 'photo',
         includeBase64: false,
         cameraType: 'back',
         saveToPhotos: true,
         quality: 0.8,
         videoQuality: 'high',
+        durationLimit: mediaType === 'video' ? 300 : undefined, // 5 minutes max for video
       });
 
       if (result.didCancel) {
@@ -292,7 +315,15 @@ const CreateBuzzScreen: React.FC = () => {
       }
 
       const asset = result.assets?.[0];
-      applySelectedAsset(asset);
+      if (asset) {
+        applySelectedAsset(asset);
+        console.log('Media captured:', {
+          type: asset.type,
+          uri: asset.uri,
+          duration: asset.duration,
+          fileSize: asset.fileSize,
+        });
+      }
     } catch (error) {
       console.error('Camera error:', error);
       Alert.alert('Error', 'Failed to open the camera. Please try again or use the gallery option.');
@@ -834,7 +865,11 @@ const CreateBuzzScreen: React.FC = () => {
                     <Image source={{uri: media.url}} style={styles.mediaImage} />
                   ) : (
                     <View style={[styles.mediaImage, styles.mediaVideoPlaceholder]}>
-                      <Icon name="videocam" size={28} color="#FFFFFF" />
+                      <Icon name="videocam" size={48} color="#FFFFFF" />
+                      <View style={styles.videoPlayButton}>
+                        <Icon name="play-arrow" size={32} color="#FFFFFF" />
+                      </View>
+                      <Text style={styles.videoLabel}>Video Selected</Text>
                     </View>
                   )}
                   <TouchableOpacity
@@ -1332,6 +1367,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(47,123,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  videoLabel: {
+    position: 'absolute',
+    bottom: 8,
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   removeMediaButton: {
     position: 'absolute',

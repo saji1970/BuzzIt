@@ -151,7 +151,6 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
       try {
         setBusy(true);
         updateStatus('connecting');
-        cameraRef.current?.startPreview();
         cameraRef.current?.start();
       } catch (error: any) {
         console.error('BuzzLive start error:', error);
@@ -163,8 +162,20 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
     const handleStop = useCallback(async () => {
       try {
         setBusy(true);
-        cameraRef.current?.stop();
-        cameraRef.current?.stopPreview();
+        updateStatus('idle');
+        // Stop the stream - this should stop both stream and preview
+        if (cameraRef.current) {
+          try {
+            cameraRef.current.stop();
+            console.log('Camera stopped successfully');
+          } catch (stopError) {
+            console.error('Error stopping camera:', stopError);
+            // Continue with cleanup even if stop fails
+          }
+        }
+      } catch (error: any) {
+        console.error('Error in handleStop:', error);
+        updateStatus('error');
       } finally {
         setBusy(false);
         updateStatus('idle');

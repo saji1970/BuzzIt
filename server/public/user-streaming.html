@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buzz it - Streaming</title>
+    <!-- Amazon IVS Player SDK -->
+    <script src="https://player.live-video.net/1.20.0/amazon-ivs-player.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -493,22 +495,37 @@
             <div id="streamPreview" class="card" style="display: none;">
                 <h2>Stream Preview</h2>
                 <div class="preview-container">
-                    <video id="previewVideo" class="preview-video" controls muted></video>
+                    <video id="previewVideo" class="preview-video" controls muted style="display: none;"></video>
+                    <div id="previewVideoPlaceholder" style="display: flex; align-items: center; justify-content: center; width: 100%; min-height: 400px; color: white; background: #1a1a1a; position: absolute; top: 0; left: 0;">
+                        <div style="text-align: center;">
+                            <p style="font-size: 18px; margin-bottom: 10px;">Loading stream...</p>
+                            <p style="font-size: 14px; opacity: 0.7;">Please wait while we connect to the stream</p>
+                        </div>
+                    </div>
                     <div class="preview-overlay">
                         <span class="live-dot"></span>
                         LIVE
                     </div>
                     <div class="viewer-count">👁️ <span id="previewViewers">0</span> viewers</div>
                 </div>
-                        <div style="margin-top: 20px;">
-                            <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
-                            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-                                <button class="btn btn-success" onclick="copyStreamLink()">Copy Stream Link</button>
-                                <button class="btn" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
-                                <button class="btn btn-danger" onclick="endCurrentStream()">End Stream</button>
-                            </div>
+                <div style="margin-top: 20px;">
+                    <p><strong>Stream Link:</strong> <span id="streamShareLink" style="color: #667eea;"></span></p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-success" onclick="copyStreamLink()">Copy Stream Link</button>
+                        <button class="btn" id="broadcastButton" onclick="broadcastStream()" style="display: none;">📡 Broadcast</button>
+                        <button class="btn btn-danger" onclick="endCurrentStream()">End Stream</button>
+                    </div>
+
+                    <!-- Visible IVS Playback URL for creators -->
+                    <div id="playbackUrlRow" style="display:none; margin-top: 12px; background:#121212; border:1px solid #2a2a2a; border-radius:8px; padding:12px; color:#fff;">
+                        <div style="font-size:12px; opacity:0.8; text-transform:uppercase; letter-spacing:0.5px;">Playback URL (IVS)</div>
+                        <div id="playbackUrlValue" style="margin-top:6px; word-break:break-all; font-family: monospace;"></div>
+                        <div style="margin-top:10px;">
+                            <button id="copyPlaybackUrlBtn" class="btn" style="width:auto; padding:8px 12px;">Copy Playback URL</button>
                         </div>
                     </div>
+                </div>
+            </div>
 
                     <!-- Active Streams -->
                     <div class="card">
@@ -618,6 +635,7 @@
         let recordedChunks = [];
         let isMuted = false;
         let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back
+        let ivsPlayer = null;
 
         // Check if already logged in
         if (authToken) {
@@ -1254,6 +1272,78 @@
             }, 1000);
         }
 
+        function initializeIVSPlayer(playbackUrl) {
+            // Clean up existing player
+            if (ivsPlayer) {
+                try {
+                    ivsPlayer.delete();
+                } catch (e) {
+                    console.error('Error deleting IVS player:', e);
+                }
+                ivsPlayer = null;
+            }
+
+            const placeholder = document.getElementById('previewVideoPlaceholder');
+            const videoElement = document.getElementById('previewVideo');
+            
+            // Hide placeholder and show video
+            if (placeholder) placeholder.style.display = 'none';
+            if (videoElement) videoElement.style.display = 'block';
+
+            try {
+                // Check if IVS SDK is available
+                if (typeof IVSPlayer === 'undefined') {
+                    console.error('Amazon IVS Player SDK not loaded');
+                    // Fallback to regular video element
+                    if (videoElement && playbackUrl) {
+                        videoElement.src = playbackUrl;
+                        videoElement.play().catch(e => console.error('Error playing video:', e));
+                    }
+                    return;
+                }
+
+                // Create IVS player
+                const PlayerState = IVSPlayer.PlayerState;
+                const PlayerEventType = IVSPlayer.PlayerEventType;
+
+                ivsPlayer = IVSPlayer.create();
+                ivsPlayer.attachHTMLVideoElement(videoElement);
+                ivsPlayer.load(playbackUrl);
+
+                // Handle player events
+                ivsPlayer.addEventListener(PlayerEventType.PLAYING, () => {
+                    console.log('IVS Player: Playing');
+                    if (placeholder) placeholder.style.display = 'none';
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.ENDED, () => {
+                    console.log('IVS Player: Stream ended');
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.ERROR, (error) => {
+                    console.error('IVS Player error:', error);
+                    showAlert('Stream playback error. The stream may not be active.', 'error');
+                    // Fallback to regular video element
+                    if (videoElement && playbackUrl) {
+                        videoElement.src = playbackUrl;
+                        videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                    }
+                });
+
+                ivsPlayer.addEventListener(PlayerEventType.TEXT_METADATA_CUE, (cue) => {
+                    console.log('IVS Player metadata:', cue.text);
+                });
+
+            } catch (error) {
+                console.error('Error initializing IVS player:', error);
+                // Fallback to regular video element
+                if (videoElement && playbackUrl) {
+                    videoElement.src = playbackUrl;
+                    videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                }
+            }
+        }
+
         function showStreamPreview() {
             if (!currentStream) return;
 
@@ -1261,18 +1351,63 @@
             document.getElementById('broadcastButton').style.display = 'inline-block';
             const previewVideo = document.getElementById('previewVideo');
             
-            if (currentStream.streamUrl) {
-                previewVideo.src = currentStream.streamUrl;
-                previewVideo.play();
+            // Prioritize IVS playback URL, then restream, then regular stream URL
+            const playbackUrl = currentStream.ivsPlaybackUrl || 
+                               currentStream.restreamPlaybackUrl || 
+                               currentStream.streamUrl || 
+                               '';
+
+            // Show the raw playback URL for the creator
+            const playbackRow = document.getElementById('playbackUrlRow');
+            const playbackValue = document.getElementById('playbackUrlValue');
+            const copyBtn = document.getElementById('copyPlaybackUrlBtn');
+            if (playbackUrl && playbackValue && playbackRow) {
+                playbackValue.textContent = playbackUrl;
+                playbackRow.style.display = 'block';
+                if (copyBtn) {
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(playbackUrl).then(() => {
+                            showAlert('Playback URL copied to clipboard', 'success');
+                        }).catch(() => {
+                            showAlert('Failed to copy Playback URL', 'error');
+                        });
+                    };
+                }
+            } else if (playbackRow) {
+                playbackRow.style.display = 'none';
+            }
+
+            if (playbackUrl) {
+                // Check if it's an IVS stream (HLS .m3u8 URL)
+                if (playbackUrl.includes('.m3u8') || currentStream.ivsPlaybackUrl) {
+                    initializeIVSPlayer(playbackUrl);
+                } else {
+                    // Regular video stream
+                    if (previewVideo) {
+                        previewVideo.src = playbackUrl;
+                        previewVideo.play().catch(e => console.error('Error playing video:', e));
+                        previewVideo.style.display = 'block';
+                        const placeholder = document.getElementById('previewVideoPlaceholder');
+                        if (placeholder) placeholder.style.display = 'none';
+                    }
+                }
+            } else {
+                const placeholder = document.getElementById('previewVideoPlaceholder');
+                if (placeholder) {
+                    placeholder.innerHTML = '<div style="text-align: center;"><p style="font-size: 18px; margin-bottom: 10px;">No stream URL available</p><p style="font-size: 14px; opacity: 0.7;">Stream may not be active yet</p></div>';
+                    placeholder.style.display = 'flex';
+                }
             }
 
             document.getElementById('previewViewers').textContent = currentStream.viewers || 0;
             document.getElementById('streamShareLink').textContent = `${window.location.origin}/stream/${currentStream.id}`;
             
             // Update viewer count periodically
-            setInterval(() => {
-                updateViewerCount();
-            }, 5000);
+            if (!window.viewerUpdateInterval) {
+                window.viewerUpdateInterval = setInterval(() => {
+                    updateViewerCount();
+                }, 5000);
+            }
         }
 
         function previewStream() {
@@ -1357,6 +1492,31 @@
         async function endCurrentStream() {
             if (currentStream) {
                 await endStream(currentStream.id);
+                
+                // Clean up IVS player
+                if (ivsPlayer) {
+                    try {
+                        ivsPlayer.delete();
+                    } catch (e) {
+                        console.error('Error deleting IVS player:', e);
+                    }
+                    ivsPlayer = null;
+                }
+                
+                const previewVideo = document.getElementById('previewVideo');
+                if (previewVideo) {
+                    previewVideo.pause();
+                    previewVideo.src = '';
+                    previewVideo.style.display = 'none';
+                }
+                
+                const placeholder = document.getElementById('previewVideoPlaceholder');
+                if (placeholder) placeholder.style.display = 'flex';
+                
+                if (window.viewerUpdateInterval) {
+                    clearInterval(window.viewerUpdateInterval);
+                    window.viewerUpdateInterval = null;
+                }
             }
         }
 

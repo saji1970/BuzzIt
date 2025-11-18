@@ -108,6 +108,34 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+const sanitizePlaybackUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return '';
+  }
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.startsWith('/')) {
+    return '';
+  }
+  if (/^rtmps?:\/\//i.test(trimmed)) {
+    return '';
+  }
+  if (/buzzit-production\.up\.railway\.app\/stream\//i.test(trimmed)) {
+    return '';
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return '';
+    }
+    return trimmed;
+  } catch (error) {
+    return '';
+  }
+};
+
 // Twilio configuration (optional for development)
 let twilioClient = null;
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
@@ -127,15 +155,47 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files (admin panel) BEFORE other routes
 const publicPath = path.join(__dirname, 'public');
-// Only serve static files for non-API routes
+// Only serve static files for non-API routes and non-stream routes
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return next(); // Skip static file serving for API routes
+  if (req.path.startsWith('/api/') || req.path.startsWith('/stream/')) {
+    return next(); // Skip static file serving for API routes and stream viewer routes
   }
   express.static(publicPath)(req, res, next);
 });
 
 app.use('/uploads', express.static(uploadsDir));
+
+// Stream viewer page route - public viewing page for live streams (MUST be before /user-login and /user-streaming)
+app.get('/stream/:id', (req, res) => {
+  const streamViewerPath = path.join(publicPath, 'stream-viewer.html');
+  const absolutePath = path.resolve(streamViewerPath);
+  
+  if (fs.existsSync(streamViewerPath)) {
+    res.sendFile(streamViewerPath);
+  } else if (fs.existsSync(absolutePath)) {
+    res.sendFile(absolutePath);
+  } else {
+    // Try alternative paths
+    const altPath1 = path.join(__dirname, 'public', 'stream-viewer.html');
+    const altPath2 = path.resolve(__dirname, 'public', 'stream-viewer.html');
+    
+    if (fs.existsSync(altPath1)) {
+      res.sendFile(altPath1);
+    } else if (fs.existsSync(altPath2)) {
+      res.sendFile(altPath2);
+    } else {
+      console.error('❌ Stream viewer page not found. Tried paths:', {
+        streamViewerPath,
+        absolutePath,
+        altPath1,
+        altPath2,
+        __dirname,
+        publicPath
+      });
+      res.status(404).json({ error: 'Stream viewer page not found' });
+    }
+  }
+});
 
 // User login page route
 app.get('/user-login', (req, res) => {
@@ -1308,19 +1368,13 @@ app.get('/api/buzzes', async (req, res) => {
   try {
     await pruneExpiredBuzzes();
     const { userId, interests } = req.query;
-    let query = {};
-
-    if (userId) {
-      query.userId = userId;
-    }
-
-    if (interests) {
-      const interestArray = interests.split(',');
-      query['interests.id'] = { $in: interestArray };
-    }
     
-    // Get buzzes from database
-    let dbBuzzes = await getAllBuzzes({ userId });
+    console.log(`[Get Buzzes] Request - userId: ${userId || 'all'}, interests: ${interests || 'all'}`);
+    
+    // Get ALL buzzes from database (no userId filter unless explicitly requested)
+    // This ensures all users can see all buzzes
+    let dbBuzzes = await getAllBuzzes(userId ? { userId } : {});
+    console.log(`[Get Buzzes] Found ${dbBuzzes.length} buzzes from database`);
     
     // Merge with in-memory buzzes (for backwards compatibility)
     const memBuzzIds = new Set(buzzes.map(b => b.id));
@@ -1338,13 +1392,25 @@ app.get('/api/buzzes', async (req, res) => {
       );
     }
     
-    // Sort and combine
+    // Sort and combine - newest first
     uniqueMemBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    res.json([...dbBuzzes, ...uniqueMemBuzzes]);
+    dbBuzzes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const allBuzzes = [...dbBuzzes, ...uniqueMemBuzzes];
+    console.log(`[Get Buzzes] Returning ${allBuzzes.length} total buzzes (${dbBuzzes.length} from DB, ${uniqueMemBuzzes.length} from memory)`);
+    
+    // Return in the expected format: { success: true, data: [...] }
+    res.json({
+      success: true,
+      data: allBuzzes,
+    });
   } catch (error) {
     console.error('Get buzzes error:', error);
-    // Fallback to in-memory array
-    res.json(buzzes);
+    // Fallback to in-memory array in correct format
+    res.json({
+      success: true,
+      data: buzzes || [],
+    });
   }
 });
 
@@ -1457,6 +1523,7 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
     let savedBuzz;
     if (db.isConnected()) {
       try {
+        console.log(`[Create Buzz] Saving buzz to database - ID: ${newBuzzData.id}, User: ${newBuzzData.username}, Content length: ${newBuzzData.content?.length || 0}`);
         const result = await db.query(`
           INSERT INTO buzzes (
             id, user_id, username, display_name, content, type, media_type, media_url,
@@ -1486,6 +1553,7 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
           newBuzzData.shares,
           newBuzzData.isLiked,
         ]);
+        console.log(`[Create Buzz] Successfully saved buzz ${newBuzzData.id} to database`);
         
         savedBuzz = convertDbBuzzToObject(result.rows[0]);
       } catch (saveError) {
@@ -1533,10 +1601,17 @@ app.post('/api/buzzes', verifyToken, async (req, res) => {
       }
     }
     
-    res.status(201).json(savedBuzz);
+    // Return in the expected format: { success: true, data: {...} }
+    res.status(201).json({
+      success: true,
+      data: savedBuzz,
+    });
   } catch (error) {
     console.error('Create buzz error:', error);
-    res.status(500).json({ error: 'Failed to create buzz' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to create buzz' 
+    });
   }
 });
 
@@ -1953,39 +2028,49 @@ app.get('/api/live-streams', async (req, res) => {
     
     if (db.isConnected()) {
       try {
+        // Get ALL live streams - no user filtering, so all users can see all streams
         const result = await db.query(
-          'SELECT * FROM live_streams WHERE is_live = true ORDER BY viewers DESC, started_at DESC LIMIT 20'
+          'SELECT * FROM live_streams WHERE is_live = true ORDER BY viewers DESC, started_at DESC LIMIT 50'
         );
-        liveStreams = result.rows.map(row => ({
-          id: row.id,
-          userId: row.user_id,
-          username: row.username,
-          displayName: row.display_name,
-          title: row.title,
-          description: row.description,
-          streamUrl: process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url,
-          thumbnailUrl: row.thumbnail_url,
-          isLive: row.is_live,
-          viewers: row.viewers,
-          category: row.category,
-          tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
-          channelId: row.channel_id,
-          restreamKey: row.restream_key,
-          restreamRtmpUrl: row.restream_rtmp_url,
-          restreamPlaybackUrl: row.restream_playback_url,
-          startedAt: row.started_at,
-          endedAt: row.ended_at,
-          ivsIngestRtmpsUrl: process.env.IVS_INGEST_RTMPS_URL || null,
-          ivsStreamKey: process.env.IVS_STREAM_KEY || null,
-          ivsPlaybackUrl: process.env.IVS_PLAYBACK_URL || null,
-          ivsSrtUrl: process.env.IVS_SRT_URL || null,
-          ivsSrtPassphrase: process.env.IVS_SRT_PASSPHRASE || null,
-        }));
+        console.log(`[Live Streams API] Found ${result.rows.length} live streams in database`);
+        liveStreams = result.rows.map(row => {
+          const resolvedPlayback = process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url;
+          const primaryPlayback = sanitizePlaybackUrl(resolvedPlayback);
+          const restreamPlaybackUrl = sanitizePlaybackUrl(row.restream_playback_url) || null;
+          const ivsPlaybackUrl = sanitizePlaybackUrl(process.env.IVS_PLAYBACK_URL) || null;
+
+          return {
+            id: row.id,
+            userId: row.user_id,
+            username: row.username,
+            displayName: row.display_name,
+            title: row.title,
+            description: row.description,
+            streamUrl: primaryPlayback,
+            thumbnailUrl: row.thumbnail_url,
+            isLive: row.is_live,
+            viewers: row.viewers,
+            category: row.category,
+            tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+            channelId: row.channel_id,
+            restreamKey: row.restream_key,
+            restreamRtmpUrl: row.restream_rtmp_url,
+            restreamPlaybackUrl,
+            startedAt: row.started_at,
+            endedAt: row.ended_at,
+            ivsIngestRtmpsUrl: process.env.IVS_INGEST_RTMPS_URL || null,
+            ivsStreamKey: process.env.IVS_STREAM_KEY || null,
+            ivsPlaybackUrl,
+            ivsSrtUrl: process.env.IVS_SRT_URL || null,
+            ivsSrtPassphrase: process.env.IVS_SRT_PASSPHRASE || null,
+          };
+        });
       } catch (dbError) {
         console.error('Database live streams error:', dbError);
       }
     }
     
+    console.log(`[Live Streams API] Returning ${liveStreams.length} streams to client`);
     res.json({
       success: true,
       data: liveStreams,
@@ -2005,6 +2090,11 @@ app.get('/api/live-streams/:id', async (req, res) => {
         const result = await db.query('SELECT * FROM live_streams WHERE id = $1', [req.params.id]);
         if (result.rows.length > 0) {
           const row = result.rows[0];
+          const resolvedPlayback = process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url;
+          const primaryPlayback = sanitizePlaybackUrl(resolvedPlayback);
+          const restreamPlaybackUrl = sanitizePlaybackUrl(row.restream_playback_url) || null;
+          const ivsPlaybackUrl = sanitizePlaybackUrl(process.env.IVS_PLAYBACK_URL) || null;
+
           stream = {
             id: row.id,
             userId: row.user_id,
@@ -2012,7 +2102,7 @@ app.get('/api/live-streams/:id', async (req, res) => {
             displayName: row.display_name,
             title: row.title,
             description: row.description,
-            streamUrl: process.env.IVS_PLAYBACK_URL || row.restream_playback_url || row.stream_url,
+            streamUrl: primaryPlayback,
             thumbnailUrl: row.thumbnail_url,
             isLive: row.is_live,
             viewers: row.viewers,
@@ -2021,12 +2111,12 @@ app.get('/api/live-streams/:id', async (req, res) => {
             channelId: row.channel_id,
             restreamKey: row.restream_key,
             restreamRtmpUrl: row.restream_rtmp_url,
-            restreamPlaybackUrl: row.restream_playback_url,
+            restreamPlaybackUrl,
             startedAt: row.started_at,
             endedAt: row.ended_at,
             ivsIngestRtmpsUrl: process.env.IVS_INGEST_RTMPS_URL || null,
             ivsStreamKey: process.env.IVS_STREAM_KEY || null,
-            ivsPlaybackUrl: process.env.IVS_PLAYBACK_URL || null,
+            ivsPlaybackUrl,
             ivsSrtUrl: process.env.IVS_SRT_URL || null,
             ivsSrtPassphrase: process.env.IVS_SRT_PASSPHRASE || null,
           };
@@ -2108,6 +2198,10 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       }
     }
     
+    const resolvedPlaybackCandidate =
+      ivsPlaybackUrl || restreamPlaybackUrl || req.body.streamUrl || '';
+    const sanitizedPlaybackUrl = sanitizePlaybackUrl(resolvedPlaybackCandidate);
+
     const newStreamData = {
       id: streamId,
       userId: req.userId,
@@ -2117,7 +2211,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       description: req.body.description || '',
       // Don't set a default RTMP URL - RTMP is for streaming TO a server, not playback
       // Only set streamUrl if a valid playback URL is provided (HLS, DASH, or WebRTC)
-      streamUrl: ivsPlaybackUrl || restreamPlaybackUrl || req.body.streamUrl || '',
+      streamUrl: sanitizedPlaybackUrl,
       thumbnailUrl: req.body.thumbnailUrl || user.avatar,
       isLive: true,
       viewers: 0,
@@ -2126,10 +2220,12 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
       channelId: req.body.channelId || null,
       restreamKey: restreamKey,
       restreamRtmpUrl: restreamRtmpUrl,
-      restreamPlaybackUrl: restreamPlaybackUrl,
+      restreamPlaybackUrl: restreamPlaybackUrl
+        ? sanitizePlaybackUrl(restreamPlaybackUrl) || null
+        : null,
       ivsIngestRtmpsUrl,
       ivsStreamKey,
-      ivsPlaybackUrl,
+      ivsPlaybackUrl: ivsPlaybackUrl ? sanitizePlaybackUrl(ivsPlaybackUrl) || null : null,
       ivsSrtUrl,
       ivsSrtPassphrase,
     };
@@ -2172,7 +2268,7 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           displayName: row.display_name,
           title: row.title,
           description: row.description,
-          streamUrl: row.stream_url,
+          streamUrl: sanitizePlaybackUrl(row.stream_url),
           thumbnailUrl: row.thumbnail_url,
           isLive: row.is_live,
           viewers: row.viewers,
@@ -2181,11 +2277,11 @@ app.post('/api/live-streams', verifyToken, async (req, res) => {
           channelId: row.channel_id || null,
           restreamKey: row.restream_key || null,
           restreamRtmpUrl: row.restream_rtmp_url || null,
-          restreamPlaybackUrl: row.restream_playback_url || null,
+          restreamPlaybackUrl: sanitizePlaybackUrl(row.restream_playback_url) || null,
           startedAt: row.started_at,
           ivsIngestRtmpsUrl,
           ivsStreamKey,
-          ivsPlaybackUrl,
+          ivsPlaybackUrl: ivsPlaybackUrl ? sanitizePlaybackUrl(ivsPlaybackUrl) || null : null,
           ivsSrtUrl,
           ivsSrtPassphrase,
         };
@@ -2242,7 +2338,7 @@ app.patch('/api/live-streams/:id/viewers', async (req, res) => {
       displayName: row.display_name,
       title: row.title,
       description: row.description,
-      streamUrl: row.stream_url,
+      streamUrl: sanitizePlaybackUrl(row.stream_url),
       thumbnailUrl: row.thumbnail_url,
       isLive: row.is_live,
       viewers: row.viewers,
@@ -3073,14 +3169,158 @@ app.patch('/api/live-streams/:id/end', verifyToken, async (req, res) => {
   }
 });
 
+// Admin endpoint to clear all existing live streams
+app.delete('/api/admin/live-streams/clear', verifyAdmin, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    // Get count of live streams before clearing
+    const countResult = await db.query('SELECT COUNT(*) as count FROM live_streams WHERE is_live = true');
+    const streamCount = parseInt(countResult.rows[0]?.count || 0);
+    
+    // Mark all live streams as ended
+    const result = await db.query(
+      'UPDATE live_streams SET is_live = false, ended_at = CURRENT_TIMESTAMP WHERE is_live = true RETURNING id'
+    );
+    
+    const clearedCount = result.rows.length;
+    console.log(`[Admin] Cleared ${clearedCount} live streams`);
+    
+    res.json({
+      success: true,
+      message: `Successfully cleared ${clearedCount} live stream(s)`,
+      data: {
+        clearedCount,
+        totalFound: streamCount,
+      },
+    });
+  } catch (error) {
+    console.error('Clear live streams error:', error);
+    res.status(500).json({ error: 'Failed to clear live streams' });
+  }
+});
+
+// Admin endpoint to delete all streams (including ended ones)
+app.delete('/api/admin/live-streams/delete-all', verifyAdmin, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    // Get count before deletion
+    const countResult = await db.query('SELECT COUNT(*) as count FROM live_streams');
+    const totalCount = parseInt(countResult.rows[0]?.count || 0);
+    
+    // Delete all streams
+    const result = await db.query('DELETE FROM live_streams RETURNING id');
+    
+    const deletedCount = result.rows.length;
+    console.log(`[Admin] Deleted ${deletedCount} streams from database`);
+    
+    res.json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} stream(s) from database`,
+      data: {
+        deletedCount,
+        totalFound: totalCount,
+      },
+    });
+  } catch (error) {
+    console.error('Delete all streams error:', error);
+    res.status(500).json({ error: 'Failed to delete streams' });
+  }
+});
+
+// Admin endpoint to delete buzzes by username
+app.delete('/api/admin/buzzes/by-username/:username', verifyAdmin, async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase().trim();
+    
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+    
+    // Get count before deletion
+    const countResult = await db.query('SELECT COUNT(*) as count FROM buzzes WHERE LOWER(username) = $1', [username]);
+    const totalCount = parseInt(countResult.rows[0]?.count || 0);
+    
+    if (totalCount === 0) {
+      return res.json({
+        success: true,
+        message: `No buzzes found for user "${username}"`,
+        data: {
+          deletedCount: 0,
+          totalFound: 0,
+        },
+      });
+    }
+    
+    // Delete all buzzes from this user
+    const result = await db.query('DELETE FROM buzzes WHERE LOWER(username) = $1 RETURNING id', [username]);
+    
+    const deletedCount = result.rows.length;
+    console.log(`[Admin] Deleted ${deletedCount} buzzes from user "${username}"`);
+    
+    // Also remove from in-memory array
+    const initialLength = buzzes.length;
+    const filtered = buzzes.filter(b => b.username?.toLowerCase() !== username);
+    const memDeleted = initialLength - filtered.length;
+    buzzes.length = 0;
+    buzzes.push(...filtered);
+    
+    res.json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} buzz(es) from user "${username}"`,
+      data: {
+        deletedCount,
+        totalFound: totalCount,
+        memDeleted,
+      },
+    });
+  } catch (error) {
+    console.error('Delete buzzes by username error:', error);
+    res.status(500).json({ error: 'Failed to delete buzzes' });
+  }
+});
+
 app.delete('/api/admin/buzzes/:id', verifyAdmin, async (req, res) => {
   try {
     const buzzId = req.params.id;
     
-    // Delete from database
-    const deletedBuzz = await Buzz.findOneAndDelete({ id: buzzId });
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
     
-    if (deletedBuzz) {
+    // Delete from database
+    const result = await db.query('DELETE FROM buzzes WHERE id = $1 RETURNING *', [buzzId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Buzz not found' });
+    }
+    
+    // Also remove from in-memory array
+    const index = buzzes.findIndex(b => b.id === buzzId);
+    if (index !== -1) {
+      buzzes.splice(index, 1);
+    }
+    
+    console.log(`[Admin] Deleted buzz ${buzzId}`);
+    
+    res.json({
+      success: true,
+      message: 'Buzz deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete buzz error:', error);
+    res.status(500).json({ error: 'Failed to delete buzz' });
+  }
+});
+
+// Legacy Mongoose code (commented out for reference)
+// const deletedBuzz = await Buzz.findOneAndDelete({ id: buzzId });
+// if (deletedBuzz) {
       // Also remove from in-memory array
     const buzzIndex = buzzes.findIndex(b => b.id === buzzId);
       if (buzzIndex !== -1) buzzes.splice(buzzIndex, 1);
