@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buzz it - Live Stream</title>
-    <!-- Amazon IVS Player SDK -->
-    <script src="https://player.live-video.net/1.20.0/amazon-ivs-player.min.js"></script>
+    <!-- Amazon IVS Player SDK - Latest Version -->
+    <script src="https://player.live-video.net/1.46.0/amazon-ivs-player.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -308,7 +308,7 @@
 
             const placeholder = document.getElementById('videoPlaceholder');
             const videoElement = document.getElementById('videoPlayer');
-            
+
             // Hide placeholder and show video
             if (placeholder) placeholder.style.display = 'none';
             if (videoElement) videoElement.style.display = 'block';
@@ -325,44 +325,130 @@
                     return;
                 }
 
-                // Create IVS player
+                // Create IVS player with configuration
                 const PlayerState = IVSPlayer.PlayerState;
                 const PlayerEventType = IVSPlayer.PlayerEventType;
 
+                console.log('🎬 Initializing IVS Player v1.46.0 with URL:', playbackUrl);
+
                 ivsPlayer = IVSPlayer.create();
                 ivsPlayer.attachHTMLVideoElement(videoElement);
+
+                // Set volume
+                ivsPlayer.setVolume(1.0);
+
+                // Load and play
                 ivsPlayer.load(playbackUrl);
+                ivsPlayer.play();
+
+                // Handle player state changes
+                ivsPlayer.addEventListener(PlayerState.READY, () => {
+                    console.log('✅ IVS Player: Ready');
+                    hideError();
+                });
+
+                ivsPlayer.addEventListener(PlayerState.PLAYING, () => {
+                    console.log('▶️ IVS Player: Playing');
+                    if (placeholder) placeholder.style.display = 'none';
+                    hideError();
+                });
+
+                ivsPlayer.addEventListener(PlayerState.BUFFERING, () => {
+                    console.log('⏳ IVS Player: Buffering');
+                });
+
+                ivsPlayer.addEventListener(PlayerState.IDLE, () => {
+                    console.log('⏸️ IVS Player: Idle');
+                });
+
+                ivsPlayer.addEventListener(PlayerState.ENDED, () => {
+                    console.log('🛑 IVS Player: Stream ended');
+                    showError('Stream has ended');
+                });
 
                 // Handle player events
                 ivsPlayer.addEventListener(PlayerEventType.PLAYING, () => {
-                    console.log('IVS Player: Playing');
+                    console.log('IVS Player Event: Playing');
                     if (placeholder) placeholder.style.display = 'none';
                     hideError();
                 });
 
                 ivsPlayer.addEventListener(PlayerEventType.ENDED, () => {
-                    console.log('IVS Player: Stream ended');
+                    console.log('IVS Player Event: Ended');
                     showError('Stream has ended');
                 });
 
                 ivsPlayer.addEventListener(PlayerEventType.ERROR, (error) => {
-                    console.error('IVS Player error:', error);
-                    showError('Stream playback error. The stream may not be active.');
-                    // Fallback to regular video element
-                    if (videoElement && playbackUrl) {
-                        videoElement.src = playbackUrl;
-                        videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                    console.error('❌ IVS Player error:', {
+                        type: error?.type || 'unknown',
+                        message: error?.message || 'Unknown error',
+                        code: error?.code || 'N/A',
+                        source: error?.source || 'N/A'
+                    });
+
+                    // Show user-friendly error message
+                    let errorMessage = 'Stream playback error. ';
+                    if (error?.code === 'ERR_NETWORK') {
+                        errorMessage += 'Network connection issue detected.';
+                    } else if (error?.code === 'ERR_NOT_FOUND') {
+                        errorMessage += 'Stream not found or no longer available.';
+                    } else {
+                        errorMessage += 'The stream may not be active.';
+                    }
+
+                    showError(errorMessage);
+
+                    // Fallback to regular video element for non-IVS HLS streams
+                    if (videoElement && playbackUrl && playbackUrl.includes('.m3u8')) {
+                        console.log('Attempting fallback to native HLS playback...');
+                        setTimeout(() => {
+                            videoElement.src = playbackUrl;
+                            videoElement.play().catch(e => console.error('Error playing fallback video:', e));
+                        }, 1000);
                     }
                 });
 
+                // Handle quality changes
+                ivsPlayer.addEventListener(PlayerEventType.QUALITY_CHANGED, (quality) => {
+                    console.log('📊 Quality changed:', {
+                        name: quality?.name || 'auto',
+                        width: quality?.width,
+                        height: quality?.height,
+                        bitrate: quality?.bitrate,
+                        framerate: quality?.framerate
+                    });
+                });
+
+                // Handle duration updates
+                ivsPlayer.addEventListener(PlayerEventType.DURATION_CHANGED, (duration) => {
+                    console.log('⏱️ Duration changed:', duration);
+                });
+
+                // Handle metadata
                 ivsPlayer.addEventListener(PlayerEventType.TEXT_METADATA_CUE, (cue) => {
-                    console.log('IVS Player metadata:', cue.text);
+                    console.log('📝 IVS Player metadata:', cue.text);
+                    try {
+                        const metadata = JSON.parse(cue.text);
+                        console.log('Parsed metadata:', metadata);
+                    } catch (e) {
+                        // Not JSON metadata
+                    }
+                });
+
+                // Log player capabilities
+                console.log('🎮 IVS Player capabilities:', {
+                    version: IVSPlayer?.version || 'unknown',
+                    isPlayerSupported: IVSPlayer.isPlayerSupported,
+                    qualities: ivsPlayer.getQualities?.() || 'not available yet'
                 });
 
             } catch (error) {
-                console.error('Error initializing IVS player:', error);
+                console.error('💥 Error initializing IVS player:', error);
+                showError('Failed to initialize video player: ' + error.message);
+
                 // Fallback to regular video element
                 if (videoElement && playbackUrl) {
+                    console.log('Attempting fallback to standard video element...');
                     videoElement.src = playbackUrl;
                     videoElement.play().catch(e => console.error('Error playing fallback video:', e));
                 }
