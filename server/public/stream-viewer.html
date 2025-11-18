@@ -285,6 +285,14 @@
             document.getElementById('streamTitle').textContent = stream.title || 'Live Stream';
             document.getElementById('streamerName').textContent = stream.displayName || stream.username || 'Unknown';
             document.getElementById('viewerCount').textContent = stream.viewers || 0;
+
+            // Debug: Log all stream URLs
+            console.log('📺 Stream URLs available:', {
+                ivsPlaybackUrl: stream.ivsPlaybackUrl,
+                restreamPlaybackUrl: stream.restreamPlaybackUrl,
+                streamUrl: stream.streamUrl,
+                isLive: stream.isLive
+            });
         }
 
         function initializeIVSPlayer(playbackUrl) {
@@ -363,10 +371,17 @@
 
         function initializeStream(stream) {
             // Prioritize IVS playback URL, then restream, then regular stream URL
-            const playbackUrl = stream.ivsPlaybackUrl || 
-                               stream.restreamPlaybackUrl || 
-                               stream.streamUrl || 
+            const playbackUrl = stream.ivsPlaybackUrl ||
+                               stream.restreamPlaybackUrl ||
+                               stream.streamUrl ||
                                '';
+
+            console.log('🎬 Selected playback URL:', playbackUrl);
+            console.log('URL type:', {
+                isHLS: playbackUrl.includes('.m3u8'),
+                isIVS: !!stream.ivsPlaybackUrl,
+                isHTTPS: playbackUrl.startsWith('https://')
+            });
 
             if (!playbackUrl) {
                 showError('No stream URL available. The stream may not be active yet.');
