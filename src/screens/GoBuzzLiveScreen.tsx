@@ -91,7 +91,12 @@ const GoBuzzLiveScreen: React.FC = () => {
   const buildRtmpIngestUrl = (stream: any): string => {
     if (!stream) {
       if (FALLBACK_IVS_INGEST && FALLBACK_IVS_STREAM_KEY) {
-        return `${FALLBACK_IVS_INGEST.replace(/\/$/, '')}/${FALLBACK_IVS_STREAM_KEY}`;
+        let fallbackUrl = FALLBACK_IVS_INGEST.replace(/\/$/, '');
+        // Convert RTMPS to RTMP and remove port 443 if present
+        if (fallbackUrl.startsWith('rtmps://')) {
+          fallbackUrl = fallbackUrl.replace('rtmps://', 'rtmp://').replace(':443', '');
+        }
+        return `${fallbackUrl}/${FALLBACK_IVS_STREAM_KEY}`;
       }
       return '';
     }
@@ -113,8 +118,10 @@ const GoBuzzLiveScreen: React.FC = () => {
     }
 
     let normalized = baseUrl.replace(/\/$/, '');
+    // Convert RTMPS to RTMP and remove port 443 if present
+    // NodeMediaClient doesn't support RTMPS, so we convert to RTMP
     if (normalized.startsWith('rtmps://')) {
-      normalized = normalized.replace('rtmps://', 'rtmp://');
+      normalized = normalized.replace('rtmps://', 'rtmp://').replace(':443', '');
     }
 
     return `${normalized}/${streamKey}`;
