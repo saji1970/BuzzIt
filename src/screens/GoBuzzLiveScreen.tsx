@@ -21,10 +21,6 @@ import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import Clipboard from '@react-native-clipboard/clipboard';
 
-const FALLBACK_IVS_INGEST = 'rtmps://4232ed0fa439.global-contribute.live-video.net:443/app/';
-const FALLBACK_IVS_STREAM_KEY =
-  'sk_us-west-2_aJE3SKSY6Wzy_CruB8zI61cLLda7jS7uRE4rTSrJPZ6';
-
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
@@ -90,30 +86,26 @@ const GoBuzzLiveScreen: React.FC = () => {
 
   const buildRtmpIngestUrl = (stream: any): string => {
     if (!stream) {
-      if (FALLBACK_IVS_INGEST && FALLBACK_IVS_STREAM_KEY) {
-        let fallbackUrl = FALLBACK_IVS_INGEST.replace(/\/$/, '');
-        // Convert RTMPS to RTMP and remove port 443 if present
-        if (fallbackUrl.startsWith('rtmps://')) {
-          fallbackUrl = fallbackUrl.replace('rtmps://', 'rtmp://').replace(':443', '');
-        }
-        return `${fallbackUrl}/${FALLBACK_IVS_STREAM_KEY}`;
-      }
+      console.warn('buildRtmpIngestUrl: No stream provided');
       return '';
     }
+
     const baseUrl =
       stream?.ivsIngestRtmpsUrl ||
       stream?.ivsIngestUrl ||
       stream?.restreamRtmpUrl ||
-      FALLBACK_IVS_INGEST ||
       '';
     const streamKey =
       stream?.ivsStreamKey ||
       stream?.ivsStreamKeyArn ||
       stream?.restreamKey ||
-      FALLBACK_IVS_STREAM_KEY ||
       '';
 
     if (!baseUrl || !streamKey) {
+      console.error('buildRtmpIngestUrl: Missing IVS credentials', {
+        hasBaseUrl: !!baseUrl,
+        hasStreamKey: !!streamKey
+      });
       return '';
     }
 
@@ -378,16 +370,18 @@ const GoBuzzLiveScreen: React.FC = () => {
         const playbackUrl =
           response.data.ivsPlaybackUrl || response.data.streamUrl || '';
         if (!playbackUrl.trim()) {
-          if (!response.data.ivsIngestRtmpsUrl && FALLBACK_IVS_INGEST) {
-            setIsStreaming(true);
-          } else {
-            // Stream is created, show controls
-            setIsStreaming(true);
+          // Stream is created but no playback URL yet, show alert
+          setIsStreaming(true);
+          if (response.data.ivsIngestRtmpsUrl) {
             Alert.alert(
               'Stream Started',
-              response.data.ivsIngestRtmpsUrl
-                ? 'Your live stream has started! Configure your encoder (OBS or mobile) with the RTMPS server and stream key shown below so viewers can see the video.'
-                : 'Your live stream has started! Configure a streaming server so viewers can see the video.',
+              'Your live stream has started! Configure your encoder (OBS or mobile) with the RTMPS server and stream key shown below so viewers can see the video.',
+              [{text: 'OK'}],
+            );
+          } else {
+            Alert.alert(
+              'Stream Started',
+              'Your live stream has started! Configure a streaming server so viewers can see the video.',
               [{text: 'OK'}],
             );
           }
