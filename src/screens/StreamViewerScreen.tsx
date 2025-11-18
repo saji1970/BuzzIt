@@ -42,13 +42,13 @@ type AugmentedLiveStream = LiveStream & {
 
 interface StreamViewerScreenProps {
   stream: AugmentedLiveStream;
-  visible: boolean;
+  visible?: boolean;
   onClose: () => void;
 }
 
 const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   stream,
-  visible,
+  visible = true,
   onClose,
 }) => {
   const {theme} = useTheme();
