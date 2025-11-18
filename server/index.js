@@ -3443,6 +3443,42 @@ app.get('/api/features', (req, res) => {
   });
 });
 
+// Diagnostic endpoint to check IVS configuration
+app.get('/api/ivs-config-check', (req, res) => {
+  const ivsIngestRtmpsUrl = process.env.IVS_INGEST_RTMPS_URL || '';
+  const ivsStreamKey = process.env.IVS_STREAM_KEY || '';
+  const ivsPlaybackUrl = process.env.IVS_PLAYBACK_URL || '';
+
+  res.json({
+    success: true,
+    config: {
+      ivsIngestRtmpsUrl: {
+        value: ivsIngestRtmpsUrl,
+        length: ivsIngestRtmpsUrl.length,
+        hasLeadingSpace: ivsIngestRtmpsUrl !== ivsIngestRtmpsUrl.trimStart(),
+        hasTrailingSpace: ivsIngestRtmpsUrl !== ivsIngestRtmpsUrl.trimEnd(),
+        trimmed: ivsIngestRtmpsUrl.trim()
+      },
+      ivsStreamKey: {
+        value: ivsStreamKey,
+        length: ivsStreamKey.length,
+        hasLeadingSpace: ivsStreamKey !== ivsStreamKey.trimStart(),
+        hasTrailingSpace: ivsStreamKey !== ivsStreamKey.trimEnd(),
+        trimmed: ivsStreamKey.trim(),
+        startsWithSk: ivsStreamKey.trim().startsWith('sk_')
+      },
+      ivsPlaybackUrl: {
+        value: ivsPlaybackUrl,
+        length: ivsPlaybackUrl.length,
+        hasLeadingSpace: ivsPlaybackUrl !== ivsPlaybackUrl.trimStart(),
+        hasTrailingSpace: ivsPlaybackUrl !== ivsPlaybackUrl.trimEnd(),
+        trimmed: ivsPlaybackUrl.trim()
+      }
+    },
+    message: 'Check for leading/trailing spaces in your Railway environment variables'
+  });
+});
+
 app.patch('/api/features', verifyAdmin, (req, res) => {
   try {
     const { features } = req.body;
