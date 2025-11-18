@@ -8,7 +8,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import Video from 'react-native-video';
+import IVSPlayer from 'amazon-ivs-react-native-player';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -63,16 +63,26 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
 
       {isPlayable ? (
         <View style={styles.videoWrapper}>
-          <Video
-            source={{uri: playableUrl as string}}
+          <IVSPlayer
+            streamUrl={playableUrl as string}
             style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            paused={paused}
-            controls={false}
+            autoplay={!paused}
             muted={false}
-            onBuffer={({isBuffering}) => setBuffering(isBuffering)}
-            onError={error => {
-              console.error('BuzzLive viewer error', {
+            onLoad={(duration) => {
+              console.log('BuzzLive IVS Player loaded, duration:', duration);
+              setBuffering(false);
+            }}
+            onPlayerStateChange={(state) => {
+              console.log('BuzzLive IVS Player state:', state);
+              if (state === 'Buffering') {
+                setBuffering(true);
+              } else if (state === 'Playing' || state === 'Ready') {
+                setBuffering(false);
+              }
+            }}
+            onError={(errorType, error) => {
+              console.error('BuzzLive IVS viewer error', {
+                errorType,
                 error,
                 playbackUrl,
                 playableUrl,
@@ -80,7 +90,6 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
               });
               setErrored(true);
             }}
-            repeat
           />
           {buffering && (
             <View style={styles.bufferOverlay}>

@@ -14,7 +14,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import Video, {ResizeMode} from 'react-native-video';
+import IVSPlayer from 'amazon-ivs-react-native-player';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -309,33 +309,23 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         {/* Video Player */}
         <View style={styles.videoContainer}>
           {playbackUrl && stream.isLive && isValidStreamUrl(playbackUrl) ? (
-            <Video
-              source={{ uri: playbackUrl }}
+            <IVSPlayer
+              streamUrl={playbackUrl}
               style={styles.video}
-              resizeMode={ResizeMode.CONTAIN}
-              controls={true}
-              repeat={false}
-              paused={false}
+              autoplay={true}
               muted={false}
-              playInBackground={false}
-              playWhenInactive={false}
-              ignoreSilentSwitch="ignore"
-              progressUpdateInterval={1000}
-              onLoadStart={() => {
-                console.log('Video loading started for stream:', stream.id, 'URL:', playbackUrl);
+              onLoad={(duration) => {
+                console.log('IVS Player loaded successfully for stream:', stream.id, 'Duration:', duration);
               }}
-              onLoad={() => {
-                console.log('Video loaded successfully for stream:', stream.id);
+              onPlayerStateChange={(state) => {
+                console.log('IVS Player state changed:', state);
               }}
-              onError={(error) => {
-                console.error('Video playback error:', error);
+              onError={(errorType, error) => {
+                console.error('IVS Player error:', errorType, error);
                 console.error('Failed URL:', playbackUrl);
-                console.error('Error details:', JSON.stringify(error, null, 2));
               }}
-              onBuffer={({isBuffering}) => {
-                if (isBuffering) {
-                  console.log('Video buffering...');
-                }
+              onProgress={(position) => {
+                // Stream progress tracking
               }}
             />
           ) : stream.isLive ? (
