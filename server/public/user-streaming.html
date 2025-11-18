@@ -1145,7 +1145,7 @@
 
         async function loadActiveStreams() {
             if (!selectedChannel) return;
-            
+
             try {
                 const response = await fetch('/api/live-streams', {
                     headers: {
@@ -1156,8 +1156,9 @@
                 const data = await response.json();
 
                 if (data.success && data.data) {
-                    const channelStreams = data.data.filter(s => 
-                        s.userId === currentUser.id && s.isLive && s.channelId === selectedChannel.id
+                    // Show all active streams for the selected channel (not just user's own)
+                    const channelStreams = data.data.filter(s =>
+                        s.isLive && s.channelId === selectedChannel.id
                     );
                     renderActiveStreams(channelStreams);
                 }
@@ -1197,17 +1198,28 @@
 
             let html = '';
             streams.forEach(stream => {
+                const isOwner = stream.userId === currentUser.id;
+                const ownerBadge = isOwner ?
+                    '<span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">Your Stream</span>' :
+                    '';
+                const streamerName = stream.displayName || stream.username || 'Unknown';
+
                 html += `
-                    <div class="stream-card">
-                        <h3>${stream.title}</h3>
-                        <div class="meta">
-                            <strong>Viewers:</strong> ${stream.viewers} | 
+                    <div class="stream-card" style="position: relative; ${isOwner ? 'border: 2px solid #667eea;' : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                            <h3 style="margin: 0;">${stream.title}${ownerBadge}</h3>
+                            <span style="background: #FF0069; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">LIVE</span>
+                        </div>
+                        <div class="meta" style="margin-bottom: 10px;">
+                            <strong>Streamer:</strong> ${streamerName} |
+                            <strong>Viewers:</strong> ${stream.viewers} |
                             <strong>Category:</strong> ${stream.category || 'General'}
                         </div>
                         <p style="color: #666; margin-bottom: 15px;">${stream.description || 'No description'}</p>
                         <div class="stream-actions">
                             <button class="btn btn-success" onclick="copyStreamLinkById('${stream.id}')">Copy Link</button>
-                            <button class="btn btn-danger" onclick="endStream('${stream.id}')">End Stream</button>
+                            <button class="btn" onclick="viewStream('${stream.id}')" style="background: #667eea;">Watch</button>
+                            ${isOwner ? `<button class="btn btn-danger" onclick="endStream('${stream.id}')">End Stream</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -1450,6 +1462,11 @@
             navigator.clipboard.writeText(link).then(() => {
                 showAlert('Stream link copied to clipboard!', 'success');
             });
+        }
+
+        function viewStream(streamId) {
+            const streamUrl = `${window.location.origin}/stream/${streamId}`;
+            window.open(streamUrl, '_blank');
         }
 
         function broadcastStream() {
