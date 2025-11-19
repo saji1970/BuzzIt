@@ -207,6 +207,46 @@ app.get('/user-login', (req, res) => {
   }
 });
 
+// Stream test page route
+app.get('/stream-test.html', (req, res) => {
+  const streamTestPath = path.join(publicPath, 'stream-test.html');
+  const absolutePath = path.resolve(streamTestPath);
+  
+  console.log('🔍 Stream test path check:', {
+    publicPath,
+    streamTestPath,
+    absolutePath,
+    exists: fs.existsSync(streamTestPath),
+    absoluteExists: fs.existsSync(absolutePath)
+  });
+  
+  if (fs.existsSync(streamTestPath)) {
+    res.sendFile(streamTestPath);
+  } else if (fs.existsSync(absolutePath)) {
+    res.sendFile(absolutePath);
+  } else {
+    // Try alternative paths
+    const altPath1 = path.join(__dirname, 'public', 'stream-test.html');
+    const altPath2 = path.resolve(__dirname, 'public', 'stream-test.html');
+    
+    if (fs.existsSync(altPath1)) {
+      res.sendFile(altPath1);
+    } else if (fs.existsSync(altPath2)) {
+      res.sendFile(altPath2);
+    } else {
+      console.error('❌ Stream test page not found. Tried paths:', {
+        streamTestPath,
+        absolutePath,
+        altPath1,
+        altPath2,
+        __dirname,
+        publicPath
+      });
+      res.status(404).json({ error: 'Stream test page not found' });
+    }
+  }
+});
+
 // User streaming page route
 app.get('/user-streaming', (req, res) => {
   const userStreamingPath = path.join(publicPath, 'user-streaming.html');
