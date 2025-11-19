@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuzzIt Stream Test - Create & Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .preview-section {
+            margin-top: 20px;
+        }
+
+        .playback-url {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .playback-url-label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .playback-url-value {
+            color: #555;
+        }
+
+        .preview-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        #ivs-player {
+            width: 100%;
+            height: 100%;
+        }
+
+        .preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            font-size: 16px;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .auth-section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .auth-section h3 {
+            margin-bottom: 15px;
+        }
+
+        .auth-section input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .auth-section button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .auth-section button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 BuzzIt Stream Test</h1>
+            <p>Create a stream and preview it with Amazon IVS Player</p>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="auth-section">
+            <h3>🔐 Authentication</h3>
+            <input type="text" id="username" placeholder="Username" value="">
+            <input type="password" id="password" placeholder="Password" value="">
+            <button onclick="login()">Login</button>
+            <div id="auth-status" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+
+        <div class="main-content">
+            <!-- Stream Creation Form -->
+            <div class="card">
+                <h2>📝 Create Stream</h2>
+                <div id="status-message"></div>
+                <form id="stream-form" onsubmit="createStream(event)">
+                    <div class="form-group">
+                        <label for="stream-title">Stream Title *</label>
+                        <input type="text" id="stream-title" placeholder="Enter stream title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="stream-description">Description</label>
+                        <textarea id="stream-description" placeholder="Enter stream description (optional)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="stream-category">Category</label>
+                        <input type="text" id="stream-category" placeholder="e.g., gaming, music, general" value="general">
+                    </div>
+                    <button type="submit" class="btn" id="create-btn">
+                        Create Stream
+                    </button>
+                </form>
+            </div>
+
+            <!-- Stream Preview -->
+            <div class="card">
+                <h2>👁️ Stream Preview</h2>
+                <div class="preview-section">
+                    <!-- Playback URL - Displayed ABOVE preview window -->
+                    <div class="playback-url" id="playback-url-container" style="display: none;">
+                        <span class="playback-url-label">🔗 Playback URL:</span>
+                        <div class="playback-url-value" id="playback-url-value">-</div>
+                        <button onclick="copyPlaybackUrl()" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📋 Copy URL</button>
+                    </div>
+                    <!-- Preview Window -->
+                    <div class="preview-container">
+                        <div id="ivs-player"></div>
+                        <div class="preview-placeholder" id="preview-placeholder">
+                            Create a stream to see preview
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Amazon IVS Web Player SDK -->
+    <script src="https://player.live-video.net/1.0.0/amazon-ivs-player.min.js"></script>
+    <script>
+        const API_BASE_URL = window.location.origin;
+        let authToken = localStorage.getItem('authToken') || '';
+        let currentStream = null;
+        let ivsPlayer = null;
+
+        // Check if already logged in
+        if (authToken) {
+            document.getElementById('auth-status').innerHTML = '<span style="color: #90EE90;">✅ Logged in</span>';
+        }
+
+        // Login function
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusEl = document.getElementById('auth-status');
+
+            if (!username || !password) {
+                statusEl.innerHTML = '<span style="color: #ffcccb;">Please enter username and password</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.token) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    statusEl.innerHTML = '<span style="color: #90EE90;">✅ Login successful!</span>';
+                } else {
+                    statusEl.innerHTML = `<span style="color: #ffcccb;">❌ ${data.error || 'Login failed'}</span>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<span style="color: #ffcccb;">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-message');
+            statusEl.innerHTML = `<div class="status ${type}">${message}</div>`;
+            setTimeout(() => {
+                statusEl.innerHTML = '';
+            }, 5000);
+        }
+
+        // Create stream
+        async function createStream(event) {
+            event.preventDefault();
+
+            if (!authToken) {
+                showStatus('Please login first', 'error');
+                return;
+            }
+
+            const title = document.getElementById('stream-title').value;
+            const description = document.getElementById('stream-description').value;
+            const category = document.getElementById('stream-category').value || 'general';
+
+            const createBtn = document.getElementById('create-btn');
+            createBtn.disabled = true;
+            createBtn.innerHTML = '<span class="loading"></span> Creating...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/live-streams`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        category,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    currentStream = data.data;
+                    showStatus('✅ Stream created successfully!', 'success');
+                    
+                    // Display playback URL
+                    const playbackUrl = data.data.ivsPlaybackUrl || data.data.restreamPlaybackUrl || data.data.streamUrl;
+                    if (playbackUrl) {
+                        displayPlaybackUrl(playbackUrl);
+                        loadIVSPlayer(playbackUrl);
+                    } else {
+                        showStatus('⚠️ No playback URL available. Stream may need to be active.', 'info');
+                        document.getElementById('playback-url-container').style.display = 'none';
+                        document.getElementById('preview-placeholder').textContent = 'No playback URL available';
+                    }
+                } else {
+                    showStatus(`❌ Error: ${data.error || 'Failed to create stream'}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                createBtn.disabled = false;
+                createBtn.innerHTML = 'Create Stream';
+            }
+        }
+
+        // Display playback URL
+        function displayPlaybackUrl(url) {
+            const container = document.getElementById('playback-url-container');
+            const valueEl = document.getElementById('playback-url-value');
+            
+            container.style.display = 'block';
+            valueEl.textContent = url || 'No playback URL available';
+        }
+
+        // Copy playback URL to clipboard
+        function copyPlaybackUrl() {
+            const url = document.getElementById('playback-url-value').textContent;
+            if (url && url !== '-' && url !== 'No playback URL available') {
+                navigator.clipboard.writeText(url).then(() => {
+                    showStatus('✅ Playback URL copied to clipboard!', 'success');
+                }).catch(err => {
+                    showStatus('❌ Failed to copy URL', 'error');
+                });
+            }
+        }
+
+        // Load Amazon IVS Player
+        function loadIVSPlayer(playbackUrl) {
+            // Hide placeholder
+            document.getElementById('preview-placeholder').style.display = 'none';
+
+            // Clean up existing player
+            if (ivsPlayer) {
+                ivsPlayer.delete();
+                ivsPlayer = null;
+            }
+
+            // Clear player container
+            const playerContainer = document.getElementById('ivs-player');
+            playerContainer.innerHTML = '';
+
+            // Check if IVS SDK is loaded
+            if (typeof IVSPlayer === 'undefined') {
+                playerContainer.innerHTML = '<div class="preview-placeholder">❌ IVS Player SDK not loaded</div>';
+                return;
+            }
+
+            try {
+                // Create video element
+                const videoElement = document.createElement('video');
+                videoElement.setAttribute('playsinline', '');
+                videoElement.setAttribute('autoplay', '');
+                videoElement.style.width = '100%';
+                videoElement.style.height = '100%';
+                playerContainer.appendChild(videoElement);
+
+                // Create IVS player
+                ivsPlayer = IVSPlayer.create();
+                ivsPlayer.attachHTMLVideoElement(videoElement);
+                ivsPlayer.load(playbackUrl);
+
+                // Event listeners
+                ivsPlayer.addEventListener(IVSPlayer.PlayerState.PLAYING, () => {
+                    console.log('✅ Stream is playing');
+                });
+
+                ivsPlayer.addEventListener(IVSPlayer.PlayerState.BUFFERING, () => {
+                    console.log('⏳ Buffering...');
+                });
+
+                ivsPlayer.addEventListener(IVSPlayer.PlayerEventType.ERROR, (error) => {
+                    console.error('❌ Player error:', error);
+                    playerContainer.innerHTML = '<div class="preview-placeholder">❌ Error loading stream. Check if stream is active.</div>';
+                });
+
+                ivsPlayer.addEventListener(IVSPlayer.PlayerEventType.QUALITY_CHANGED, (quality) => {
+                    console.log('Quality changed:', quality);
+                });
+
+            } catch (error) {
+                console.error('Error initializing IVS player:', error);
+                playerContainer.innerHTML = '<div class="preview-placeholder">❌ Error initializing player</div>';
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ivsPlayer) {
+                ivsPlayer.delete();
+            }
+        });
+    </script>
+</body>
+</html>
+
