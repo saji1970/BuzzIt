@@ -437,7 +437,10 @@
 
         document.getElementById('playback-url').textContent = playbackUrl;
         document.getElementById('ingest-url').textContent = ingestUrl;
-        document.getElementById('stream-key').textContent = '••••••••';
+        // Mask stream key in UI but keep actual value for broadcasting
+        document.getElementById('stream-key').textContent = streamKey ?
+          `${streamKey.substring(0, 4)}...${streamKey.substring(streamKey.length - 4)}` :
+          'Not configured';
 
         updateStatus('ready', 'Ready! Click "Start Camera" to begin streaming.');
 
@@ -505,18 +508,10 @@
           ingestEndpoint: ingestUrl
         });
 
-        // IMPORTANT: Create video composition first
-        const videoComposition = broadcastClient.addVideoInputDevice(
-          localStream.getVideoTracks()[0],
-          'camera',
-          { index: 0 }
-        );
-
-        // Add audio track
-        broadcastClient.addAudioInputDevice(
-          localStream.getAudioTracks()[0],
-          'mic'
-        );
+        // IMPORTANT: Add MediaStream (not tracks) to broadcast client
+        // The SDK expects the entire MediaStream object
+        broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
+        broadcastClient.addAudioInputDevice(localStream, 'mic');
 
         console.log('🎬 Devices added, starting broadcast...');
 

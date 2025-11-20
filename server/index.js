@@ -2064,14 +2064,20 @@ app.get('/api/live-streams/config', (req, res) => {
 
 // Stream Test API endpoints (for standalone stream testing)
 app.get('/api/stream-test/config', (req, res) => {
+  const ingestUrl = process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '';
+  const streamKey = process.env.IVS_STREAM_KEY || '';
+
+  // Convert RTMPS to RTMP and remove port for broadcast SDK
+  const rtmpUrl = ingestUrl.replace(':443', '').replace('rtmps://', 'rtmp://');
+
   const config = {
     playbackUrl: process.env.IVS_PLAYBACK_URL || '',
-    ingestUrl: process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '',
-    streamKey: process.env.IVS_STREAM_KEY ? '••••••••' : '',
+    ingestUrl: rtmpUrl,
+    streamKey: streamKey, // Return actual stream key for broadcasting
     hasConfig: !!(
       process.env.IVS_PLAYBACK_URL &&
-      (process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL) &&
-      process.env.IVS_STREAM_KEY
+      ingestUrl &&
+      streamKey
     ),
   };
   res.json(config);
