@@ -502,19 +502,26 @@
         // Create broadcast client
         broadcastClient = IVSBroadcastClient.create({
           streamConfig: IVSBroadcastClient.STANDARD_LANDSCAPE,
-          ingestEndpoint: ingestUrl + '/' + streamKey
+          ingestEndpoint: ingestUrl
         });
 
-        // Add video track
-        const videoTrack = localStream.getVideoTracks()[0];
-        await broadcastClient.addVideoInputDevice(videoTrack, 'camera');
+        // IMPORTANT: Create video composition first
+        const videoComposition = broadcastClient.addVideoInputDevice(
+          localStream.getVideoTracks()[0],
+          'camera',
+          { index: 0 }
+        );
 
         // Add audio track
-        const audioTrack = localStream.getAudioTracks()[0];
-        await broadcastClient.addAudioInputDevice(audioTrack, 'mic');
+        broadcastClient.addAudioInputDevice(
+          localStream.getAudioTracks()[0],
+          'mic'
+        );
 
-        // Start broadcasting
-        await broadcastClient.startBroadcast();
+        console.log('🎬 Devices added, starting broadcast...');
+
+        // Start broadcasting with stream key
+        await broadcastClient.startBroadcast(streamKey);
 
         updateBroadcastStatus('🔴 Live');
         updateStatus('broadcasting', '🔴 Broadcasting live to IVS!');
