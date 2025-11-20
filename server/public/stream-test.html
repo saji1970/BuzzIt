@@ -1,520 +1,693 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BuzzIt Stream Test - Create & Preview</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon IVS Stream Test - BuzzIt</title>
+  <!-- Amazon IVS Web Broadcast SDK -->
+  <script src="https://web-broadcast.live-video.net/1.6.0/amazon-ivs-web-broadcast.js"></script>
+  <!-- Amazon IVS Player SDK -->
+  <script src="https://player.live-video.net/1.46.0/amazon-ivs-player.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
 
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
+    .header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
 
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
 
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-        }
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
 
-        .card {
-            background: white;
-            border-radius: 16px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
+    @media (max-width: 968px) {
+      .two-column {
+        grid-template-columns: 1fr;
+      }
+    }
 
-        .card h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-        }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+    .status.loading {
+      background: #fef3c7;
+      color: #92400e;
+    }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 600;
-        }
+    .status.ready {
+      background: #d1fae5;
+      color: #065f46;
+    }
 
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
 
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+    .status.broadcasting {
+      background: #fee2e2;
+      color: #dc2626;
+      animation: pulse-bg 2s infinite;
+    }
 
-        .form-group textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
+    @keyframes pulse-bg {
+      0%, 100% { background: #fee2e2; }
+      50% { background: #fecaca; }
+    }
 
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: 100%;
-        }
+    .status-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
 
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
+    .status.loading .status-icon {
+      background: #f59e0b;
+    }
 
-        .btn:active {
-            transform: translateY(0);
-        }
+    .status.ready .status-icon {
+      background: #10b981;
+    }
 
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+    .status.error .status-icon {
+      background: #ef4444;
+    }
 
-        .preview-section {
-            margin-top: 20px;
-        }
+    .status.broadcasting .status-icon {
+      background: #dc2626;
+    }
 
-        .playback-url {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            word-break: break-all;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #333;
-            border: 2px solid #e0e0e0;
-        }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
 
-        .playback-url-label {
-            font-weight: 600;
-            color: #667eea;
-            margin-bottom: 8px;
-            display: block;
-        }
+    .video-container {
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
 
-        .playback-url-value {
-            color: #555;
-        }
+    .video-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
 
-        .preview-container {
-            position: relative;
-            width: 100%;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            aspect-ratio: 16/9;
-        }
+    .placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: white;
+      z-index: 1;
+    }
 
-        #ivs-player {
-            width: 100%;
-            height: 100%;
-        }
+    .placeholder-icon {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
 
-        .preview-placeholder {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #999;
-            font-size: 16px;
-        }
+    .placeholder-text {
+      font-size: 1rem;
+      opacity: 0.7;
+    }
 
-        .status {
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
 
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
+    .button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
 
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
+    .button:active {
+      transform: translateY(0);
+    }
 
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
+    .button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+      opacity: 0.6;
+    }
 
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-        }
+    .button.danger {
+      background: #ef4444;
+    }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+    .button.danger:hover {
+      background: #dc2626;
+    }
 
-        .auth-section {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            color: white;
-        }
+    .button.success {
+      background: #10b981;
+    }
 
-        .auth-section h3 {
-            margin-bottom: 15px;
-        }
+    .button.success:hover {
+      background: #059669;
+    }
 
-        .auth-section input {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
 
-        .auth-section button {
-            background: white;
-            color: #667eea;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
+    .info-item {
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      border-left: 3px solid #667eea;
+    }
 
-        .auth-section button:hover {
-            opacity: 0.9;
-        }
-    </style>
+    .info-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .info-value {
+      font-size: 0.9rem;
+      color: #111827;
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+    }
+
+    .error-message {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      white-space: pre-line;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    h2 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 1.3rem;
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #dc2626;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🎥 BuzzIt Stream Test</h1>
-            <p>Create a stream and preview it with Amazon IVS Player</p>
-        </div>
-
-        <!-- Authentication Section -->
-        <div class="auth-section">
-            <h3>🔐 Authentication</h3>
-            <input type="text" id="username" placeholder="Username" value="">
-            <input type="password" id="password" placeholder="Password" value="">
-            <button onclick="login()">Login</button>
-            <div id="auth-status" style="margin-top: 10px; font-size: 14px;"></div>
-        </div>
-
-        <div class="main-content">
-            <!-- Stream Creation Form -->
-            <div class="card">
-                <h2>📝 Create Stream</h2>
-                <div id="status-message"></div>
-                <form id="stream-form" onsubmit="createStream(event)">
-                    <div class="form-group">
-                        <label for="stream-title">Stream Title *</label>
-                        <input type="text" id="stream-title" placeholder="Enter stream title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="stream-description">Description</label>
-                        <textarea id="stream-description" placeholder="Enter stream description (optional)"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="stream-category">Category</label>
-                        <input type="text" id="stream-category" placeholder="e.g., gaming, music, general" value="general">
-                    </div>
-                    <button type="submit" class="btn" id="create-btn">
-                        Create Stream
-                    </button>
-                </form>
-            </div>
-
-            <!-- Stream Preview -->
-            <div class="card">
-                <h2>👁️ Stream Preview</h2>
-                <div class="preview-section">
-                    <!-- Playback URL - Displayed ABOVE preview window -->
-                    <div class="playback-url" id="playback-url-container" style="display: none;">
-                        <span class="playback-url-label">🔗 Playback URL:</span>
-                        <div class="playback-url-value" id="playback-url-value">-</div>
-                        <button onclick="copyPlaybackUrl()" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📋 Copy URL</button>
-                    </div>
-                    <!-- Preview Window -->
-                    <div class="preview-container">
-                        <div id="ivs-player"></div>
-                        <div class="preview-placeholder" id="preview-placeholder">
-                            Create a stream to see preview
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <div class="container">
+    <div class="header">
+      <h1>📹 Amazon IVS Stream Test</h1>
+      <p>Broadcast and watch live streams directly from your browser</p>
     </div>
 
-    <!-- Amazon IVS Web Player SDK -->
-    <script src="https://player.live-video.net/1.0.0/amazon-ivs-player.min.js"></script>
-    <script>
-        const API_BASE_URL = window.location.origin;
-        let authToken = localStorage.getItem('authToken') || '';
-        let currentStream = null;
-        let ivsPlayer = null;
+    <div class="card">
+      <div id="status" class="status loading">
+        <div class="status-icon"></div>
+        <span id="status-text">Initializing...</span>
+      </div>
 
-        // Check if already logged in
-        if (authToken) {
-            document.getElementById('auth-status').innerHTML = '<span style="color: #90EE90;">✅ Logged in</span>';
+      <div id="error-message" class="error-message hidden"></div>
+
+      <div class="two-column">
+        <!-- Camera/Broadcast Section -->
+        <div>
+          <h2>📹 Camera & Broadcast</h2>
+          <div class="video-container">
+            <div id="camera-placeholder" class="placeholder">
+              <div class="placeholder-icon">📷</div>
+              <div class="placeholder-text">Click "Start Camera" to begin</div>
+            </div>
+            <video id="camera-video" autoplay muted playsinline></video>
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <button id="start-camera-btn" class="button" onclick="startCamera()">
+              📷 Start Camera
+            </button>
+            <button id="start-broadcast-btn" class="button success" onclick="startBroadcast()" disabled>
+              📡 Start Broadcast
+            </button>
+            <button id="stop-broadcast-btn" class="button danger" onclick="stopBroadcast()" style="display: none;">
+              ⏹️ Stop Broadcast
+            </button>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Camera Status</div>
+              <div id="camera-status" class="info-value">Not started</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Broadcast Status</div>
+              <div id="broadcast-status" class="info-value">Idle</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Player Section -->
+        <div>
+          <h2>🎥 Live Player</h2>
+          <div class="video-container">
+            <div id="player-placeholder" class="placeholder">
+              <div class="placeholder-icon">📺</div>
+              <div class="placeholder-text">Start broadcasting to see stream</div>
+            </div>
+            <video id="player-video" playsinline controls></video>
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <button id="load-stream-btn" class="button" onclick="loadStream()" disabled>
+              ▶️ Load Stream
+            </button>
+            <button id="refresh-btn" class="button" onclick="refreshStream()">
+              🔄 Refresh
+            </button>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Player Status</div>
+              <div id="player-status" class="info-value">Idle</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ℹ️ Stream Information</h2>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Playback URL</div>
+          <div id="playback-url" class="info-value">Loading...</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Ingest Server</div>
+          <div id="ingest-url" class="info-value">Loading...</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Stream Key</div>
+          <div id="stream-key" class="info-value">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="background: #f9fafb;">
+      <h2>📖 How It Works</h2>
+      <ol style="margin-left: 20px; line-height: 2;">
+        <li>Click <strong>"Start Camera"</strong> to access your webcam</li>
+        <li>Click <strong>"Start Broadcast"</strong> to stream to Amazon IVS</li>
+        <li>Wait 10-15 seconds for the stream to become available</li>
+        <li>Click <strong>"Load Stream"</strong> in the player section to watch your stream</li>
+        <li>You'll see yourself with ~5 seconds of latency (normal for IVS)</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = window.location.origin;
+    let playbackUrl = '';
+    let ingestUrl = '';
+    let streamKey = '';
+
+    // IVS Broadcast client
+    let broadcastClient = null;
+    let localStream = null;
+
+    // IVS Player
+    let player = null;
+
+    // Initialize app
+    async function init() {
+      try {
+        updateStatus('loading', 'Loading configuration...');
+
+        // Fetch configuration
+        const configRes = await fetch(`${API_BASE_URL}/api/stream-test/config`);
+        const config = await configRes.json();
+
+        if (!config.hasConfig) {
+          showError('IVS configuration is incomplete. Please check environment variables.');
+          updateStatus('error', 'Configuration incomplete');
+          return;
         }
 
-        // Login function
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const statusEl = document.getElementById('auth-status');
+        playbackUrl = config.playbackUrl;
+        ingestUrl = config.ingestUrl;
+        streamKey = config.streamKey;
 
-            if (!username || !password) {
-                statusEl.innerHTML = '<span style="color: #ffcccb;">Please enter username and password</span>';
-                return;
-            }
+        document.getElementById('playback-url').textContent = playbackUrl;
+        document.getElementById('ingest-url').textContent = ingestUrl;
+        document.getElementById('stream-key').textContent = '••••••••';
 
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ username, password }),
-                });
+        updateStatus('ready', 'Ready! Click "Start Camera" to begin streaming.');
 
-                const data = await response.json();
+        // Initialize IVS Player
+        initializePlayer();
 
-                if (data.success && data.token) {
-                    authToken = data.token;
-                    localStorage.setItem('authToken', authToken);
-                    statusEl.innerHTML = '<span style="color: #90EE90;">✅ Login successful!</span>';
-                } else {
-                    statusEl.innerHTML = `<span style="color: #ffcccb;">❌ ${data.error || 'Login failed'}</span>`;
-                }
-            } catch (error) {
-                statusEl.innerHTML = `<span style="color: #ffcccb;">❌ Error: ${error.message}</span>`;
-            }
-        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+        showError(`Failed to initialize: ${error.message}`);
+        updateStatus('error', 'Initialization failed');
+      }
+    }
 
-        // Show status message
-        function showStatus(message, type = 'info') {
-            const statusEl = document.getElementById('status-message');
-            statusEl.innerHTML = `<div class="status ${type}">${message}</div>`;
-            setTimeout(() => {
-                statusEl.innerHTML = '';
-            }, 5000);
-        }
+    // Start camera
+    async function startCamera() {
+      try {
+        updateCameraStatus('Requesting camera access...');
 
-        // Create stream
-        async function createStream(event) {
-            event.preventDefault();
-
-            if (!authToken) {
-                showStatus('Please login first', 'error');
-                return;
-            }
-
-            const title = document.getElementById('stream-title').value;
-            const description = document.getElementById('stream-description').value;
-            const category = document.getElementById('stream-category').value || 'general';
-
-            const createBtn = document.getElementById('create-btn');
-            createBtn.disabled = true;
-            createBtn.innerHTML = '<span class="loading"></span> Creating...';
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/live-streams`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`,
-                    },
-                    body: JSON.stringify({
-                        title,
-                        description,
-                        category,
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.data) {
-                    currentStream = data.data;
-                    showStatus('✅ Stream created successfully!', 'success');
-                    
-                    // Display playback URL
-                    const playbackUrl = data.data.ivsPlaybackUrl || data.data.restreamPlaybackUrl || data.data.streamUrl;
-                    if (playbackUrl) {
-                        displayPlaybackUrl(playbackUrl);
-                        loadIVSPlayer(playbackUrl);
-                    } else {
-                        showStatus('⚠️ No playback URL available. Stream may need to be active.', 'info');
-                        document.getElementById('playback-url-container').style.display = 'none';
-                        document.getElementById('preview-placeholder').textContent = 'No playback URL available';
-                    }
-                } else {
-                    showStatus(`❌ Error: ${data.error || 'Failed to create stream'}`, 'error');
-                }
-            } catch (error) {
-                showStatus(`❌ Error: ${error.message}`, 'error');
-            } finally {
-                createBtn.disabled = false;
-                createBtn.innerHTML = 'Create Stream';
-            }
-        }
-
-        // Display playback URL
-        function displayPlaybackUrl(url) {
-            const container = document.getElementById('playback-url-container');
-            const valueEl = document.getElementById('playback-url-value');
-            
-            container.style.display = 'block';
-            valueEl.textContent = url || 'No playback URL available';
-        }
-
-        // Copy playback URL to clipboard
-        function copyPlaybackUrl() {
-            const url = document.getElementById('playback-url-value').textContent;
-            if (url && url !== '-' && url !== 'No playback URL available') {
-                navigator.clipboard.writeText(url).then(() => {
-                    showStatus('✅ Playback URL copied to clipboard!', 'success');
-                }).catch(err => {
-                    showStatus('❌ Failed to copy URL', 'error');
-                });
-            }
-        }
-
-        // Load Amazon IVS Player
-        function loadIVSPlayer(playbackUrl) {
-            // Hide placeholder
-            document.getElementById('preview-placeholder').style.display = 'none';
-
-            // Clean up existing player
-            if (ivsPlayer) {
-                ivsPlayer.delete();
-                ivsPlayer = null;
-            }
-
-            // Clear player container
-            const playerContainer = document.getElementById('ivs-player');
-            playerContainer.innerHTML = '';
-
-            // Check if IVS SDK is loaded
-            if (typeof IVSPlayer === 'undefined') {
-                playerContainer.innerHTML = '<div class="preview-placeholder">❌ IVS Player SDK not loaded</div>';
-                return;
-            }
-
-            try {
-                // Create video element
-                const videoElement = document.createElement('video');
-                videoElement.setAttribute('playsinline', '');
-                videoElement.setAttribute('autoplay', '');
-                videoElement.style.width = '100%';
-                videoElement.style.height = '100%';
-                playerContainer.appendChild(videoElement);
-
-                // Create IVS player
-                ivsPlayer = IVSPlayer.create();
-                ivsPlayer.attachHTMLVideoElement(videoElement);
-                ivsPlayer.load(playbackUrl);
-
-                // Event listeners
-                ivsPlayer.addEventListener(IVSPlayer.PlayerState.PLAYING, () => {
-                    console.log('✅ Stream is playing');
-                });
-
-                ivsPlayer.addEventListener(IVSPlayer.PlayerState.BUFFERING, () => {
-                    console.log('⏳ Buffering...');
-                });
-
-                ivsPlayer.addEventListener(IVSPlayer.PlayerEventType.ERROR, (error) => {
-                    console.error('❌ Player error:', error);
-                    playerContainer.innerHTML = '<div class="preview-placeholder">❌ Error loading stream. Check if stream is active.</div>';
-                });
-
-                ivsPlayer.addEventListener(IVSPlayer.PlayerEventType.QUALITY_CHANGED, (quality) => {
-                    console.log('Quality changed:', quality);
-                });
-
-            } catch (error) {
-                console.error('Error initializing IVS player:', error);
-                playerContainer.innerHTML = '<div class="preview-placeholder">❌ Error initializing player</div>';
-            }
-        }
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (ivsPlayer) {
-                ivsPlayer.delete();
-            }
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: true
         });
-    </script>
+
+        const cameraVideo = document.getElementById('camera-video');
+        cameraVideo.srcObject = localStream;
+
+        document.getElementById('camera-placeholder').style.display = 'none';
+        cameraVideo.style.display = 'block';
+
+        document.getElementById('start-camera-btn').disabled = true;
+        document.getElementById('start-broadcast-btn').disabled = false;
+
+        updateCameraStatus('Camera active');
+        updateStatus('ready', 'Camera ready! Click "Start Broadcast" to stream.');
+
+      } catch (error) {
+        console.error('Camera error:', error);
+        showError(`Failed to access camera: ${error.message}\n\nPlease grant camera and microphone permissions.`);
+        updateCameraStatus('Camera access denied');
+      }
+    }
+
+    // Start broadcast
+    async function startBroadcast() {
+      if (!localStream) {
+        showError('Please start the camera first');
+        return;
+      }
+
+      try {
+        updateBroadcastStatus('Initializing broadcast...');
+        updateStatus('loading', 'Starting broadcast...');
+
+        // Check if IVS Web Broadcast SDK is loaded
+        if (typeof IVSBroadcastClient === 'undefined') {
+          throw new Error('IVS Web Broadcast SDK not loaded');
+        }
+
+        // Create broadcast client
+        broadcastClient = IVSBroadcastClient.create({
+          streamConfig: IVSBroadcastClient.STANDARD_LANDSCAPE,
+          ingestEndpoint: ingestUrl + '/' + streamKey
+        });
+
+        // Add video track
+        const videoTrack = localStream.getVideoTracks()[0];
+        await broadcastClient.addVideoInputDevice(videoTrack, 'camera');
+
+        // Add audio track
+        const audioTrack = localStream.getAudioTracks()[0];
+        await broadcastClient.addAudioInputDevice(audioTrack, 'mic');
+
+        // Start broadcasting
+        await broadcastClient.startBroadcast();
+
+        updateBroadcastStatus('🔴 Live');
+        updateStatus('broadcasting', '🔴 Broadcasting live to IVS!');
+
+        document.getElementById('start-broadcast-btn').style.display = 'none';
+        document.getElementById('stop-broadcast-btn').style.display = 'inline-flex';
+        document.getElementById('load-stream-btn').disabled = false;
+
+        console.log('✅ Broadcast started successfully');
+
+        // Auto-load player after 15 seconds
+        setTimeout(() => {
+          if (broadcastClient) {
+            loadStream();
+          }
+        }, 15000);
+
+      } catch (error) {
+        console.error('Broadcast error:', error);
+        showError(`Failed to start broadcast: ${error.message}\n\nMake sure IVS credentials are correct.`);
+        updateBroadcastStatus('Broadcast failed');
+        updateStatus('error', 'Broadcast failed');
+      }
+    }
+
+    // Stop broadcast
+    async function stopBroadcast() {
+      try {
+        if (broadcastClient) {
+          await broadcastClient.stopBroadcast();
+          broadcastClient.delete();
+          broadcastClient = null;
+        }
+
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          localStream = null;
+        }
+
+        const cameraVideo = document.getElementById('camera-video');
+        cameraVideo.srcObject = null;
+        cameraVideo.style.display = 'none';
+        document.getElementById('camera-placeholder').style.display = 'block';
+
+        document.getElementById('start-camera-btn').disabled = false;
+        document.getElementById('start-broadcast-btn').style.display = 'inline-flex';
+        document.getElementById('start-broadcast-btn').disabled = true;
+        document.getElementById('stop-broadcast-btn').style.display = 'none';
+
+        updateCameraStatus('Not started');
+        updateBroadcastStatus('Idle');
+        updateStatus('ready', 'Broadcast stopped');
+
+      } catch (error) {
+        console.error('Stop broadcast error:', error);
+        showError(`Error stopping broadcast: ${error.message}`);
+      }
+    }
+
+    // Initialize Amazon IVS Player
+    function initializePlayer() {
+      if (!window.IVSPlayer || !window.IVSPlayer.isPlayerSupported) {
+        showError('Amazon IVS Player is not supported in this browser.');
+        return;
+      }
+
+      try {
+        player = window.IVSPlayer.create();
+        player.attachHTMLVideoElement(document.getElementById('player-video'));
+
+        // Event listeners
+        player.addEventListener(window.IVSPlayer.PlayerState.READY, () => {
+          console.log('Player is ready');
+          document.getElementById('player-placeholder').style.display = 'none';
+          document.getElementById('player-video').style.display = 'block';
+          updatePlayerStatus('Player ready');
+        });
+
+        player.addEventListener(window.IVSPlayer.PlayerState.PLAYING, () => {
+          console.log('Stream is playing');
+          document.getElementById('player-placeholder').style.display = 'none';
+          document.getElementById('player-video').style.display = 'block';
+          updatePlayerStatus('🔴 Playing live stream');
+        });
+
+        player.addEventListener(window.IVSPlayer.PlayerState.BUFFERING, () => {
+          console.log('Stream is buffering');
+          updatePlayerStatus('Buffering...');
+        });
+
+        player.addEventListener(window.IVSPlayer.PlayerState.IDLE, () => {
+          console.log('Player is idle');
+          updatePlayerStatus('Idle');
+        });
+
+        player.addEventListener(window.IVSPlayer.PlayerEventType.ERROR, (error) => {
+          console.error('Player error:', error);
+          updatePlayerStatus('Error');
+
+          if (error.code === 404 || error.type === 'ErrorNotAvailable') {
+            showError(`Stream not available yet.\n\nWait 10-15 seconds after starting broadcast, then click "Refresh".`);
+          } else {
+            showError(`Player error: ${error.type || 'Unknown error'}`);
+          }
+        });
+
+        console.log('Player initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize player:', error);
+        showError(`Failed to initialize player: ${error.message}`);
+      }
+    }
+
+    // Load stream
+    function loadStream() {
+      if (!player || !playbackUrl) {
+        showError('Player not initialized or no playback URL available');
+        return;
+      }
+
+      try {
+        console.log('Loading stream:', playbackUrl);
+        player.load(playbackUrl);
+        player.play();
+        updatePlayerStatus('Loading stream...');
+      } catch (error) {
+        console.error('Failed to load stream:', error);
+        showError(`Failed to load stream: ${error.message}`);
+      }
+    }
+
+    // Refresh stream
+    function refreshStream() {
+      if (player) {
+        player.pause();
+        setTimeout(() => {
+          loadStream();
+        }, 500);
+      }
+    }
+
+    // Update status functions
+    function updateStatus(type, message) {
+      const statusEl = document.getElementById('status');
+      const statusText = document.getElementById('status-text');
+      statusEl.className = `status ${type}`;
+      statusText.textContent = message;
+    }
+
+    function updateCameraStatus(status) {
+      document.getElementById('camera-status').textContent = status;
+    }
+
+    function updateBroadcastStatus(status) {
+      document.getElementById('broadcast-status').textContent = status;
+    }
+
+    function updatePlayerStatus(status) {
+      document.getElementById('player-status').textContent = status;
+    }
+
+    // Show error message
+    function showError(message) {
+      const errorEl = document.getElementById('error-message');
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+      setTimeout(() => {
+        errorEl.classList.add('hidden');
+      }, 10000);
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
 </body>
 </html>
-

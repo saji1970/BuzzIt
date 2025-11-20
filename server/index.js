@@ -2062,6 +2062,53 @@ app.get('/api/live-streams/config', (req, res) => {
   }
 });
 
+// Stream Test API endpoints (for standalone stream testing)
+app.get('/api/stream-test/config', (req, res) => {
+  const config = {
+    playbackUrl: process.env.IVS_PLAYBACK_URL || '',
+    ingestUrl: process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '',
+    streamKey: process.env.IVS_STREAM_KEY ? '••••••••' : '',
+    hasConfig: !!(
+      process.env.IVS_PLAYBACK_URL &&
+      (process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL) &&
+      process.env.IVS_STREAM_KEY
+    ),
+  };
+  res.json(config);
+});
+
+app.get('/api/stream-test/status', (req, res) => {
+  res.json({
+    status: 'ready',
+    message: 'Use streaming software (OBS, etc.) to start streaming',
+    playbackUrl: process.env.IVS_PLAYBACK_URL || '',
+  });
+});
+
+app.get('/api/stream-test/instructions', (req, res) => {
+  const ingestUrl = process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '';
+  const streamKey = process.env.IVS_STREAM_KEY || '';
+
+  // Convert RTMPS to RTMP if needed (remove port 443)
+  const rtmpUrl = ingestUrl.replace(':443', '').replace('rtmps://', 'rtmp://');
+
+  res.json({
+    ingestUrl: rtmpUrl,
+    streamKey: streamKey,
+    playbackUrl: process.env.IVS_PLAYBACK_URL || '',
+    srtUrl: process.env.IVS_SRT_URL || '',
+    instructions: [
+      '1. Open the BuzzIt mobile app on your Android device',
+      '2. Navigate to the "Go Live" or streaming screen',
+      '3. Grant camera and microphone permissions if prompted',
+      '4. Tap "Start Streaming" button',
+      '5. Wait 15-20 seconds for the stream to connect',
+      '6. Come back to this page and click "Load Stream"',
+      '7. Watch your live stream appear in the preview below!',
+    ],
+  });
+});
+
 app.get('/api/live-streams', async (req, res) => {
   try {
     let liveStreams = [];
