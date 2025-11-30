@@ -716,7 +716,10 @@ const HomeScreen: React.FC = () => {
 
   // Fallback function to prevent ReferenceError - must be defined before any use
   // This ensures it's always available in the component scope
-  const renderEmptyList = () => renderEmptyState();
+  // Using useMemo to ensure it's stable and accessible
+  const renderEmptyList = useMemo(() => {
+    return () => renderEmptyState();
+  }, [theme.colors.background, theme.colors.text, theme.colors.textSecondary]);
 
   // Wait for auth check to complete first
   if (authLoading) {
