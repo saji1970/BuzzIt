@@ -288,18 +288,41 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
           enhancedRtmp
           onEvent={(code: number, msg: string) => {
             const mapped = statusFromCode(code);
+            console.log('[BuzzLivePublisher] NodePublisher event:', {
+              code,
+              msg,
+              status: mapped,
+              rtmpUrl: normalizedUrl.substring(0, 60) + '...'
+            });
+            
             if (mapped === 'connecting') {
               updateStatus('connecting');
+              console.log('[BuzzLivePublisher] 🔄 Connecting to RTMP server...');
             } else if (mapped === 'live') {
               updateStatus('live');
               setBusy(false);
+              console.log('[BuzzLivePublisher] ✅ Stream is now live!');
             } else if (mapped === 'idle') {
               updateStatus('idle');
               setBusy(false);
+              console.log('[BuzzLivePublisher] ⏸️ Stream idle');
             } else if (mapped === 'error') {
-              console.error('NodeMedia error:', code, msg);
+              console.error('[BuzzLivePublisher] ❌ Streaming error:', {
+                code,
+                message: msg,
+                rtmpUrl: normalizedUrl.substring(0, 60) + '...'
+              });
               updateStatus('error');
               setBusy(false);
+              Alert.alert(
+                'Streaming Error',
+                `Broadcasting error: ${msg || `Code ${code}`}\n\n` +
+                `Please check:\n` +
+                `1. RTMP URL is correct\n` +
+                `2. Network connectivity\n` +
+                `3. IVS service status\n` +
+                `4. Try again`,
+              );
             }
           }}
         />
