@@ -2068,40 +2068,40 @@ app.get('/api/stream-test/config', (req, res) => {
   const streamKey = process.env.IVS_STREAM_KEY || '';
 
   // IVS Web Broadcast SDK requires the base RTMPS ingest URL
-  // Format: rtmps://[channel-id].global.contribute.live-video.net:443/app/
-  // Clean and validate the URL
+  // Format should be: rtmps://[channel-id].global.contribute.live-video.net:443
+  // The SDK will handle path construction internally
   if (ingestUrl) {
     ingestUrl = ingestUrl.trim();
-    // Remove trailing slashes - the SDK will handle path construction
-    ingestUrl = ingestUrl.replace(/\/+$/, '');
-    // Ensure it ends with /app/ for RTMPS ingest
-    if (!ingestUrl.endsWith('/app/')) {
-      // Check if it ends with /app, add trailing slash
-      if (ingestUrl.endsWith('/app')) {
-        ingestUrl = ingestUrl + '/';
-      } else {
-        // If it doesn't have /app/, add it
-        if (!ingestUrl.endsWith('/')) {
-          ingestUrl = ingestUrl + '/app/';
-        } else {
-          ingestUrl = ingestUrl + 'app/';
-        }
-      }
+    
+    // Remove any existing path after the domain (like /app/, /app, etc.)
+    try {
+      const url = new URL(ingestUrl);
+      ingestUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+    } catch (e) {
+      // If URL parsing fails, do simple string manipulation
+      // Remove everything after the domain:port
+      ingestUrl = ingestUrl.replace(/^((?:rtmp|rtmps):\/\/[^\/]+).*$/, '$1');
     }
-    // Ensure protocol is RTMPS
+    
+    // Ensure protocol is RTMPS (required for Web Broadcast SDK)
     if (ingestUrl.startsWith('rtmp://')) {
       ingestUrl = ingestUrl.replace('rtmp://', 'rtmps://');
     }
-    // Ensure port 443 is specified for RTMPS
-    if (ingestUrl.includes('rtmps://') && !ingestUrl.includes(':443')) {
-      // Insert :443 after the domain
-      ingestUrl = ingestUrl.replace(/rtmps:\/\/([^\/]+)/, 'rtmps://$1:443');
+    
+    // Ensure RTMPS uses port 443
+    if (ingestUrl.startsWith('rtmps://')) {
+      // Remove any existing port
+      ingestUrl = ingestUrl.replace(/rtmps:\/\/([^:]+):\d+/, 'rtmps://$1');
+      // Add port 443 if not present
+      if (!ingestUrl.includes(':')) {
+        ingestUrl = ingestUrl.replace(/rtmps:\/\/([^\/]+)/, 'rtmps://$1:443');
+      }
     }
   }
 
   const config = {
     playbackUrl: process.env.IVS_PLAYBACK_URL || '',
-    ingestUrl: ingestUrl, // Use properly formatted RTMPS URL for Web Broadcast SDK
+    ingestUrl: ingestUrl, // Base RTMPS URL for Web Broadcast SDK
     streamKey: streamKey, // Return actual stream key for broadcasting
     hasConfig: !!(
       process.env.IVS_PLAYBACK_URL &&

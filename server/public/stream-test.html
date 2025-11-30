@@ -783,11 +783,30 @@
         }
 
         // Ensure ingest URL is properly formatted for IVS
+        // The ingest URL should be the base RTMPS URL (domain:port only)
+        // Format: rtmps://[channel-id].global.contribute.live-video.net:443
         let formattedIngestUrl = ingestUrl.trim();
-        // Remove trailing slash if present (SDK adds it)
-        if (formattedIngestUrl.endsWith('/')) {
-          formattedIngestUrl = formattedIngestUrl.slice(0, -1);
+        
+        // Validate URL format
+        try {
+          const url = new URL(formattedIngestUrl);
+          // Reconstruct to base URL only (protocol + hostname + port)
+          formattedIngestUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        } catch (e) {
+          console.warn('URL parsing failed, using original:', e);
         }
+        
+        // Ensure it's RTMPS
+        if (formattedIngestUrl.startsWith('rtmp://')) {
+          formattedIngestUrl = formattedIngestUrl.replace('rtmp://', 'rtmps://');
+        }
+        
+        // Log the formatted URL for debugging
+        console.log('🔍 Ingest URL formatted:', {
+          original: ingestUrl.substring(0, 60) + '...',
+          formatted: formattedIngestUrl,
+          protocol: formattedIngestUrl.substring(0, 8)
+        });
 
         console.log('📡 Creating broadcast client with:', {
           ingestUrl: formattedIngestUrl.substring(0, 50) + '...',
