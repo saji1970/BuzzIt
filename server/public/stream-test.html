@@ -777,22 +777,40 @@
           throw new Error('IVS Web Broadcast SDK not loaded. Please refresh the page.');
         }
 
-        // Validate ingest URL format
-        if (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://')) {
+        // Validate ingest URL format - IVS Web Broadcast SDK supports RTMPS
+        if (!ingestUrl || (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://'))) {
           throw new Error(`Invalid ingest URL format: ${ingestUrl}. Must start with rtmp:// or rtmps://`);
         }
 
+        // Ensure ingest URL is properly formatted for IVS
+        let formattedIngestUrl = ingestUrl.trim();
+        // Remove trailing slash if present (SDK adds it)
+        if (formattedIngestUrl.endsWith('/')) {
+          formattedIngestUrl = formattedIngestUrl.slice(0, -1);
+        }
+
         console.log('📡 Creating broadcast client with:', {
-          ingestUrl: ingestUrl.substring(0, 50) + '...',
+          ingestUrl: formattedIngestUrl.substring(0, 50) + '...',
+          ingestUrlProtocol: formattedIngestUrl.substring(0, 8),
           streamKeyLength: streamKey.length,
           hasLocalStream: !!localStream
         });
 
         // Create broadcast client
-        broadcastClient = IVSBroadcastClient.create({
+        // IVS Web Broadcast SDK supports RTMPS ingest endpoints
+        // The ingestEndpoint should be the base RTMPS URL without the stream key
+        const clientConfig = {
           streamConfig: IVSBroadcastClient.STANDARD_LANDSCAPE,
-          ingestEndpoint: ingestUrl
+          ingestEndpoint: formattedIngestUrl
+        };
+
+        console.log('🔧 Broadcast client config:', {
+          streamConfig: clientConfig.streamConfig,
+          ingestEndpoint: formattedIngestUrl.substring(0, 60) + '...',
+          hasStreamKey: !!streamKey
         });
+
+        broadcastClient = IVSBroadcastClient.create(clientConfig);
 
         updateStatus('loading', 'Adding video and audio devices...');
 

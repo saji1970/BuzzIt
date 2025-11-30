@@ -2064,15 +2064,44 @@ app.get('/api/live-streams/config', (req, res) => {
 
 // Stream Test API endpoints (for standalone stream testing)
 app.get('/api/stream-test/config', (req, res) => {
-  const ingestUrl = process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '';
+  let ingestUrl = process.env.IVS_INGEST_RTMPS_URL || process.env.IVS_INGEST_URL || '';
   const streamKey = process.env.IVS_STREAM_KEY || '';
 
-  // Convert RTMPS to RTMP and remove port for broadcast SDK
-  const rtmpUrl = ingestUrl.replace(':443', '').replace('rtmps://', 'rtmp://');
+  // IVS Web Broadcast SDK requires the base RTMPS ingest URL
+  // Format: rtmps://[channel-id].global.contribute.live-video.net:443/app/
+  // Clean and validate the URL
+  if (ingestUrl) {
+    ingestUrl = ingestUrl.trim();
+    // Remove trailing slashes - the SDK will handle path construction
+    ingestUrl = ingestUrl.replace(/\/+$/, '');
+    // Ensure it ends with /app/ for RTMPS ingest
+    if (!ingestUrl.endsWith('/app/')) {
+      // Check if it ends with /app, add trailing slash
+      if (ingestUrl.endsWith('/app')) {
+        ingestUrl = ingestUrl + '/';
+      } else {
+        // If it doesn't have /app/, add it
+        if (!ingestUrl.endsWith('/')) {
+          ingestUrl = ingestUrl + '/app/';
+        } else {
+          ingestUrl = ingestUrl + 'app/';
+        }
+      }
+    }
+    // Ensure protocol is RTMPS
+    if (ingestUrl.startsWith('rtmp://')) {
+      ingestUrl = ingestUrl.replace('rtmp://', 'rtmps://');
+    }
+    // Ensure port 443 is specified for RTMPS
+    if (ingestUrl.includes('rtmps://') && !ingestUrl.includes(':443')) {
+      // Insert :443 after the domain
+      ingestUrl = ingestUrl.replace(/rtmps:\/\/([^\/]+)/, 'rtmps://$1:443');
+    }
+  }
 
   const config = {
     playbackUrl: process.env.IVS_PLAYBACK_URL || '',
-    ingestUrl: rtmpUrl,
+    ingestUrl: ingestUrl, // Use properly formatted RTMPS URL for Web Broadcast SDK
     streamKey: streamKey, // Return actual stream key for broadcasting
     hasConfig: !!(
       process.env.IVS_PLAYBACK_URL &&
