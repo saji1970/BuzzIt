@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buzz it - Streaming</title>
+    <!-- Amazon IVS Web Broadcast SDK -->
+    <script src="https://web-broadcast.live-video.net/1.6.0/amazon-ivs-web-broadcast.js"></script>
     <!-- Amazon IVS Player SDK - Latest Version -->
     <script src="https://player.live-video.net/1.46.0/amazon-ivs-player.min.js"></script>
     <style>
@@ -636,6 +638,8 @@
         let isMuted = false;
         let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back
         let ivsPlayer = null;
+        let broadcastClient = null; // IVS Web Broadcast client
+        let localStream = null; // Camera stream
 
         // Check if already logged in
         if (authToken) {
@@ -1670,6 +1674,119 @@
                 }
             } catch (error) {
                 showAlert('Network error. Please try again.', 'error');
+            }
+        }
+
+        // Broadcast stream using IVS Web Broadcast SDK (improved from stream-test.html)
+        async function broadcastStream() {
+            if (!currentStream) {
+                showAlert('Please create a stream first', 'error');
+                return;
+            }
+
+            if (!localStream) {
+                showAlert('Please start camera first', 'error');
+                return;
+            }
+
+            try {
+                // Get IVS configuration
+                const configRes = await fetch('/api/stream-test/config');
+                const config = await configRes.json();
+
+                if (!config.hasConfig || !config.ingestUrl || !config.streamKey) {
+                    showAlert('IVS configuration is incomplete. Please check environment variables.', 'error');
+                    return;
+                }
+
+                let ingestUrl = config.ingestUrl.trim();
+                const streamKey = config.streamKey;
+
+                // Validate and format ingest URL (improved from stream-test.html)
+                if (!ingestUrl || (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://'))) {
+                    throw new Error(`Invalid ingest URL format: ${ingestUrl}. Must start with rtmp:// or rtmps://`);
+                }
+
+                // Extract base URL only (protocol + hostname + port)
+                try {
+                    const url = new URL(ingestUrl);
+                    ingestUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+                } catch (e) {
+                    console.warn('URL parsing failed, using original:', e);
+                }
+
+                // Ensure it's RTMPS
+                if (ingestUrl.startsWith('rtmp://')) {
+                    ingestUrl = ingestUrl.replace('rtmp://', 'rtmps://');
+                }
+
+                // Validate before passing to SDK
+                if (!ingestUrl || ingestUrl.length < 10) {
+                    throw new Error(`Invalid ingest URL: ${ingestUrl}`);
+                }
+
+                if (!ingestUrl.startsWith('rtmps://')) {
+                    throw new Error(`Ingest URL must use RTMPS protocol: ${ingestUrl}`);
+                }
+
+                // Check if IVS Web Broadcast SDK is loaded
+                if (typeof IVSBroadcastClient === 'undefined') {
+                    throw new Error('IVS Web Broadcast SDK not loaded. Please refresh the page.');
+                }
+
+                console.log('📡 Starting broadcast with:', {
+                    ingestUrl: ingestUrl.substring(0, 60) + '...',
+                    streamKeyLength: streamKey.length
+                });
+
+                // Create broadcast client
+                broadcastClient = IVSBroadcastClient.create({
+                    streamConfig: IVSBroadcastClient.STANDARD_LANDSCAPE,
+                    ingestEndpoint: ingestUrl
+                });
+
+                // Add MediaStream to broadcast client
+                broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
+                broadcastClient.addAudioInputDevice(localStream, 'mic');
+
+                // Start broadcasting
+                await broadcastClient.startBroadcast(streamKey);
+
+                console.log('✅ Broadcast started successfully');
+                showAlert('🔴 Broadcasting live to IVS!', 'success');
+                document.getElementById('broadcastButton').textContent = '🔴 Broadcasting';
+                document.getElementById('broadcastButton').disabled = true;
+
+            } catch (error) {
+                console.error('Broadcast error:', error);
+                showAlert(`Failed to start broadcast: ${error.message}`, 'error');
+                
+                // Clean up on error
+                if (broadcastClient) {
+                    try {
+                        broadcastClient.delete();
+                    } catch (e) {
+                        console.error('Error cleaning up broadcast client:', e);
+                    }
+                    broadcastClient = null;
+                }
+            }
+        }
+
+        // Stop broadcast
+        async function stopBroadcast() {
+            try {
+                if (broadcastClient) {
+                    await broadcastClient.stopBroadcast();
+                    broadcastClient.delete();
+                    broadcastClient = null;
+                }
+                showAlert('Broadcast stopped', 'success');
+                document.getElementById('broadcastButton').textContent = '📡 Broadcast';
+                document.getElementById('broadcastButton').disabled = false;
+            } catch (error) {
+                console.error('Stop broadcast error:', error);
+                showAlert(`Error stopping broadcast: ${error.message}`, 'error');
             }
         }
 

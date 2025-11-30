@@ -109,14 +109,40 @@ const GoBuzzLiveScreen: React.FC = () => {
       return '';
     }
 
-    let normalized = baseUrl.replace(/\/$/, '');
+    // Improved URL formatting - extract base URL only
+    let normalized = baseUrl.trim();
+    
+    // Remove any path after domain:port (like /app/, etc.)
+    try {
+      const url = new URL(normalized);
+      normalized = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+    } catch (e) {
+      // If URL parsing fails, use simple string manipulation
+      normalized = normalized.replace(/\/+$/, ''); // Remove trailing slashes
+      // Remove path if present (everything after domain:port)
+      const match = normalized.match(/^((?:rtmp|rtmps):\/\/[^\/]+)/);
+      if (match) {
+        normalized = match[1];
+      }
+    }
+    
     // Convert RTMPS to RTMP and remove port 443 if present
     // NodeMediaClient doesn't support RTMPS, so we convert to RTMP
     if (normalized.startsWith('rtmps://')) {
       normalized = normalized.replace('rtmps://', 'rtmp://').replace(':443', '');
     }
 
-    return `${normalized}/${streamKey}`;
+    // Append stream key
+    const finalUrl = `${normalized}/${streamKey}`;
+    
+    console.log('[GoBuzzLive] Built RTMP ingest URL:', {
+      originalBaseUrl: baseUrl,
+      normalizedBaseUrl: normalized,
+      streamKeyLength: streamKey.length,
+      finalUrl: finalUrl.substring(0, 60) + '...'
+    });
+
+    return finalUrl;
   };
 
   const handlePublisherStatusChange = (status: BuzzLivePublisherStatus) => {
