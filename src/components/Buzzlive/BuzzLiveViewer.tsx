@@ -69,23 +69,37 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
             autoplay={!paused}
             muted={false}
             onLoad={(duration) => {
-              console.log('BuzzLive IVS Player loaded, duration:', duration);
+              console.log('[BuzzLiveViewer] ✅ IVS Player loaded successfully:', {
+                duration,
+                playbackUrl: playbackUrl?.substring(0, 60) + '...',
+                playableUrl: playableUrl?.substring(0, 60) + '...'
+              });
               setBuffering(false);
             }}
             onPlayerStateChange={(state) => {
-              console.log('BuzzLive IVS Player state:', state);
+              console.log('[BuzzLiveViewer] IVS Player state changed:', {
+                state,
+                playbackUrl: playbackUrl?.substring(0, 60) + '...'
+              });
               if (state === 'Buffering') {
                 setBuffering(true);
-              } else if (state === 'Playing' || state === 'Ready') {
+                console.log('[BuzzLiveViewer] ⏳ Buffering...');
+              } else if (state === 'Playing') {
                 setBuffering(false);
+                console.log('[BuzzLiveViewer] ▶️ Stream is now playing!');
+              } else if (state === 'Ready') {
+                setBuffering(false);
+                console.log('[BuzzLiveViewer] ✅ Player ready');
+              } else if (state === 'Idle' || state === 'Ended') {
+                console.log('[BuzzLiveViewer] ⏸️ Stream idle/ended:', state);
               }
             }}
             onError={(errorType, error) => {
-              console.error('BuzzLive IVS viewer error', {
+              console.error('[BuzzLiveViewer] ❌ IVS Player error:', {
                 errorType,
                 error,
-                playbackUrl,
-                playableUrl,
+                playbackUrl: playbackUrl?.substring(0, 60) + '...',
+                playableUrl: playableUrl?.substring(0, 60) + '...',
                 isValid: isValidPlaybackStreamUrl(playableUrl || undefined),
               });
               setErrored(true);
