@@ -714,6 +714,9 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
+  // Fallback function to prevent ReferenceError if referenced elsewhere
+  const renderEmptyList = () => renderEmptyState();
+
   // Wait for auth check to complete first
   if (authLoading) {
     return (
@@ -762,9 +765,9 @@ const HomeScreen: React.FC = () => {
 
   const renderHero = () => (
     <View style={[styles.heroContainer, {paddingTop: insets.top + 12}]}>
-      <LinearGradient
+              <LinearGradient
         colors={['#7EB3FF', '#4C7DFF']}
-        start={{x: 0, y: 0}}
+                start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.heroCard}
       >
@@ -773,7 +776,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.heroTitle}>Home</Text>
             <Text style={styles.heroSubtitle}>buzz feed</Text>
           </View>
-          <TouchableOpacity
+            <TouchableOpacity
             style={styles.heroRefreshButton}
             activeOpacity={0.85}
             onPress={() => {
@@ -782,16 +785,16 @@ const HomeScreen: React.FC = () => {
             }}
           >
             <Icon name="refresh" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+            </TouchableOpacity>
+      </View>
 
         <View style={styles.heroChannels}>
-          <SubscribedChannels 
+        <SubscribedChannels 
             variant="card"
-            onChannelPress={handleBuzzerPress}
-            onYourBuzzPress={() => setShowYourBuzz(true)}
-          />
-        </View>
+          onChannelPress={handleBuzzerPress}
+          onYourBuzzPress={() => setShowYourBuzz(true)}
+        />
+      </View>
 
         <View style={styles.heroActionsRow}>
           <View
@@ -833,9 +836,9 @@ const HomeScreen: React.FC = () => {
   const renderHeader = () => {
     try {
       return (
-        <>
-          {renderHero()}
-          {renderSearchResults()}
+    <>
+      {renderHero()}
+      {renderSearchResults()}
 
       {/* Smart Feed Toggle */}
       <View style={styles.smartFeedContainer}>
@@ -910,7 +913,7 @@ const HomeScreen: React.FC = () => {
               <View style={styles.liveStreamBannerIcon}>
                 <Icon name="videocam" size={20} color="#FFFFFF" />
                 <View style={styles.liveStreamBannerDot} />
-              </View>
+          </View>
               <View style={styles.liveStreamBannerText}>
                 <Text style={styles.liveStreamBannerTitle}>
                   {liveStreams[0].displayName || liveStreams[0].username} is live!
@@ -918,15 +921,15 @@ const HomeScreen: React.FC = () => {
                 <Text style={styles.liveStreamBannerSubtitle}>
                   {liveStreams[0].viewers || 0} watching • Tap to join
                 </Text>
-              </View>
+        </View>
             </View>
             <Icon name="arrow-forward" size={24} color="#FFFFFF" />
           </View>
         </TouchableOpacity>
       )}
 
-        </>
-      );
+    </>
+  );
     } catch (error) {
       console.error('Error rendering header:', error);
       return (
@@ -956,11 +959,11 @@ const HomeScreen: React.FC = () => {
 
   // Fallback: If ScreenContainer fails, render a simple view
   try {
-    return (
-      <ScreenContainer
-        floatingHeader={false}
-        contentStyle={{paddingHorizontal: 0}}
-      >
+  return (
+    <ScreenContainer
+      floatingHeader={false}
+      contentStyle={{paddingHorizontal: 0}}
+    >
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollContainer}
@@ -1040,8 +1043,8 @@ const HomeScreen: React.FC = () => {
         </Modal>
       )}
 
-      </ScreenContainer>
-    );
+    </ScreenContainer>
+  );
   } catch (error) {
     console.error('HomeScreen render error:', error);
     // Ultimate fallback - render a simple view

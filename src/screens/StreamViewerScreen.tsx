@@ -59,9 +59,29 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [isLiked, setIsLiked] = useState(false);
   const commentsEndRef = useRef<View>(null);
   const playbackUrl = useMemo(() => {
+    // Prioritize IVS playback URL first if available (since you can see it in IVS)
     const prioritized =
       stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl || '';
-    const playable = getPlayableStreamUrl(prioritized) || '';
+    
+    // For IVS URLs, use them directly without sanitization if they're already valid
+    let playable = '';
+    
+    if (stream.ivsPlaybackUrl && stream.ivsPlaybackUrl.trim()) {
+      // IVS URLs are typically HLS (.m3u8) format
+      // Use IVS URL directly if it's a valid HTTP/HTTPS URL
+      const ivsUrl = stream.ivsPlaybackUrl.trim();
+      if ((ivsUrl.startsWith('http://') || ivsUrl.startsWith('https://')) && 
+          (ivsUrl.includes('.m3u8') || ivsUrl.includes('.mpd') || ivsUrl.includes('amazonaws.com') || ivsUrl.includes('ivs'))) {
+        playable = ivsUrl;
+        console.log('[StreamViewer] Using IVS playback URL directly:', playable);
+      } else {
+        // Try sanitization as fallback
+        playable = getPlayableStreamUrl(ivsUrl) || '';
+      }
+    } else {
+      // For non-IVS URLs, use sanitization
+      playable = getPlayableStreamUrl(prioritized) || '';
+    }
     
     console.log('[StreamViewer] Playback URL resolution:', {
       streamId: stream.id,
@@ -71,6 +91,8 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       prioritized,
       playable,
       isLive: stream.isLive,
+      hasIvsUrl: !!stream.ivsPlaybackUrl,
+      isIvsUrl: playable === stream.ivsPlaybackUrl,
     });
     
     return playable;
@@ -254,29 +276,42 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   // Check if stream URL is valid (must be a full URL, not a relative path)
   const isValidStreamUrl = (url: string): boolean => {
     if (!url || url.trim() === '') {
-      console.warn('Empty stream URL');
+      console.warn('[StreamViewer] Empty stream URL');
       return false;
     }
     
-    // Allow HLS (.m3u8) and DASH (.mpd) URLs
-    const isHls = url.includes('.m3u8');
-    const isDash = url.includes('.mpd');
-    const isHttp = url.startsWith('http://') || url.startsWith('https://');
+    const trimmedUrl = url.trim();
+    const isHttp = trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://');
     
-    // For HLS/DASH streams, be more lenient with validation
-    if ((isHls || isDash) && isHttp) {
-      console.log('Valid HLS/DASH stream URL:', url);
+    // Allow HLS (.m3u8) and DASH (.mpd) URLs
+    const isHls = trimmedUrl.includes('.m3u8');
+    const isDash = trimmedUrl.includes('.mpd');
+    
+    // IVS URLs might contain 'ivs' or 'amazonaws.com' or 'ivs.video'
+    const isIvsUrl = trimmedUrl.includes('ivs') || 
+                     trimmedUrl.includes('amazonaws.com') || 
+                     trimmedUrl.includes('ivs.video');
+    
+    // For HLS/DASH/IVS streams, be more lenient with validation
+    if (isHttp && (isHls || isDash || isIvsUrl)) {
+      console.log('[StreamViewer] Valid playback stream URL detected:', {
+        url: trimmedUrl.substring(0, 100) + (trimmedUrl.length > 100 ? '...' : ''),
+        isHls,
+        isDash,
+        isIvsUrl,
+      });
       return true;
     }
     
-    const valid = isValidPlaybackStreamUrl(url);
+    const valid = isValidPlaybackStreamUrl(trimmedUrl);
     if (!valid) {
-      console.warn('Invalid stream URL detected:', url);
-      console.warn('URL details:', {
+      console.warn('[StreamViewer] Invalid stream URL detected:', trimmedUrl.substring(0, 100));
+      console.warn('[StreamViewer] URL details:', {
         hasProtocol: isHttp,
         isHls,
         isDash,
-        length: url.length,
+        isIvsUrl,
+        length: trimmedUrl.length,
       });
     }
     return valid;
@@ -315,17 +350,40 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               autoplay={true}
               muted={false}
               onLoad={(duration) => {
-                console.log('IVS Player loaded successfully for stream:', stream.id, 'Duration:', duration);
+                console.log('[IVS Player] ✅ Loaded successfully for stream:', stream.id);
+                console.log('[IVS Player] Duration:', duration);
+                console.log('[IVS Player] Playback URL:', playbackUrl);
               }}
               onPlayerStateChange={(state) => {
-                console.log('IVS Player state changed:', state);
+                console.log('[IVS Player] State changed:', state);
+                if (state === 'playing') {
+                  console.log('[IVS Player] ✅ Stream is now playing!');
+                } else if (state === 'buffering') {
+                  console.log('[IVS Player] ⏳ Buffering...');
+                } else if (state === 'error' || state === 'idle') {
+                  console.warn('[IVS Player] ⚠️ Player state:', state);
+                }
               }}
               onError={(errorType, error) => {
-                console.error('IVS Player error:', errorType, error);
-                console.error('Failed URL:', playbackUrl);
+                console.error('[IVS Player] ❌ Error occurred:');
+                console.error('[IVS Player] Error Type:', errorType);
+                console.error('[IVS Player] Error Details:', error);
+                console.error('[IVS Player] Failed URL:', playbackUrl);
+                console.error('[IVS Player] Stream Info:', {
+                  streamId: stream.id,
+                  isLive: stream.isLive,
+                  ivsPlaybackUrl: stream.ivsPlaybackUrl,
+                });
+                
+                // Show error message to user
+                Alert.alert(
+                  'Stream Error',
+                  `Unable to play stream: ${errorType || 'Unknown error'}. Please check if the stream is active on Amazon IVS.`,
+                  [{ text: 'OK' }]
+                );
               }}
               onProgress={(position) => {
-                // Stream progress tracking
+                // Stream progress tracking (for live streams, position may be 0)
               }}
             />
           ) : stream.isLive ? (

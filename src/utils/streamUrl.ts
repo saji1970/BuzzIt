@@ -38,6 +38,11 @@ export const isValidPlaybackStreamUrl = (rawUrl?: string | null): boolean => {
   const isHls = url.includes('.m3u8');
   const isDash = url.includes('.mpd');
   
+  // IVS URLs might contain 'ivs', 'amazonaws.com', or 'ivs.video'
+  const isIvsUrl = url.includes('ivs') || 
+                   url.includes('amazonaws.com') || 
+                   url.includes('ivs.video');
+  
   try {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
@@ -46,8 +51,8 @@ export const isValidPlaybackStreamUrl = (rawUrl?: string | null): boolean => {
 
     const pathname = parsed.pathname || '';
     
-    // For HLS/DASH, be more lenient - just need a valid URL with protocol
-    if (isHls || isDash) {
+    // For HLS/DASH/IVS streams, be more lenient - just need a valid URL with protocol
+    if (isHls || isDash || isIvsUrl) {
       return true;
     }
     
