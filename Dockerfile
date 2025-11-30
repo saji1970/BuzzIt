@@ -2,18 +2,21 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files from server directory
+# Copy package files first
 COPY server/package*.json ./
 
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy entire server directory structure
-# This ensures all files and directories are copied
-COPY server/ ./
-
-# Ensure public directory exists (in case it's empty)
-RUN mkdir -p public
+# Copy all server files (package.json will be overwritten but that's fine)
+# Copy index.js and all directories
+COPY server/index.js ./
+COPY server/config ./config/
+COPY server/utils ./utils/
+COPY server/models ./models/
+COPY server/services ./services/
+COPY server/db ./db/
+COPY server/public ./public/
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
