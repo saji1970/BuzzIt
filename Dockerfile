@@ -8,32 +8,15 @@ COPY server/package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy server files
-# Copy all .js files
-COPY server/*.js ./
+# Copy entire server directory structure
+# This ensures all files and directories are copied
+COPY server/ ./
 
-# Copy config directory
-COPY server/config ./config/
-
-# Copy utils directory (helpers)
-COPY server/utils ./utils/
-
-# Copy models directory (MongoDB models)
-COPY server/models ./models/
-
-# Copy services directory (AI Recommendation Engine)
-COPY server/services ./services/
-
-# Copy db directory (database connection)
-COPY server/db ./db/
-
-# Copy public directory (admin panel and user pages)
+# Ensure public directory exists (in case it's empty)
 RUN mkdir -p public
-COPY server/public/*.html ./public/
 
 # Expose port (Railway sets PORT automatically)
 EXPOSE 3000
 
 # Start server
 CMD ["npm", "start"]
-
