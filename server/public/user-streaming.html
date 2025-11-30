@@ -1756,68 +1756,121 @@
                 let ingestUrl = config.ingestUrl.trim();
                 const streamKey = config.streamKey;
 
-                // Validate and format ingest URL (improved from stream-test.html)
-                if (!ingestUrl || (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://'))) {
-                    throw new Error(`Invalid ingest URL format: ${ingestUrl}. Must start with rtmp:// or rtmps://`);
-                }
-
-                // Extract base URL only (protocol + hostname + port)
-                try {
-                    const url = new URL(ingestUrl);
-                    ingestUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-                } catch (e) {
-                    console.warn('URL parsing failed, using original:', e);
-                }
-
-                // Ensure it's RTMPS
-                if (ingestUrl.startsWith('rtmp://')) {
-                    ingestUrl = ingestUrl.replace('rtmp://', 'rtmps://');
-                }
-
-                // Validate before passing to SDK
-                if (!ingestUrl || ingestUrl.length < 10) {
-                    throw new Error(`Invalid ingest URL: ${ingestUrl}`);
-                }
-
-                if (!ingestUrl.startsWith('rtmps://')) {
-                    throw new Error(`Ingest URL must use RTMPS protocol: ${ingestUrl}`);
-                }
-
                 // Check if IVS Web Broadcast SDK is loaded
                 if (typeof IVSBroadcastClient === 'undefined') {
                     throw new Error('IVS Web Broadcast SDK not loaded. Please refresh the page.');
                 }
 
-                console.log('📡 Starting broadcast with:', {
-                    ingestUrl: ingestUrl.substring(0, 60) + '...',
-                    streamKeyLength: streamKey.length
+                // Validate ingest URL format - IVS Web Broadcast SDK supports RTMPS
+                if (!ingestUrl || (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://'))) {
+                    throw new Error(`Invalid ingest URL format: ${ingestUrl}. Must start with rtmp:// or rtmps://`);
+                }
+
+                // Ensure ingest URL is properly formatted for IVS
+                // The ingest URL should be the base RTMPS URL (domain:port only)
+                // Format: rtmps://[channel-id].global.contribute.live-video.net:443
+                let formattedIngestUrl = ingestUrl.trim();
+                
+                // Validate URL format
+                try {
+                    const url = new URL(formattedIngestUrl);
+                    // Reconstruct to base URL only (protocol + hostname + port)
+                    formattedIngestUrl = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+                } catch (e) {
+                    console.warn('URL parsing failed, using original:', e);
+                }
+                
+                // Ensure it's RTMPS
+                if (formattedIngestUrl.startsWith('rtmp://')) {
+                    formattedIngestUrl = formattedIngestUrl.replace('rtmp://', 'rtmps://');
+                }
+                
+                // Log the formatted URL for debugging
+                console.log('🔍 Ingest URL formatted:', {
+                    original: ingestUrl.substring(0, 60) + '...',
+                    formatted: formattedIngestUrl,
+                    protocol: formattedIngestUrl.substring(0, 8)
+                });
+
+                // Final validation before passing to SDK
+                if (!formattedIngestUrl || formattedIngestUrl.length < 10) {
+                    throw new Error(`Invalid ingest URL: ${formattedIngestUrl}`);
+                }
+                
+                if (!formattedIngestUrl.startsWith('rtmps://')) {
+                    throw new Error(`Ingest URL must use RTMPS protocol: ${formattedIngestUrl}`);
+                }
+
+                console.log('📡 Creating broadcast client with:', {
+                    fullIngestUrl: formattedIngestUrl, // Log full URL for debugging
+                    ingestUrlLength: formattedIngestUrl.length,
+                    ingestUrlProtocol: formattedIngestUrl.substring(0, 8),
+                    streamKeyLength: streamKey.length,
+                    hasLocalStream: !!localStream
                 });
 
                 // Create broadcast client
-                broadcastClient = IVSBroadcastClient.create({
+                // IVS Web Broadcast SDK supports RTMPS ingest endpoints
+                // The ingestEndpoint should be the base RTMPS URL without the stream key
+                const clientConfig = {
                     streamConfig: IVSBroadcastClient.STANDARD_LANDSCAPE,
-                    ingestEndpoint: ingestUrl
+                    ingestEndpoint: formattedIngestUrl
+                };
+
+                console.log('🔧 Broadcast client config:', {
+                    streamConfig: clientConfig.streamConfig,
+                    ingestEndpoint: formattedIngestUrl.substring(0, 60) + '...',
+                    hasStreamKey: !!streamKey
                 });
 
+                broadcastClient = IVSBroadcastClient.create(clientConfig);
+
                 // Add MediaStream to broadcast client
-                broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
-                broadcastClient.addAudioInputDevice(localStream, 'mic');
+                try {
+                    broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
+                    broadcastClient.addAudioInputDevice(localStream, 'mic');
+                    console.log('✅ Devices added successfully');
+                } catch (deviceError) {
+                    console.error('Device addition error:', deviceError);
+                    throw new Error(`Failed to add devices: ${deviceError.message}`);
+                }
 
-                // Start broadcasting
-                await broadcastClient.startBroadcast(streamKey);
+                console.log('🎬 Starting broadcast with stream key...');
 
-                console.log('✅ Broadcast started successfully');
+                // Start broadcasting with stream key
+                try {
+                    await broadcastClient.startBroadcast(streamKey);
+                    console.log('✅ Broadcast started successfully');
+                } catch (broadcastError) {
+                    console.error('Broadcast start error:', broadcastError);
+                    // Clean up on error
+                    if (broadcastClient) {
+                        try {
+                            broadcastClient.delete();
+                        } catch (e) {
+                            console.error('Error cleaning up broadcast client:', e);
+                        }
+                        broadcastClient = null;
+                    }
+                    throw broadcastError;
+                }
+
                 showAlert('🔴 Broadcasting live to IVS! Stream will be available in 15-20 seconds.', 'success');
                 document.getElementById('broadcastButton').textContent = '🔴 Broadcasting';
                 document.getElementById('broadcastButton').disabled = true;
 
-                // Wait 15 seconds before attempting to load the stream (IVS needs time to process)
-                // Don't auto-load - let user click preview when ready
                 console.log('⏳ Stream is starting. Wait 15-20 seconds before previewing.');
 
             } catch (error) {
                 console.error('Broadcast error:', error);
-                showAlert(`Failed to start broadcast: ${error.message}`, 'error');
+                const errorMessage = error.message || 'Unknown error';
+                showAlert(`Failed to start broadcast: ${errorMessage}\n\n` +
+                    `Please check:\n` +
+                    `1. IVS credentials are correct\n` +
+                    `2. Ingest URL: ${ingestUrl ? 'Set' : 'Missing'}\n` +
+                    `3. Stream Key: ${streamKey ? 'Set' : 'Missing'}\n` +
+                    `4. Network connectivity to AWS IVS\n` +
+                    `5. Browser console for detailed errors`, 'error');
                 
                 // Clean up on error
                 if (broadcastClient) {
@@ -1839,6 +1892,10 @@
                     broadcastClient.delete();
                     broadcastClient = null;
                 }
+
+                // Note: Don't stop localStream here as user might want to restart broadcast
+                // Only stop it when stopping camera stream
+
                 showAlert('Broadcast stopped', 'success');
                 document.getElementById('broadcastButton').textContent = '📡 Broadcast';
                 document.getElementById('broadcastButton').disabled = false;
