@@ -97,12 +97,31 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
 
     const normalizedUrl = useMemo(() => {
       if (!rtmpUrl) {
+        console.log('[BuzzLivePublisher] No RTMP URL provided');
         return '';
       }
-      if (rtmpUrl.startsWith('rtmps://')) {
-        return rtmpUrl.replace('rtmps://', 'rtmp://');
+      
+      // Improved URL formatting (matching web implementation)
+      let url = rtmpUrl.trim();
+      console.log('[BuzzLivePublisher] Processing RTMP URL:', {
+        original: url.substring(0, 60) + '...',
+        length: url.length
+      });
+      
+      // Convert RTMPS to RTMP (NodeMediaClient doesn't support RTMPS)
+      if (url.startsWith('rtmps://')) {
+        url = url.replace('rtmps://', 'rtmp://');
+        // Remove port 443 if present (RTMP default port is 1935)
+        url = url.replace(':443/', '/').replace(':443', '');
+        console.log('[BuzzLivePublisher] Converted RTMPS to RTMP');
       }
-      return rtmpUrl;
+      
+      console.log('[BuzzLivePublisher] ✅ Normalized URL:', {
+        normalized: url.substring(0, 60) + '...',
+        protocol: url.substring(0, 8)
+      });
+      
+      return url;
     }, [rtmpUrl]);
 
     const ensurePermissions = useCallback(async () => {
@@ -153,9 +172,23 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
         updateStatus('connecting');
         cameraRef.current?.start();
       } catch (error: any) {
-        console.error('BuzzLive start error:', error);
+        console.error('[BuzzLivePublisher] Start error:', {
+          message: error.message,
+          stack: error.stack,
+          error,
+          rtmpUrl: normalizedUrl.substring(0, 60) + '...'
+        });
         updateStatus('error');
         setBusy(false);
+        Alert.alert(
+          'Stream Start Error',
+          `Failed to start broadcasting: ${error.message || 'Unknown error'}\n\n` +
+          `Please check:\n` +
+          `1. RTMP URL is correct: ${normalizedUrl ? 'Set' : 'Missing'}\n` +
+          `2. Network connectivity\n` +
+          `3. Camera and microphone permissions\n` +
+          `4. Try again`,
+        );
       }
     }, [busy, ensurePermissions, normalizedUrl, status, updateStatus]);
 

@@ -109,15 +109,30 @@ const GoBuzzLiveScreen: React.FC = () => {
       return '';
     }
 
-    // Improved URL formatting - extract base URL only
+    // Improved URL formatting - extract base URL only (matching web implementation)
     let normalized = baseUrl.trim();
+    
+    // Log original URL for debugging
+    console.log('[GoBuzzLive] Processing ingest URL:', {
+      original: baseUrl.substring(0, 60) + '...',
+      hasStreamKey: !!streamKey,
+      streamKeyLength: streamKey.length
+    });
     
     // Remove any path after domain:port (like /app/, etc.)
     try {
       const url = new URL(normalized);
+      // Reconstruct to base URL only (protocol + hostname + port)
       normalized = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+      console.log('[GoBuzzLive] URL parsed successfully:', {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || 'default',
+        normalized: normalized.substring(0, 60) + '...'
+      });
     } catch (e) {
       // If URL parsing fails, use simple string manipulation
+      console.warn('[GoBuzzLive] URL parsing failed, using string manipulation:', e);
       normalized = normalized.replace(/\/+$/, ''); // Remove trailing slashes
       // Remove path if present (everything after domain:port)
       const match = normalized.match(/^((?:rtmp|rtmps):\/\/[^\/]+)/);
@@ -130,16 +145,25 @@ const GoBuzzLiveScreen: React.FC = () => {
     // NodeMediaClient doesn't support RTMPS, so we convert to RTMP
     if (normalized.startsWith('rtmps://')) {
       normalized = normalized.replace('rtmps://', 'rtmp://').replace(':443', '');
+      console.log('[GoBuzzLive] Converted RTMPS to RTMP (NodeMediaClient requirement)');
+    }
+
+    // Final validation
+    if (!normalized || normalized.length < 10) {
+      console.error('[GoBuzzLive] Invalid normalized URL:', normalized);
+      return '';
     }
 
     // Append stream key
     const finalUrl = `${normalized}/${streamKey}`;
     
-    console.log('[GoBuzzLive] Built RTMP ingest URL:', {
-      originalBaseUrl: baseUrl,
-      normalizedBaseUrl: normalized,
+    console.log('[GoBuzzLive] ✅ Built RTMP ingest URL:', {
+      originalBaseUrl: baseUrl.substring(0, 60) + '...',
+      normalizedBaseUrl: normalized.substring(0, 60) + '...',
+      protocol: normalized.substring(0, 8),
       streamKeyLength: streamKey.length,
-      finalUrl: finalUrl.substring(0, 60) + '...'
+      finalUrlLength: finalUrl.length,
+      finalUrlPreview: finalUrl.substring(0, 60) + '...'
     });
 
     return finalUrl;
@@ -440,11 +464,29 @@ const GoBuzzLiveScreen: React.FC = () => {
             Alert.alert('Active Stream', 'We could not verify the active stream. Please try again.');
           }
         } else {
-          Alert.alert('Error', errorMessage);
+          // Enhanced error message with troubleshooting tips (matching web implementation)
+          const errorDetails = `Failed to start stream: ${errorMessage}\n\nPlease check:\n` +
+            `1. IVS credentials are configured\n` +
+            `2. Network connectivity\n` +
+            `3. Try again in a few moments`;
+          Alert.alert('Stream Error', errorDetails);
+          console.error('[GoBuzzLive] Stream creation error:', {
+            error: errorMessage,
+            response: response
+          });
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to start stream');
+      console.error('[GoBuzzLive] Stream creation exception:', {
+        message: error.message,
+        stack: error.stack,
+        error
+      });
+      const errorDetails = `Failed to start stream: ${error.message || 'Unknown error'}\n\nPlease check:\n` +
+        `1. Network connection\n` +
+        `2. IVS service availability\n` +
+        `3. Try again later`;
+      Alert.alert('Stream Error', errorDetails);
     }
   };
 
