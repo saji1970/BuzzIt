@@ -1864,11 +1864,13 @@
             } catch (error) {
                 console.error('Broadcast error:', error);
                 const errorMessage = error.message || 'Unknown error';
+                const hasIngestUrl = config && config.ingestUrl;
+                const hasStreamKey = config && config.streamKey;
                 showAlert(`Failed to start broadcast: ${errorMessage}\n\n` +
                     `Please check:\n` +
                     `1. IVS credentials are correct\n` +
-                    `2. Ingest URL: ${ingestUrl ? 'Set' : 'Missing'}\n` +
-                    `3. Stream Key: ${streamKey ? 'Set' : 'Missing'}\n` +
+                    `2. Ingest URL: ${hasIngestUrl ? 'Set' : 'Missing'}\n` +
+                    `3. Stream Key: ${hasStreamKey ? 'Set' : 'Missing'}\n` +
                     `4. Network connectivity to AWS IVS\n` +
                     `5. Browser console for detailed errors`, 'error');
                 
