@@ -639,6 +639,8 @@
         let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back
         let ivsPlayer = null;
         let broadcastClient = null; // IVS Web Broadcast client
+        let streamRetryCount = 0;
+        let streamRetryTimeout = null;
 
         // Check if already logged in
         if (authToken) {
@@ -1288,6 +1290,13 @@
         }
 
         function initializeIVSPlayer(playbackUrl) {
+            // Reset retry counter when initializing new player
+            streamRetryCount = 0;
+            if (streamRetryTimeout) {
+                clearTimeout(streamRetryTimeout);
+                streamRetryTimeout = null;
+            }
+
             // Clean up existing player
             if (ivsPlayer) {
                 try {
@@ -1375,26 +1384,72 @@
                         source: error?.source || 'N/A'
                     });
 
+                    // Handle 404 errors - stream might not be available yet
+                    const is404Error = error?.code === 404 || 
+                                     error?.type === 'ErrorNotAvailable' ||
+                                     (error?.message && error.message.includes('404'));
+
+                    if (is404Error && streamRetryCount < 5) {
+                        // Stream might not be available yet - wait and retry
+                        streamRetryCount++;
+                        const waitTime = streamRetryCount * 3000; // 3s, 6s, 9s, 12s, 15s
+                        
+                        console.log(`⏳ Stream not available yet (404). Retrying in ${waitTime/1000}s... (Attempt ${streamRetryCount}/5)`);
+                        
+                        if (placeholder) {
+                            placeholder.style.display = 'flex';
+                            placeholder.innerHTML = `
+                                <div style="text-align: center;">
+                                    <p style="font-size: 18px; margin-bottom: 10px;">⏳ Waiting for stream...</p>
+                                    <p style="font-size: 14px; opacity: 0.7;">Stream is starting. Retrying in ${waitTime/1000} seconds... (${streamRetryCount}/5)</p>
+                                </div>
+                            `;
+                        }
+
+                        // Clear any existing timeout
+                        if (streamRetryTimeout) {
+                            clearTimeout(streamRetryTimeout);
+                        }
+
+                        // Retry after delay
+                        streamRetryTimeout = setTimeout(() => {
+                            if (ivsPlayer && playbackUrl) {
+                                console.log(`🔄 Retrying stream load (attempt ${streamRetryCount})...`);
+                                try {
+                                    ivsPlayer.load(playbackUrl);
+                                    ivsPlayer.play();
+                                } catch (e) {
+                                    console.error('Error retrying stream:', e);
+                                }
+                            }
+                        }, waitTime);
+
+                        return; // Don't show error or fallback yet
+                    }
+
+                    // If we've exhausted retries or it's a different error
+                    streamRetryCount = 0; // Reset for next attempt
+                    if (streamRetryTimeout) {
+                        clearTimeout(streamRetryTimeout);
+                        streamRetryTimeout = null;
+                    }
+
                     // Show user-friendly error message
                     let errorMessage = 'Stream playback error. ';
-                    if (error?.code === 'ERR_NETWORK') {
+                    if (error?.code === 'ERR_NETWORK' || error?.code === 4) {
                         errorMessage += 'Network connection issue detected.';
-                    } else if (error?.code === 'ERR_NOT_FOUND') {
-                        errorMessage += 'Stream not found or no longer available.';
+                    } else if (is404Error) {
+                        errorMessage += 'Stream not available. Please wait 15-20 seconds after starting broadcast, then try again.';
                     } else {
                         errorMessage += 'The stream may not be active.';
                     }
 
-                    showAlert(errorMessage, 'error');
-
-                    // Fallback to regular video element for non-IVS HLS streams
-                    if (videoElement && playbackUrl && playbackUrl.includes('.m3u8')) {
-                        console.log('Attempting fallback to native HLS playback...');
-                        setTimeout(() => {
-                            videoElement.src = playbackUrl;
-                            videoElement.play().catch(e => console.error('Error playing fallback video:', e));
-                        }, 1000);
+                    // Only show alert if we're not retrying
+                    if (streamRetryCount === 0) {
+                        showAlert(errorMessage, 'error');
                     }
+
+                    // Don't attempt fallback immediately - let user manually retry
                 });
 
                 // Handle quality changes
@@ -1752,9 +1807,13 @@
                 await broadcastClient.startBroadcast(streamKey);
 
                 console.log('✅ Broadcast started successfully');
-                showAlert('🔴 Broadcasting live to IVS!', 'success');
+                showAlert('🔴 Broadcasting live to IVS! Stream will be available in 15-20 seconds.', 'success');
                 document.getElementById('broadcastButton').textContent = '🔴 Broadcasting';
                 document.getElementById('broadcastButton').disabled = true;
+
+                // Wait 15 seconds before attempting to load the stream (IVS needs time to process)
+                // Don't auto-load - let user click preview when ready
+                console.log('⏳ Stream is starting. Wait 15-20 seconds before previewing.');
 
             } catch (error) {
                 console.error('Broadcast error:', error);
