@@ -471,6 +471,48 @@
 
     // IVS Player
     let player = null;
+    let sdkLoaded = false;
+
+    // Check SDK loading status
+    function checkSDKStatus() {
+      const broadcastSDKLoaded = typeof IVSBroadcastClient !== 'undefined';
+      const playerSDKLoaded = typeof IVSPlayer !== 'undefined';
+      
+      console.log('SDK Status:', {
+        broadcastSDK: broadcastSDKLoaded,
+        playerSDK: playerSDKLoaded
+      });
+
+      if (broadcastSDKLoaded && playerSDKLoaded) {
+        sdkLoaded = true;
+        return true;
+      }
+      return false;
+    }
+
+    // Monitor SDK loading
+    window.addEventListener('load', () => {
+      // Check immediately
+      if (checkSDKStatus()) {
+        console.log('✅ SDKs loaded on page load');
+      } else {
+        // Check periodically
+        const checkInterval = setInterval(() => {
+          if (checkSDKStatus()) {
+            console.log('✅ SDKs loaded after delay');
+            clearInterval(checkInterval);
+          }
+        }, 500);
+
+        // Stop checking after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          if (!sdkLoaded) {
+            console.warn('⚠️ SDKs may not be fully loaded');
+          }
+        }, 10000);
+      }
+    });
 
     // Check if already logged in
     if (authToken) {
@@ -557,7 +599,24 @@
         ingestUrl = config.ingestUrl;
         streamKey = config.streamKey;
 
-        updateStatus('ready', 'Ready! Create a stream to begin.');
+        // Validate configuration
+        if (!playbackUrl) {
+          showError('Playback URL is missing. Please check IVS_PLAYBACK_URL environment variable.');
+        }
+        if (!ingestUrl) {
+          showError('Ingest URL is missing. Please check IVS_INGEST_RTMPS_URL environment variable.');
+        }
+        if (!streamKey) {
+          showError('Stream key is missing. Please check IVS_STREAM_KEY environment variable.');
+        }
+
+        // Check SDK status
+        if (!checkSDKStatus()) {
+          console.warn('⚠️ SDKs may not be fully loaded yet');
+          updateStatus('ready', 'Ready! (SDKs loading...) Create a stream to begin.');
+        } else {
+          updateStatus('ready', 'Ready! Create a stream to begin.');
+        }
 
         // Initialize IVS Player
         initializePlayer();
@@ -656,6 +715,37 @@
       }
     }
 
+    // Wait for SDK to load
+    function waitForSDK(maxWait = 10000) {
+      return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        const checkSDK = () => {
+          if (typeof IVSBroadcastClient !== 'undefined' && IVSBroadcastClient.create) {
+            console.log('✅ IVS Broadcast SDK is ready');
+            resolve();
+          } else if (Date.now() - startTime > maxWait) {
+            reject(new Error('IVS Web Broadcast SDK failed to load. Please refresh the page and check your internet connection.'));
+          } else {
+            setTimeout(checkSDK, 100);
+          }
+        };
+        checkSDK();
+      });
+    }
+
+    // Test network connectivity
+    async function testNetworkConnectivity() {
+      try {
+        // Test if we can reach AWS IVS CDN
+        const testUrl = 'https://web-broadcast.live-video.net/1.6.0/amazon-ivs-web-broadcast.js';
+        const response = await fetch(testUrl, { method: 'HEAD', mode: 'no-cors' });
+        return true;
+      } catch (error) {
+        console.warn('Network connectivity test failed:', error);
+        return false;
+      }
+    }
+
     // Start broadcast
     async function startBroadcast() {
       if (!localStream) {
@@ -663,13 +753,40 @@
         return;
       }
 
+      if (!ingestUrl || !streamKey) {
+        showError('IVS configuration is missing. Please check environment variables.');
+        return;
+      }
+
       try {
-        updateStatus('loading', 'Starting broadcast...');
+        updateStatus('loading', 'Checking SDK and network...');
+
+        // Test network connectivity
+        const networkOk = await testNetworkConnectivity();
+        if (!networkOk) {
+          console.warn('⚠️ Network connectivity test failed, but continuing...');
+        }
+
+        // Wait for SDK to be fully loaded
+        await waitForSDK();
+
+        updateStatus('loading', 'Initializing broadcast client...');
 
         // Check if IVS Web Broadcast SDK is loaded
         if (typeof IVSBroadcastClient === 'undefined') {
-          throw new Error('IVS Web Broadcast SDK not loaded');
+          throw new Error('IVS Web Broadcast SDK not loaded. Please refresh the page.');
         }
+
+        // Validate ingest URL format
+        if (!ingestUrl.startsWith('rtmp://') && !ingestUrl.startsWith('rtmps://')) {
+          throw new Error(`Invalid ingest URL format: ${ingestUrl}. Must start with rtmp:// or rtmps://`);
+        }
+
+        console.log('📡 Creating broadcast client with:', {
+          ingestUrl: ingestUrl.substring(0, 50) + '...',
+          streamKeyLength: streamKey.length,
+          hasLocalStream: !!localStream
+        });
 
         // Create broadcast client
         broadcastClient = IVSBroadcastClient.create({
@@ -677,22 +794,44 @@
           ingestEndpoint: ingestUrl
         });
 
-        // Add MediaStream to broadcast client
-        broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
-        broadcastClient.addAudioInputDevice(localStream, 'mic');
+        updateStatus('loading', 'Adding video and audio devices...');
 
-        console.log('🎬 Devices added, starting broadcast...');
+        // Add MediaStream to broadcast client
+        try {
+          broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
+          broadcastClient.addAudioInputDevice(localStream, 'mic');
+          console.log('✅ Devices added successfully');
+        } catch (deviceError) {
+          console.error('Device addition error:', deviceError);
+          throw new Error(`Failed to add devices: ${deviceError.message}`);
+        }
+
+        updateStatus('loading', 'Starting broadcast to IVS...');
+        console.log('🎬 Starting broadcast with stream key...');
 
         // Start broadcasting with stream key
-        await broadcastClient.startBroadcast(streamKey);
+        try {
+          await broadcastClient.startBroadcast(streamKey);
+          console.log('✅ Broadcast started successfully');
+        } catch (broadcastError) {
+          console.error('Broadcast start error:', broadcastError);
+          // Clean up on error
+          if (broadcastClient) {
+            try {
+              broadcastClient.delete();
+            } catch (e) {
+              console.error('Error cleaning up broadcast client:', e);
+            }
+            broadcastClient = null;
+          }
+          throw broadcastError;
+        }
 
         updateStatus('broadcasting', '🔴 Broadcasting live to IVS!');
 
         document.getElementById('start-broadcast-btn').style.display = 'none';
         document.getElementById('stop-broadcast-btn').style.display = 'inline-flex';
         document.getElementById('load-stream-btn').disabled = false;
-
-        console.log('✅ Broadcast started successfully');
 
         // Auto-load player after 15 seconds
         setTimeout(() => {
@@ -703,7 +842,15 @@
 
       } catch (error) {
         console.error('Broadcast error:', error);
-        showError(`Failed to start broadcast: ${error.message}\n\nMake sure IVS credentials are correct.`);
+        const errorMessage = error.message || 'Unknown error';
+        showError(`Failed to start broadcast: ${errorMessage}\n\n` +
+          `Please check:\n` +
+          `1. IVS credentials are correct\n` +
+          `2. Ingest URL: ${ingestUrl ? 'Set' : 'Missing'}\n` +
+          `3. Stream Key: ${streamKey ? 'Set' : 'Missing'}\n` +
+          `4. Network connectivity to AWS IVS\n` +
+          `5. Browser console for detailed errors`);
+        updateStatus('error', 'Broadcast failed');
       }
     }
 
