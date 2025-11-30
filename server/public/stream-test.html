@@ -808,8 +808,18 @@
           protocol: formattedIngestUrl.substring(0, 8)
         });
 
+        // Final validation before passing to SDK
+        if (!formattedIngestUrl || formattedIngestUrl.length < 10) {
+          throw new Error(`Invalid ingest URL: ${formattedIngestUrl}`);
+        }
+        
+        if (!formattedIngestUrl.startsWith('rtmps://')) {
+          throw new Error(`Ingest URL must use RTMPS protocol: ${formattedIngestUrl}`);
+        }
+
         console.log('📡 Creating broadcast client with:', {
-          ingestUrl: formattedIngestUrl.substring(0, 50) + '...',
+          fullIngestUrl: formattedIngestUrl, // Log full URL for debugging
+          ingestUrlLength: formattedIngestUrl.length,
           ingestUrlProtocol: formattedIngestUrl.substring(0, 8),
           streamKeyLength: streamKey.length,
           hasLocalStream: !!localStream
