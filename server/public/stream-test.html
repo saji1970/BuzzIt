@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amazon IVS Stream Test - BuzzIt</title>
+  <title>BuzzIt Stream Test - Standalone App</title>
   <!-- Amazon IVS Web Broadcast SDK -->
   <script src="https://web-broadcast.live-video.net/1.6.0/amazon-ivs-web-broadcast.js"></script>
   <!-- Amazon IVS Player SDK -->
@@ -53,16 +53,38 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
 
-    .two-column {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
+    .form-group {
+      margin-bottom: 20px;
     }
 
-    @media (max-width: 968px) {
-      .two-column {
-        grid-template-columns: 1fr;
-      }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
     }
 
     .status {
@@ -218,34 +240,45 @@
       background: #059669;
     }
 
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 10px;
-      margin-bottom: 15px;
+    .playback-url-display {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      word-break: break-all;
     }
 
-    .info-item {
-      padding: 12px;
-      background: #f3f4f6;
-      border-radius: 6px;
-      border-left: 3px solid #667eea;
+    .playback-url-display.hidden {
+      display: none;
     }
 
-    .info-label {
-      font-size: 0.75rem;
-      color: #6b7280;
-      margin-bottom: 5px;
+    .playback-url-label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-bottom: 8px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .info-value {
-      font-size: 0.9rem;
-      color: #111827;
-      word-break: break-all;
+    .playback-url-value {
+      font-size: 1rem;
       font-family: 'Courier New', monospace;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+
+    .copy-btn {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
     }
 
     .error-message {
@@ -270,86 +303,118 @@
       font-size: 1.3rem;
     }
 
-    .live-badge {
-      display: inline-flex;
+    .user-info {
+      background: #f3f4f6;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 6px;
-      background: #dc2626;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-left: 10px;
     }
 
-    .live-dot {
-      width: 8px;
-      height: 8px;
-      background: white;
-      border-radius: 50%;
-      animation: pulse 1s infinite;
+    .user-info span {
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 968px) {
+      .two-column {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>📹 Amazon IVS Stream Test</h1>
-      <p>Broadcast and watch live streams directly from your browser</p>
+      <h1>📹 BuzzIt Stream Test</h1>
+      <p>Create, broadcast, and preview live streams</p>
     </div>
 
-    <div class="card">
-      <div id="status" class="status loading">
-        <div class="status-icon"></div>
-        <span id="status-text">Initializing...</span>
+    <!-- Login Section -->
+    <div id="login-section" class="card">
+      <h2>🔐 Login</h2>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" required placeholder="Enter your username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="Enter your password">
+        </div>
+        <button type="submit" class="button">Login</button>
+      </form>
+    </div>
+
+    <!-- Main App Section (hidden until login) -->
+    <div id="app-section" class="hidden">
+      <div class="card">
+        <div class="user-info">
+          <div>
+            Logged in as: <span id="user-display">-</span>
+          </div>
+          <button class="button danger" onclick="logout()">Logout</button>
+        </div>
       </div>
 
-      <div id="error-message" class="error-message hidden"></div>
-
-      <div class="two-column">
-        <!-- Camera/Broadcast Section -->
-        <div>
-          <h2>📹 Camera & Broadcast</h2>
-          <div class="video-container">
-            <div id="camera-placeholder" class="placeholder">
-              <div class="placeholder-icon">📷</div>
-              <div class="placeholder-text">Click "Start Camera" to begin</div>
-            </div>
-            <video id="camera-video" autoplay muted playsinline></video>
-          </div>
-
-          <div style="margin-bottom: 15px;">
-            <button id="start-camera-btn" class="button" onclick="startCamera()">
-              📷 Start Camera
-            </button>
-            <button id="start-broadcast-btn" class="button success" onclick="startBroadcast()" disabled>
-              📡 Start Broadcast
-            </button>
-            <button id="stop-broadcast-btn" class="button danger" onclick="stopBroadcast()" style="display: none;">
-              ⏹️ Stop Broadcast
-            </button>
-          </div>
-
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">Camera Status</div>
-              <div id="camera-status" class="info-value">Not started</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">Broadcast Status</div>
-              <div id="broadcast-status" class="info-value">Idle</div>
-            </div>
-          </div>
+      <div class="card">
+        <div id="status" class="status loading">
+          <div class="status-icon"></div>
+          <span id="status-text">Initializing...</span>
         </div>
 
-        <!-- Player Section -->
-        <div>
-          <h2>🎥 Live Player</h2>
+        <div id="error-message" class="error-message hidden"></div>
+
+        <!-- Stream Creation Form -->
+        <div id="stream-form-section">
+          <h2>📝 Create Stream</h2>
+          <form id="create-stream-form">
+            <div class="form-group">
+              <label for="stream-title">Stream Title *</label>
+              <input type="text" id="stream-title" required placeholder="My Awesome Stream">
+            </div>
+            <div class="form-group">
+              <label for="stream-description">Description</label>
+              <textarea id="stream-description" placeholder="Describe your stream..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="stream-category">Category</label>
+              <select id="stream-category">
+                <option value="entertainment">Entertainment</option>
+                <option value="gaming">Gaming</option>
+                <option value="music">Music</option>
+                <option value="sports">Sports</option>
+                <option value="tech">Technology</option>
+                <option value="education">Education</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <button type="submit" class="button success">Create Stream & Start Broadcasting</button>
+          </form>
+        </div>
+
+        <!-- Playback URL Display (shown after stream creation) -->
+        <div id="playback-url-display" class="playback-url-display hidden">
+          <div class="playback-url-label">🔗 Playback URL</div>
+          <div class="playback-url-value" id="playback-url-value">-</div>
+          <button class="button copy-btn" onclick="copyPlaybackUrl()">📋 Copy URL</button>
+        </div>
+
+        <!-- Preview Section -->
+        <div id="preview-section" class="hidden">
+          <h2>👁️ Stream Preview</h2>
           <div class="video-container">
             <div id="player-placeholder" class="placeholder">
               <div class="placeholder-icon">📺</div>
-              <div class="placeholder-text">Start broadcasting to see stream</div>
+              <div class="placeholder-text">Stream will appear here after broadcasting starts</div>
             </div>
             <video id="player-video" playsinline controls></video>
           </div>
@@ -361,53 +426,44 @@
             <button id="refresh-btn" class="button" onclick="refreshStream()">
               🔄 Refresh
             </button>
-          </div>
-
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">Player Status</div>
-              <div id="player-status" class="info-value">Idle</div>
-            </div>
+            <button id="stop-broadcast-btn" class="button danger" onclick="stopBroadcast()" style="display: none;">
+              ⏹️ Stop Broadcast
+            </button>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <h2>ℹ️ Stream Information</h2>
-      <div class="info-grid">
-        <div class="info-item">
-          <div class="info-label">Playback URL</div>
-          <div id="playback-url" class="info-value">Loading...</div>
+      <!-- Camera/Broadcast Section -->
+      <div class="card">
+        <h2>📹 Camera & Broadcast</h2>
+        <div class="video-container">
+          <div id="camera-placeholder" class="placeholder">
+            <div class="placeholder-icon">📷</div>
+            <div class="placeholder-text">Camera will start when you create a stream</div>
+          </div>
+          <video id="camera-video" autoplay muted playsinline></video>
         </div>
-        <div class="info-item">
-          <div class="info-label">Ingest Server</div>
-          <div id="ingest-url" class="info-value">Loading...</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Stream Key</div>
-          <div id="stream-key" class="info-value">Loading...</div>
+
+        <div style="margin-bottom: 15px;">
+          <button id="start-camera-btn" class="button" onclick="startCamera()" disabled>
+            📷 Start Camera
+          </button>
+          <button id="start-broadcast-btn" class="button success" onclick="startBroadcast()" disabled>
+            📡 Start Broadcast
+          </button>
         </div>
       </div>
-    </div>
-
-    <div class="card" style="background: #f9fafb;">
-      <h2>📖 How It Works</h2>
-      <ol style="margin-left: 20px; line-height: 2;">
-        <li>Click <strong>"Start Camera"</strong> to access your webcam</li>
-        <li>Click <strong>"Start Broadcast"</strong> to stream to Amazon IVS</li>
-        <li>Wait 10-15 seconds for the stream to become available</li>
-        <li>Click <strong>"Load Stream"</strong> in the player section to watch your stream</li>
-        <li>You'll see yourself with ~5 seconds of latency (normal for IVS)</li>
-      </ol>
     </div>
   </div>
 
   <script>
     const API_BASE_URL = window.location.origin;
+    let authToken = localStorage.getItem('userToken');
+    let currentUser = null;
     let playbackUrl = '';
     let ingestUrl = '';
     let streamKey = '';
+    let currentStream = null;
 
     // IVS Broadcast client
     let broadcastClient = null;
@@ -415,6 +471,72 @@
 
     // IVS Player
     let player = null;
+
+    // Check if already logged in
+    if (authToken) {
+      checkAuth();
+    }
+
+    // Login form handler
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.token) {
+          authToken = data.token;
+          localStorage.setItem('userToken', authToken);
+          currentUser = data.user;
+          showApp();
+        } else {
+          showError(data.error || 'Login failed');
+        }
+      } catch (error) {
+        showError(`Login error: ${error.message}`);
+      }
+    });
+
+    async function checkAuth() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          currentUser = data.data;
+          showApp();
+        } else {
+          logout();
+        }
+      } catch (error) {
+        logout();
+      }
+    }
+
+    function showApp() {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('app-section').classList.remove('hidden');
+      document.getElementById('user-display').textContent = currentUser?.username || currentUser?.displayName || 'User';
+      init();
+    }
+
+    function logout() {
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem('userToken');
+      document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('app-section').classList.add('hidden');
+    }
 
     // Initialize app
     async function init() {
@@ -435,14 +557,7 @@
         ingestUrl = config.ingestUrl;
         streamKey = config.streamKey;
 
-        document.getElementById('playback-url').textContent = playbackUrl;
-        document.getElementById('ingest-url').textContent = ingestUrl;
-        // Mask stream key in UI but keep actual value for broadcasting
-        document.getElementById('stream-key').textContent = streamKey ?
-          `${streamKey.substring(0, 4)}...${streamKey.substring(streamKey.length - 4)}` :
-          'Not configured';
-
-        updateStatus('ready', 'Ready! Click "Start Camera" to begin streaming.');
+        updateStatus('ready', 'Ready! Create a stream to begin.');
 
         // Initialize IVS Player
         initializePlayer();
@@ -454,10 +569,67 @@
       }
     }
 
+    // Create stream form handler
+    document.getElementById('create-stream-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!authToken) {
+        showError('Please login first');
+        return;
+      }
+
+      try {
+        updateStatus('loading', 'Creating stream...');
+
+        const title = document.getElementById('stream-title').value;
+        const description = document.getElementById('stream-description').value;
+        const category = document.getElementById('stream-category').value;
+
+        const response = await fetch(`${API_BASE_URL}/api/live-streams`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ title, description, category })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          currentStream = data.data;
+          
+          // Use the stream's playback URL if available, otherwise use config
+          const streamPlaybackUrl = currentStream.ivsPlaybackUrl || 
+                                   currentStream.restreamPlaybackUrl || 
+                                   currentStream.streamUrl || 
+                                   playbackUrl;
+
+          // Display playback URL prominently
+          document.getElementById('playback-url-value').textContent = streamPlaybackUrl;
+          document.getElementById('playback-url-display').classList.remove('hidden');
+
+          // Show preview section
+          document.getElementById('preview-section').classList.remove('hidden');
+          document.getElementById('stream-form-section').style.display = 'none';
+
+          // Enable camera button
+          document.getElementById('start-camera-btn').disabled = false;
+
+          updateStatus('ready', 'Stream created! Start camera to begin broadcasting.');
+        } else {
+          showError(data.error || 'Failed to create stream');
+        }
+      } catch (error) {
+        console.error('Create stream error:', error);
+        showError(`Failed to create stream: ${error.message}`);
+      }
+    });
+
     // Start camera
     async function startCamera() {
       try {
-        updateCameraStatus('Requesting camera access...');
+        updateStatus('loading', 'Requesting camera access...');
 
         localStream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -476,13 +648,11 @@
         document.getElementById('start-camera-btn').disabled = true;
         document.getElementById('start-broadcast-btn').disabled = false;
 
-        updateCameraStatus('Camera active');
         updateStatus('ready', 'Camera ready! Click "Start Broadcast" to stream.');
 
       } catch (error) {
         console.error('Camera error:', error);
         showError(`Failed to access camera: ${error.message}\n\nPlease grant camera and microphone permissions.`);
-        updateCameraStatus('Camera access denied');
       }
     }
 
@@ -494,7 +664,6 @@
       }
 
       try {
-        updateBroadcastStatus('Initializing broadcast...');
         updateStatus('loading', 'Starting broadcast...');
 
         // Check if IVS Web Broadcast SDK is loaded
@@ -508,8 +677,7 @@
           ingestEndpoint: ingestUrl
         });
 
-        // IMPORTANT: Add MediaStream (not tracks) to broadcast client
-        // The SDK expects the entire MediaStream object
+        // Add MediaStream to broadcast client
         broadcastClient.addVideoInputDevice(localStream, 'camera', { index: 0 });
         broadcastClient.addAudioInputDevice(localStream, 'mic');
 
@@ -518,7 +686,6 @@
         // Start broadcasting with stream key
         await broadcastClient.startBroadcast(streamKey);
 
-        updateBroadcastStatus('🔴 Live');
         updateStatus('broadcasting', '🔴 Broadcasting live to IVS!');
 
         document.getElementById('start-broadcast-btn').style.display = 'none';
@@ -537,8 +704,6 @@
       } catch (error) {
         console.error('Broadcast error:', error);
         showError(`Failed to start broadcast: ${error.message}\n\nMake sure IVS credentials are correct.`);
-        updateBroadcastStatus('Broadcast failed');
-        updateStatus('error', 'Broadcast failed');
       }
     }
 
@@ -566,8 +731,6 @@
         document.getElementById('start-broadcast-btn').disabled = true;
         document.getElementById('stop-broadcast-btn').style.display = 'none';
 
-        updateCameraStatus('Not started');
-        updateBroadcastStatus('Idle');
         updateStatus('ready', 'Broadcast stopped');
 
       } catch (error) {
@@ -592,30 +755,24 @@
           console.log('Player is ready');
           document.getElementById('player-placeholder').style.display = 'none';
           document.getElementById('player-video').style.display = 'block';
-          updatePlayerStatus('Player ready');
         });
 
         player.addEventListener(window.IVSPlayer.PlayerState.PLAYING, () => {
           console.log('Stream is playing');
           document.getElementById('player-placeholder').style.display = 'none';
           document.getElementById('player-video').style.display = 'block';
-          updatePlayerStatus('🔴 Playing live stream');
         });
 
         player.addEventListener(window.IVSPlayer.PlayerState.BUFFERING, () => {
           console.log('Stream is buffering');
-          updatePlayerStatus('Buffering...');
         });
 
         player.addEventListener(window.IVSPlayer.PlayerState.IDLE, () => {
           console.log('Player is idle');
-          updatePlayerStatus('Idle');
         });
 
         player.addEventListener(window.IVSPlayer.PlayerEventType.ERROR, (error) => {
           console.error('Player error:', error);
-          updatePlayerStatus('Error');
-
           if (error.code === 404 || error.type === 'ErrorNotAvailable') {
             showError(`Stream not available yet.\n\nWait 10-15 seconds after starting broadcast, then click "Refresh".`);
           } else {
@@ -632,16 +789,25 @@
 
     // Load stream
     function loadStream() {
-      if (!player || !playbackUrl) {
-        showError('Player not initialized or no playback URL available');
+      if (!player) {
+        showError('Player not initialized');
+        return;
+      }
+
+      const streamPlaybackUrl = currentStream?.ivsPlaybackUrl || 
+                               currentStream?.restreamPlaybackUrl || 
+                               currentStream?.streamUrl || 
+                               playbackUrl;
+
+      if (!streamPlaybackUrl) {
+        showError('No playback URL available');
         return;
       }
 
       try {
-        console.log('Loading stream:', playbackUrl);
-        player.load(playbackUrl);
+        console.log('Loading stream:', streamPlaybackUrl);
+        player.load(streamPlaybackUrl);
         player.play();
-        updatePlayerStatus('Loading stream...');
       } catch (error) {
         console.error('Failed to load stream:', error);
         showError(`Failed to load stream: ${error.message}`);
@@ -658,24 +824,27 @@
       }
     }
 
+    // Copy playback URL
+    function copyPlaybackUrl() {
+      const url = document.getElementById('playback-url-value').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }).catch(err => {
+        showError('Failed to copy URL');
+      });
+    }
+
     // Update status functions
     function updateStatus(type, message) {
       const statusEl = document.getElementById('status');
       const statusText = document.getElementById('status-text');
       statusEl.className = `status ${type}`;
       statusText.textContent = message;
-    }
-
-    function updateCameraStatus(status) {
-      document.getElementById('camera-status').textContent = status;
-    }
-
-    function updateBroadcastStatus(status) {
-      document.getElementById('broadcast-status').textContent = status;
-    }
-
-    function updatePlayerStatus(status) {
-      document.getElementById('player-status').textContent = status;
     }
 
     // Show error message
@@ -687,9 +856,6 @@
         errorEl.classList.add('hidden');
       }, 10000);
     }
-
-    // Initialize when page loads
-    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
