@@ -1743,10 +1743,11 @@
                 return;
             }
 
+            let config = null;
             try {
                 // Get IVS configuration
                 const configRes = await fetch('/api/stream-test/config');
-                const config = await configRes.json();
+                config = await configRes.json();
 
                 if (!config.hasConfig || !config.ingestUrl || !config.streamKey) {
                     showAlert('IVS configuration is incomplete. Please check environment variables.', 'error');
