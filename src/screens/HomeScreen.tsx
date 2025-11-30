@@ -714,7 +714,8 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  // Fallback function to prevent ReferenceError if referenced elsewhere
+  // Fallback function to prevent ReferenceError - must be defined before any use
+  // This ensures it's always available in the component scope
   const renderEmptyList = () => renderEmptyState();
 
   // Wait for auth check to complete first
