@@ -1350,6 +1350,18 @@
                 ivsPlayer.addEventListener(PlayerState.PLAYING, () => {
                     console.log('▶️ IVS Player: Playing');
                     if (placeholder) placeholder.style.display = 'none';
+                    if (videoElement) {
+                        videoElement.style.display = 'block';
+                        // Ensure video is visible
+                        videoElement.style.visibility = 'visible';
+                        videoElement.style.opacity = '1';
+                    }
+                    // Reset retry counter on successful play
+                    streamRetryCount = 0;
+                    if (streamRetryTimeout) {
+                        clearTimeout(streamRetryTimeout);
+                        streamRetryTimeout = null;
+                    }
                 });
 
                 ivsPlayer.addEventListener(PlayerState.BUFFERING, () => {
@@ -1428,28 +1440,27 @@
                     }
 
                     // If we've exhausted retries or it's a different error
-                    streamRetryCount = 0; // Reset for next attempt
                     if (streamRetryTimeout) {
                         clearTimeout(streamRetryTimeout);
                         streamRetryTimeout = null;
                     }
 
-                    // Show user-friendly error message
-                    let errorMessage = 'Stream playback error. ';
-                    if (error?.code === 'ERR_NETWORK' || error?.code === 4) {
-                        errorMessage += 'Network connection issue detected.';
-                    } else if (is404Error) {
-                        errorMessage += 'Stream not available. Please wait 15-20 seconds after starting broadcast, then try again.';
-                    } else {
-                        errorMessage += 'The stream may not be active.';
-                    }
-
-                    // Only show alert if we're not retrying
-                    if (streamRetryCount === 0) {
+                    // Only show error if retries are exhausted
+                    if (is404Error && streamRetryCount >= 5) {
+                        showAlert('Stream not available after multiple attempts. Please wait 15-20 seconds after starting broadcast, then click Preview again.', 'error');
+                        streamRetryCount = 0; // Reset for next manual attempt
+                    } else if (!is404Error) {
+                        // For non-404 errors, show immediately
+                        let errorMessage = 'Stream playback error. ';
+                        if (error?.code === 'ERR_NETWORK' || error?.code === 4) {
+                            errorMessage += 'Network connection issue detected.';
+                        } else {
+                            errorMessage += 'The stream may not be active.';
+                        }
                         showAlert(errorMessage, 'error');
                     }
 
-                    // Don't attempt fallback immediately - let user manually retry
+                    // Don't attempt fallback - IVS streams require IVS Player
                 });
 
                 // Handle quality changes
