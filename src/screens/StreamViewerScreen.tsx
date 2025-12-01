@@ -57,30 +57,39 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [newComment, setNewComment] = useState('');
   const [viewers, setViewers] = useState(stream.viewers || 0);
   const [isLiked, setIsLiked] = useState(false);
+  const [enrichedStream, setEnrichedStream] = useState<AugmentedLiveStream>(stream);
   const commentsEndRef = useRef<View>(null);
+  
+  // Update enriched stream when prop changes
+  useEffect(() => {
+    setEnrichedStream(stream);
+  }, [stream]);
   const playbackUrl = useMemo(() => {
+    // Use enriched stream data (may have been updated from API)
+    const currentStream = enrichedStream;
+    
     // Prioritize IVS playback URL first if available (since you can see it in IVS)
     const prioritized =
-      stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl || '';
+      currentStream.ivsPlaybackUrl || currentStream.restreamPlaybackUrl || currentStream.streamUrl || '';
     
     console.log('[StreamViewer] 🔍 Starting playback URL resolution:', {
-      streamId: stream.id,
-      ivsPlaybackUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
-      restreamPlaybackUrl: stream.restreamPlaybackUrl ? stream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
-      streamUrl: stream.streamUrl ? stream.streamUrl.substring(0, 100) + '...' : null,
-      isLive: stream.isLive,
+      streamId: currentStream.id,
+      ivsPlaybackUrl: currentStream.ivsPlaybackUrl ? currentStream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
+      restreamPlaybackUrl: currentStream.restreamPlaybackUrl ? currentStream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
+      streamUrl: currentStream.streamUrl ? currentStream.streamUrl.substring(0, 100) + '...' : null,
+      isLive: currentStream.isLive,
     });
     
     // For IVS URLs, use them directly without sanitization if they're already valid
     let playable = '';
     
-    if (stream.ivsPlaybackUrl && stream.ivsPlaybackUrl.trim()) {
+    if (currentStream.ivsPlaybackUrl && currentStream.ivsPlaybackUrl.trim()) {
       // IVS URLs are typically HLS (.m3u8) format
       // IVS URLs can be:
       // - Full HLS URL: https://...amazonaws.com/.../channel-id.m3u8
       // - Base playback URL: https://...playback.live-video.net/api/video/v1/...
       // - IVS domain URLs: https://...ivs.video/...
-      const ivsUrl = stream.ivsPlaybackUrl.trim();
+      const ivsUrl = currentStream.ivsPlaybackUrl.trim();
       const isHttp = ivsUrl.startsWith('http://') || ivsUrl.startsWith('https://');
       const hasIvsIndicator = ivsUrl.includes('.m3u8') || 
                               ivsUrl.includes('.mpd') || 
@@ -105,8 +114,8 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     }
     
     // Fallback to restream playback URL
-    if (!playable && stream.restreamPlaybackUrl && stream.restreamPlaybackUrl.trim()) {
-      const sanitized = getPlayableStreamUrl(stream.restreamPlaybackUrl);
+    if (!playable && currentStream.restreamPlaybackUrl && currentStream.restreamPlaybackUrl.trim()) {
+      const sanitized = getPlayableStreamUrl(currentStream.restreamPlaybackUrl);
       if (sanitized) {
         playable = sanitized;
         console.log('[StreamViewer] ✅ Using restream playback URL:', playable.substring(0, 100) + '...');
@@ -114,8 +123,8 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     }
     
     // Final fallback to streamUrl
-    if (!playable && stream.streamUrl && stream.streamUrl.trim()) {
-      const sanitized = getPlayableStreamUrl(stream.streamUrl);
+    if (!playable && currentStream.streamUrl && currentStream.streamUrl.trim()) {
+      const sanitized = getPlayableStreamUrl(currentStream.streamUrl);
       if (sanitized) {
         playable = sanitized;
         console.log('[StreamViewer] ✅ Using streamUrl as fallback:', playable.substring(0, 100) + '...');
@@ -123,18 +132,24 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     }
     
     console.log('[StreamViewer] 📊 Final playback URL resolution:', {
-      streamId: stream.id,
+      streamId: currentStream.id,
       hasPlayableUrl: !!playable,
       playableUrl: playable ? playable.substring(0, 100) + '...' : null,
-      isLive: stream.isLive,
-      willRenderPlayer: !!(playable && stream.isLive && isValidStreamUrl(playable)),
+      isLive: currentStream.isLive,
+      willRenderPlayer: !!(playable && currentStream.isLive && isValidStreamUrl(playable)),
     });
     
     return playable;
-  }, [stream.ivsPlaybackUrl, stream.restreamPlaybackUrl, stream.streamUrl, stream.id, stream.isLive]);
+  }, [enrichedStream.ivsPlaybackUrl, enrichedStream.restreamPlaybackUrl, enrichedStream.streamUrl, enrichedStream.id, enrichedStream.isLive]);
 
   useEffect(() => {
     if (visible && stream) {
+      // If playback URL is missing, try to fetch fresh stream data
+      if (!stream.ivsPlaybackUrl && !stream.restreamPlaybackUrl && !stream.streamUrl && stream.id) {
+        console.log('[StreamViewer] ⚠️ Missing playback URLs, fetching fresh stream data...');
+        checkStreamStatus();
+      }
+      
       // Check if stream is still live before loading
       checkStreamStatus();
       loadComments();
@@ -162,8 +177,20 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   
   const checkStreamStatus = async () => {
     try {
-      const response = await ApiService.getLiveStream(stream.id);
+      const response = await ApiService.getLiveStream(enrichedStream.id);
       if (response.success && response.data) {
+        // Update stream data with fresh playback URLs if missing
+        if (response.data.ivsPlaybackUrl && !enrichedStream.ivsPlaybackUrl) {
+          console.log('[StreamViewer] ✅ Fetched fresh IVS playback URL:', response.data.ivsPlaybackUrl.substring(0, 60) + '...');
+          // Update enriched stream state with fresh data
+          setEnrichedStream(prev => ({
+            ...prev,
+            ivsPlaybackUrl: response.data.ivsPlaybackUrl,
+            restreamPlaybackUrl: response.data.restreamPlaybackUrl,
+            streamUrl: response.data.streamUrl,
+          }));
+        }
+        
         // If stream is no longer live, close the viewer
         if (!response.data.isLive || response.data.endedAt) {
           Alert.alert(
@@ -190,7 +217,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const startViewerUpdates = () => {
     const interval = setInterval(async () => {
       try {
-        const response = await ApiService.getLiveStream(stream.id);
+        const response = await ApiService.getLiveStream(enrichedStream.id);
         if (response.success && response.data) {
           setViewers(response.data.viewers || 0);
         }
@@ -208,7 +235,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   const incrementViewer = async () => {
     try {
-      await ApiService.updateViewers(stream.id, 'increment');
+      await ApiService.updateViewers(enrichedStream.id, 'increment');
     } catch (error) {
       console.error('Error incrementing viewer:', error);
     }
@@ -216,7 +243,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   const decrementViewer = async () => {
     try {
-      await ApiService.updateViewers(stream.id, 'decrement');
+      await ApiService.updateViewers(enrichedStream.id, 'decrement');
     } catch (error) {
       console.error('Error decrementing viewer:', error);
     }
@@ -224,7 +251,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   const loadComments = async () => {
     try {
-      const response = await ApiService.getStreamComments(stream.id);
+      const response = await ApiService.getStreamComments(enrichedStream.id);
       if (response.success && response.data) {
         setComments(response.data.map((c: any) => ({
           id: c.id,
@@ -255,9 +282,9 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     setComments(prev => [...prev, comment]);
     setNewComment('');
 
-    // Send to backend API
+      // Send to backend API
     try {
-      const response = await ApiService.addStreamComment(stream.id, comment.comment);
+      const response = await ApiService.addStreamComment(enrichedStream.id, comment.comment);
       if (response.success && response.data) {
         // Update comment with server response
         setComments(prev => prev.map(c => 
@@ -278,10 +305,10 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
   const handleShare = async () => {
     try {
-      const shareUrl = `https://buzzit-production.up.railway.app/stream/${stream.id}`;
+      const shareUrl = `https://buzzit-production.up.railway.app/stream/${enrichedStream.id}`;
       const result = await Share.share({
-        message: `Check out ${stream.displayName}'s live stream: "${stream.title}"\n${shareUrl}`,
-        title: stream.title,
+        message: `Check out ${enrichedStream.displayName}'s live stream: "${enrichedStream.title}"\n${shareUrl}`,
+        title: enrichedStream.title,
       });
 
       if (result.action === Share.sharedAction) {
@@ -388,14 +415,14 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {playbackUrl && stream.isLive && isValidStreamUrl(playbackUrl) ? (
+          {playbackUrl && enrichedStream.isLive && isValidStreamUrl(playbackUrl) ? (
             <IVSPlayer
               streamUrl={playbackUrl}
               style={styles.video}
               autoplay={true}
               muted={false}
               onLoad={(duration) => {
-                console.log('[IVS Player] ✅ Loaded successfully for stream:', stream.id);
+                console.log('[IVS Player] ✅ Loaded successfully for stream:', enrichedStream.id);
                 console.log('[IVS Player] Duration:', duration);
                 console.log('[IVS Player] Playback URL:', playbackUrl);
               }}
@@ -415,11 +442,11 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                 console.error('[IVS Player] Error Details:', error);
                 console.error('[IVS Player] Failed URL:', playbackUrl);
                 console.error('[IVS Player] Stream Info:', {
-                  streamId: stream.id,
-                  isLive: stream.isLive,
-                  ivsPlaybackUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
-                  restreamPlaybackUrl: stream.restreamPlaybackUrl ? stream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
-                  streamUrl: stream.streamUrl ? stream.streamUrl.substring(0, 100) + '...' : null,
+                  streamId: enrichedStream.id,
+                  isLive: enrichedStream.isLive,
+                  ivsPlaybackUrl: enrichedStream.ivsPlaybackUrl ? enrichedStream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
+                  restreamPlaybackUrl: enrichedStream.restreamPlaybackUrl ? enrichedStream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
+                  streamUrl: enrichedStream.streamUrl ? enrichedStream.streamUrl.substring(0, 100) + '...' : null,
                 });
                 
                 // Show error message to user with more context
@@ -437,7 +464,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                 // Stream progress tracking (for live streams, position may be 0)
               }}
             />
-          ) : stream.isLive ? (
+          ) : enrichedStream.isLive ? (
             <View style={styles.placeholderVideo}>
               <Icon name="videocam" size={64} color="#FFFFFF" />
               <Text style={styles.placeholderText}>Live stream starting...</Text>
@@ -453,7 +480,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                   Debug: {playbackUrl.substring(0, 80)}...
                 </Text>
               )}
-              {(!stream.ivsPlaybackUrl && !stream.restreamPlaybackUrl && !stream.streamUrl) && (
+              {(!enrichedStream.ivsPlaybackUrl && !enrichedStream.restreamPlaybackUrl && !enrichedStream.streamUrl) && (
                 <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
                   No playback URL available. Please check server configuration.
                 </Text>
@@ -467,7 +494,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
           )}
 
           {/* Live Badge */}
-          {stream.isLive && (
+          {enrichedStream.isLive && (
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
               <Text style={styles.liveText}>LIVE</Text>
@@ -493,8 +520,8 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.infoOverlay}>
             <View style={styles.streamInfo}>
-              <Text style={styles.streamTitle}>{stream.title}</Text>
-              <Text style={styles.streamAuthor}>{stream.displayName}</Text>
+              <Text style={styles.streamTitle}>{enrichedStream.title}</Text>
+              <Text style={styles.streamAuthor}>{enrichedStream.displayName}</Text>
             </View>
             <View style={styles.streamStats}>
               <View style={styles.statItem}>

@@ -439,9 +439,17 @@ const HomeScreen: React.FC = () => {
             return true;
           })
           .map((stream: any) => {
-            const normalizedStreamUrl = getPlayableStreamUrl(stream.streamUrl) || '';
-            const normalizedRestream = getPlayableStreamUrl(stream.restreamPlaybackUrl) || null;
-            const normalizedIvs = getPlayableStreamUrl(stream.ivsPlaybackUrl) || null;
+            const normalizedStreamUrl = getPlayableStreamUrl(stream.streamUrl) || stream.streamUrl || '';
+            // For IVS URLs, prefer original if normalization fails (IVS URLs are already valid)
+            const normalizedRestream = getPlayableStreamUrl(stream.restreamPlaybackUrl) || stream.restreamPlaybackUrl || null;
+            const normalizedIvs = getPlayableStreamUrl(stream.ivsPlaybackUrl) || stream.ivsPlaybackUrl || null;
+
+            console.log('[HomeScreen] Mapping stream:', {
+              id: stream.id,
+              hasIvsUrl: !!stream.ivsPlaybackUrl,
+              ivsUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 60) + '...' : null,
+              normalizedIvs: normalizedIvs ? normalizedIvs.substring(0, 60) + '...' : null,
+            });
 
             return {
               id: stream.id,
