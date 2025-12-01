@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useMemo, useState, useEffect, useRef} from 'react';
 import {
   ActivityIndicator,
   ImageBackground,
@@ -8,7 +8,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import IVSPlayer from 'amazon-ivs-react-native-player';
+import Video, {ResizeMode, OnVideoErrorData} from 'react-native-video';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -30,6 +30,10 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [errored, setErrored] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retryMessage, setRetryMessage] = useState('');
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const videoKeyRef = useRef(0);
 
   const playableUrl = useMemo(() => {
     console.log('[BuzzLiveViewer] 🔍 Processing playback URL:', {
@@ -53,6 +57,84 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
     [playableUrl, errored],
   );
 
+  // Clean up retry timeout on unmount or URL change
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, [playbackUrl]);
+
+  // Reset retry state when URL changes
+  useEffect(() => {
+    setRetryCount(0);
+    setRetryMessage('');
+    setErrored(false);
+    videoKeyRef.current += 1;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, [playbackUrl]);
+
+  const handleRetry = () => {
+    console.log('[BuzzLiveViewer] 🔄 Manual retry triggered');
+    setErrored(false);
+    setRetryCount(0);
+    setRetryMessage('');
+    setPaused(false);
+    videoKeyRef.current += 1;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleRetry = (error: OnVideoErrorData) => {
+    // Check if error is 404 or stream not available
+    const errorString = error?.error?.errorString || error?.error?.localizedDescription || '';
+    const isStreamNotAvailable =
+      errorString.includes('404') ||
+      errorString.includes('not found') ||
+      errorString.includes('unavailable') ||
+      error?.error?.code === '404';
+
+    if (isStreamNotAvailable && retryCount < 5) {
+      const nextRetry = retryCount + 1;
+      const waitTime = nextRetry * 3000; // 3s, 6s, 9s, 12s, 15s
+
+      console.log(`[BuzzLiveViewer] ⏳ Stream not available yet. Retrying in ${waitTime/1000}s... (Attempt ${nextRetry}/5)`);
+
+      setRetryMessage(`⏳ Waiting for stream... Retrying in ${waitTime/1000}s (${nextRetry}/5)`);
+      setBuffering(true);
+
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log(`[BuzzLiveViewer] 🔄 Retrying stream load (attempt ${nextRetry})...`);
+        setRetryCount(nextRetry);
+        setErrored(false);
+        videoKeyRef.current += 1; // Force Video component to reload
+        setRetryMessage('');
+      }, waitTime);
+    } else {
+      // Not a 404 error or retries exhausted
+      if (retryCount >= 5) {
+        console.error('[BuzzLiveViewer] ❌ Stream not available after 5 retries');
+        setRetryMessage('Stream not available. Please try again later.');
+      } else {
+        console.error('[BuzzLiveViewer] ❌ Playback error (not retryable):', errorString);
+        setRetryMessage('Unable to play stream');
+      }
+      setErrored(true);
+      setBuffering(false);
+    }
+  };
+
   return (
     <View style={[styles.card, style]}>
       <LinearGradient
@@ -75,52 +157,74 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
 
       {isPlayable ? (
         <View style={styles.videoWrapper}>
-          <IVSPlayer
-            streamUrl={playableUrl as string}
+          <Video
+            key={videoKeyRef.current}
+            source={{ uri: playableUrl as string }}
             style={StyleSheet.absoluteFill}
-            autoplay={!paused}
+            controls={false}
+            resizeMode={ResizeMode.COVER}
+            paused={paused}
             muted={false}
-            onLoad={(duration) => {
-              console.log('[BuzzLiveViewer] ✅ IVS Player loaded successfully:', {
-                duration,
+            repeat={false}
+            playInBackground={false}
+            playWhenInactive={false}
+            ignoreSilentSwitch="ignore"
+            onLoad={(data) => {
+              console.log('[BuzzLiveViewer] ✅ Video Player loaded successfully:', {
+                duration: data.duration,
+                naturalSize: data.naturalSize,
                 playbackUrl: playbackUrl?.substring(0, 60) + '...',
                 playableUrl: playableUrl?.substring(0, 60) + '...'
               });
               setBuffering(false);
-            }}
-            onPlayerStateChange={(state) => {
-              console.log('[BuzzLiveViewer] IVS Player state changed:', {
-                state,
-                playbackUrl: playbackUrl?.substring(0, 60) + '...'
-              });
-              if (state === 'Buffering') {
-                setBuffering(true);
-                console.log('[BuzzLiveViewer] ⏳ Buffering...');
-              } else if (state === 'Playing') {
-                setBuffering(false);
-                console.log('[BuzzLiveViewer] ▶️ Stream is now playing!');
-              } else if (state === 'Ready') {
-                setBuffering(false);
-                console.log('[BuzzLiveViewer] ✅ Player ready');
-              } else if (state === 'Idle' || state === 'Ended') {
-                console.log('[BuzzLiveViewer] ⏸️ Stream idle/ended:', state);
+              setRetryCount(0);
+              setRetryMessage('');
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = null;
               }
             }}
-            onError={(errorType, error) => {
-              console.error('[BuzzLiveViewer] ❌ IVS Player error:', {
-                errorType,
-                error,
+            onLoadStart={() => {
+              console.log('[BuzzLiveViewer] ⏳ Loading started...');
+              setBuffering(true);
+            }}
+            onBuffer={(data) => {
+              const isBuffering = data?.isBuffering ?? false;
+              setBuffering(isBuffering);
+              if (isBuffering) {
+                console.log('[BuzzLiveViewer] ⏳ Buffering...');
+              } else {
+                console.log('[BuzzLiveViewer] ✅ Buffering complete');
+                console.log('[BuzzLiveViewer] ▶️ Stream is now playing!');
+              }
+            }}
+            onProgress={(data) => {
+              console.log('[BuzzLiveViewer] Progress:', {
+                currentTime: data.currentTime,
+                playableDuration: data.playableDuration,
+              });
+            }}
+            onError={(error) => {
+              console.error('[BuzzLiveViewer] ❌ Video Player error:', {
+                error: error.error,
+                errorCode: error.error?.code,
+                errorString: error.error?.errorString || error.error?.localizedDescription,
                 playbackUrl: playbackUrl?.substring(0, 60) + '...',
                 playableUrl: playableUrl?.substring(0, 60) + '...',
                 isValid: isValidPlaybackStreamUrl(playableUrl || undefined),
               });
-              setErrored(true);
+              scheduleRetry(error);
+            }}
+            onEnd={() => {
+              console.log('[BuzzLiveViewer] ⏸️ Stream ended');
             }}
           />
-          {buffering && (
+          {(buffering || retryMessage) && (
             <View style={styles.bufferOverlay}>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.bufferLabel}>Buffering…</Text>
+              <Text style={styles.bufferLabel}>
+                {retryMessage || 'Buffering…'}
+              </Text>
             </View>
           )}
         </View>
@@ -130,7 +234,9 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
           imageStyle={styles.placeholderImage}
           source={placeholderImage ? {uri: placeholderImage} : undefined}>
           <Icon name="broadcast-off" size={48} color="#94a3b8" />
-          <Text style={styles.placeholderText}>Stream offline</Text>
+          <Text style={styles.placeholderText}>
+            {retryMessage || 'Stream offline'}
+          </Text>
         </ImageBackground>
       )}
 
@@ -144,10 +250,7 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.footerButton}
-          onPress={() => {
-            setErrored(false);
-            setPaused(false);
-          }}>
+          onPress={handleRetry}>
           <Icon name="refresh" size={22} color="#fff" />
           <Text style={styles.footerLabel}>Reload</Text>
         </TouchableOpacity>

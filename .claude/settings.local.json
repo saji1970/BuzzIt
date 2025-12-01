@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix Amazon IVS live streaming for web and mobile apps\n\n- Fix RTMP URL building bug in GoBuzzLiveScreen (remove :443 port when converting RTMPS to RTMP)\n- Add server/.env.example with IVS environment variable template\n- Add IVS_SETUP_GUIDE.md with comprehensive setup and troubleshooting guide\n- Add DEPLOYMENT_CHECKLIST.md with quick start deployment instructions\n\nChanges required for deployment:\n- Set IVS_INGEST_RTMPS_URL environment variable on Railway\n- Set IVS_STREAM_KEY environment variable on Railway\n- Set IVS_PLAYBACK_URL environment variable on Railway\n- Set IVS_SRT_URL environment variable on Railway (optional)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(./gradlew assembleRelease:*)",
+      "Bash(npm install:*)",
+      "WebSearch",
+      "Bash(gradlew clean:*)",
+      "Bash(./gradlew.bat clean)",
+      "Bash(npx react-native run-android)",
+      "Bash(timeout /t 60 /nobreak)",
+      "Bash(node -c:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

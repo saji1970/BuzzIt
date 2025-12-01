@@ -12,9 +12,9 @@ import {
   Share,
   Alert,
   Dimensions,
+  InteractionManager,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import IVSPlayer from 'amazon-ivs-react-native-player';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 
@@ -23,6 +23,7 @@ import {useAuth} from '../context/AuthContext';
 import {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
 import {getPlayableStreamUrl, isValidPlaybackStreamUrl} from '../utils/streamUrl';
+import StreamVideoPlayer from '../components/StreamVideoPlayer';
 
 const {width, height} = Dimensions.get('window');
 
@@ -58,15 +59,59 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [viewers, setViewers] = useState(stream.viewers || 0);
   const [isLiked, setIsLiked] = useState(false);
   const [enrichedStream, setEnrichedStream] = useState<AugmentedLiveStream>(stream);
+  const [shouldRenderVideo, setShouldRenderVideo] = useState(false);
+  const [isBridgeReady, setIsBridgeReady] = useState(false);
+  const [userRequestedVideo, setUserRequestedVideo] = useState(false);
   const commentsEndRef = useRef<View>(null);
+  const isMountedRef = useRef(true);
   
   // Update enriched stream when prop changes
   useEffect(() => {
-    setEnrichedStream(stream);
+    if (stream) {
+      setEnrichedStream(stream);
+    }
   }, [stream]);
+  
+  // Track mount status and handle bridge readiness
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (visible) {
+      // Reset states when modal becomes visible
+      setIsBridgeReady(false);
+      setShouldRenderVideo(false);
+      setUserRequestedVideo(false);
+      
+      // Simple delay to ensure Modal is mounted
+      const readyTimer = setTimeout(() => {
+        if (isMountedRef.current) {
+          setIsBridgeReady(true);
+        }
+      }, 300);
+      
+      return () => {
+        clearTimeout(readyTimer);
+        isMountedRef.current = false;
+        setIsBridgeReady(false);
+        setShouldRenderVideo(false);
+      };
+    } else {
+      setIsBridgeReady(false);
+      setShouldRenderVideo(false);
+      return () => {
+        isMountedRef.current = false;
+      };
+    }
+  }, [visible]);
+  
   const playbackUrl = useMemo(() => {
     // Use enriched stream data (may have been updated from API)
     const currentStream = enrichedStream;
+    
+    // Safety check
+    if (!currentStream || !currentStream.id) {
+      console.warn('[StreamViewer] ⚠️ Invalid stream object:', currentStream);
+      return '';
+    }
     
     // Prioritize IVS playback URL first if available (since you can see it in IVS)
     const prioritized =
@@ -140,7 +185,7 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     });
     
     return playable;
-  }, [enrichedStream.ivsPlaybackUrl, enrichedStream.restreamPlaybackUrl, enrichedStream.streamUrl, enrichedStream.id, enrichedStream.isLive]);
+  }, [enrichedStream]);
 
   useEffect(() => {
     if (visible && stream) {
@@ -177,52 +222,101 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   
   const checkStreamStatus = async () => {
     try {
+      if (!isMountedRef.current) return;
+      
+      if (!enrichedStream || !enrichedStream.id) {
+        console.warn('[StreamViewer] ⚠️ Cannot check stream status: invalid stream object');
+        return;
+      }
       const response = await ApiService.getLiveStream(enrichedStream.id);
+      
+      if (!isMountedRef.current) return;
+      
       if (response.success && response.data) {
         // Update stream data with fresh playback URLs if missing
-        if (response.data.ivsPlaybackUrl && !enrichedStream.ivsPlaybackUrl) {
+        if (response.data.ivsPlaybackUrl && (!enrichedStream || !enrichedStream.ivsPlaybackUrl)) {
           console.log('[StreamViewer] ✅ Fetched fresh IVS playback URL:', response.data.ivsPlaybackUrl.substring(0, 60) + '...');
           // Update enriched stream state with fresh data
-          setEnrichedStream(prev => ({
-            ...prev,
-            ivsPlaybackUrl: response.data.ivsPlaybackUrl,
-            restreamPlaybackUrl: response.data.restreamPlaybackUrl,
-            streamUrl: response.data.streamUrl,
-          }));
+          if (isMountedRef.current) {
+            setEnrichedStream(prev => {
+              if (!prev) {
+                // If prev is null/undefined, create a new stream object from response
+                return {
+                  id: response.data.id,
+                  userId: response.data.userId,
+                  username: response.data.username || 'Unknown',
+                  displayName: response.data.displayName || response.data.username || 'Unknown',
+                  title: response.data.title || 'Live Stream',
+                  description: response.data.description,
+                  streamUrl: response.data.streamUrl || '',
+                  thumbnailUrl: response.data.thumbnailUrl,
+                  isLive: response.data.isLive,
+                  viewers: response.data.viewers || 0,
+                  category: response.data.category,
+                  startedAt: response.data.startedAt,
+                  tags: response.data.tags || [],
+                  endedAt: response.data.endedAt,
+                  ivsPlaybackUrl: response.data.ivsPlaybackUrl,
+                  restreamPlaybackUrl: response.data.restreamPlaybackUrl,
+                };
+              }
+              return {
+                ...prev,
+                ivsPlaybackUrl: response.data.ivsPlaybackUrl,
+                restreamPlaybackUrl: response.data.restreamPlaybackUrl,
+                streamUrl: response.data.streamUrl,
+              };
+            });
+          }
         }
         
         // If stream is no longer live, close the viewer
         if (!response.data.isLive || response.data.endedAt) {
-          Alert.alert(
-            'Stream Ended',
-            'This live stream has ended.',
-            [{ text: 'OK', onPress: onClose }]
-          );
+          if (isMountedRef.current) {
+            Alert.alert(
+              'Stream Ended',
+              'This live stream has ended.',
+              [{ text: 'OK', onPress: onClose }]
+            );
+          }
         }
       }
     } catch (error) {
-      console.error('Error checking stream status:', error);
+      if (isMountedRef.current) {
+        console.error('Error checking stream status:', error);
+      }
     }
   };
 
   useEffect(() => {
     // Auto-scroll to bottom when new comment arrives
-    if (comments.length > 0 && commentsEndRef.current) {
-      setTimeout(() => {
-        commentsEndRef.current?.scrollIntoView({behavior: 'smooth'});
+    if (comments.length > 0 && commentsEndRef.current && isMountedRef.current) {
+      const timeout = setTimeout(() => {
+        if (isMountedRef.current && commentsEndRef.current) {
+          commentsEndRef.current?.scrollIntoView({behavior: 'smooth'});
+        }
       }, 100);
+      return () => clearTimeout(timeout);
     }
   }, [comments]);
 
   const startViewerUpdates = () => {
     const interval = setInterval(async () => {
+      if (!isMountedRef.current) {
+        clearInterval(interval);
+        return;
+      }
       try {
+        if (!enrichedStream?.id) return;
         const response = await ApiService.getLiveStream(enrichedStream.id);
+        if (!isMountedRef.current) return;
         if (response.success && response.data) {
           setViewers(response.data.viewers || 0);
         }
       } catch (error) {
-        console.error('Error updating viewer count:', error);
+        if (isMountedRef.current) {
+          console.error('Error updating viewer count:', error);
+        }
       }
     }, 3000);
 
@@ -234,24 +328,32 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   };
 
   const incrementViewer = async () => {
+    if (!isMountedRef.current || !enrichedStream?.id) return;
     try {
       await ApiService.updateViewers(enrichedStream.id, 'increment');
     } catch (error) {
-      console.error('Error incrementing viewer:', error);
+      if (isMountedRef.current) {
+        console.error('Error incrementing viewer:', error);
+      }
     }
   };
 
   const decrementViewer = async () => {
+    if (!isMountedRef.current || !enrichedStream?.id) return;
     try {
       await ApiService.updateViewers(enrichedStream.id, 'decrement');
     } catch (error) {
-      console.error('Error decrementing viewer:', error);
+      if (isMountedRef.current) {
+        console.error('Error decrementing viewer:', error);
+      }
     }
   };
 
   const loadComments = async () => {
+    if (!isMountedRef.current || !enrichedStream?.id) return;
     try {
       const response = await ApiService.getStreamComments(enrichedStream.id);
+      if (!isMountedRef.current) return;
       if (response.success && response.data) {
         setComments(response.data.map((c: any) => ({
           id: c.id,
@@ -263,12 +365,14 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         })));
       }
     } catch (error) {
-      console.error('Error loading comments:', error);
+      if (isMountedRef.current) {
+        console.error('Error loading comments:', error);
+      }
     }
   };
 
   const sendComment = async () => {
-    if (!newComment.trim()) return;
+    if (!isMountedRef.current || !newComment.trim() || !enrichedStream?.id) return;
 
     const comment: StreamComment = {
       id: Date.now().toString(),
@@ -279,12 +383,15 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       timestamp: new Date(),
     };
 
-    setComments(prev => [...prev, comment]);
-    setNewComment('');
+    if (isMountedRef.current) {
+      setComments(prev => [...prev, comment]);
+      setNewComment('');
+    }
 
       // Send to backend API
     try {
       const response = await ApiService.addStreamComment(enrichedStream.id, comment.comment);
+      if (!isMountedRef.current) return;
       if (response.success && response.data) {
         // Update comment with server response
         setComments(prev => prev.map(c => 
@@ -296,10 +403,12 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         ));
       }
     } catch (error) {
-      console.error('Error sending comment:', error);
-      // Remove optimistic comment on error
-      setComments(prev => prev.filter(c => c.id !== comment.id));
-      Alert.alert('Error', 'Failed to send comment. Please try again.');
+      if (isMountedRef.current) {
+        console.error('Error sending comment:', error);
+        // Remove optimistic comment on error
+        setComments(prev => prev.filter(c => c.id !== comment.id));
+        Alert.alert('Error', 'Failed to send comment. Please try again.');
+      }
     }
   };
 
@@ -405,85 +514,80 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     </View>
   );
 
-  if (!visible || !stream) return null;
+  if (!visible || !stream || !enrichedStream) return null;
+
+  // Don't render anything until bridge is ready - prevents any component from mounting
+  if (visible && !isBridgeReady) {
+    return null;
+  }
+
+  // Only render Modal after bridge is confirmed ready
+  if (!isBridgeReady) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible={visible && isBridgeReady}
       animationType="slide"
-      onRequestClose={onClose}>
-      <View style={[styles.container, {backgroundColor: '#000'}]}>
+      onRequestClose={onClose}
+      onDismiss={() => {
+        setShouldRenderVideo(false);
+        setIsBridgeReady(false);
+      }}>
+        <View style={[styles.container, {backgroundColor: '#000'}]}>
         {/* Video Player */}
         <View style={styles.videoContainer}>
-          {playbackUrl && enrichedStream.isLive && isValidStreamUrl(playbackUrl) ? (
-            <IVSPlayer
-              streamUrl={playbackUrl}
+          {userRequestedVideo && shouldRenderVideo && playbackUrl && enrichedStream.isLive && isValidStreamUrl(playbackUrl) ? (
+            <StreamVideoPlayer
+              playbackUrl={playbackUrl}
+              streamId={enrichedStream.id}
+              isLive={enrichedStream.isLive}
               style={styles.video}
-              autoplay={true}
-              muted={false}
-              onLoad={(duration) => {
-                console.log('[IVS Player] ✅ Loaded successfully for stream:', enrichedStream.id);
-                console.log('[IVS Player] Duration:', duration);
-                console.log('[IVS Player] Playback URL:', playbackUrl);
-              }}
-              onPlayerStateChange={(state) => {
-                console.log('[IVS Player] State changed:', state);
-                if (state === 'playing') {
-                  console.log('[IVS Player] ✅ Stream is now playing!');
-                } else if (state === 'buffering') {
-                  console.log('[IVS Player] ⏳ Buffering...');
-                } else if (state === 'error' || state === 'idle') {
-                  console.warn('[IVS Player] ⚠️ Player state:', state);
-                }
-              }}
-              onError={(errorType, error) => {
-                console.error('[IVS Player] ❌ Error occurred:');
-                console.error('[IVS Player] Error Type:', errorType);
-                console.error('[IVS Player] Error Details:', error);
-                console.error('[IVS Player] Failed URL:', playbackUrl);
-                console.error('[IVS Player] Stream Info:', {
-                  streamId: enrichedStream.id,
-                  isLive: enrichedStream.isLive,
-                  ivsPlaybackUrl: enrichedStream.ivsPlaybackUrl ? enrichedStream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
-                  restreamPlaybackUrl: enrichedStream.restreamPlaybackUrl ? enrichedStream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
-                  streamUrl: enrichedStream.streamUrl ? enrichedStream.streamUrl.substring(0, 100) + '...' : null,
-                });
-                
-                // Show error message to user with more context
-                const errorMessage = errorType 
-                  ? `Unable to play stream: ${errorType}. ${error || ''}`
-                  : 'Unable to play stream. Please check if the stream is active and the playback URL is valid.';
-                
-                Alert.alert(
-                  'Stream Error',
-                  errorMessage,
-                  [{ text: 'OK' }]
-                );
-              }}
-              onProgress={(position) => {
-                // Stream progress tracking (for live streams, position may be 0)
+              onError={(error) => {
+                console.error('[StreamViewer] Video player error:', error);
               }}
             />
           ) : enrichedStream.isLive ? (
             <View style={styles.placeholderVideo}>
-              <Icon name="videocam" size={64} color="#FFFFFF" />
-              <Text style={styles.placeholderText}>Live stream starting...</Text>
-              <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7, paddingHorizontal: 20 }]}>
-                {!playbackUrl || playbackUrl.trim() === ''
-                  ? 'Waiting for playback URL. The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
-                  : playbackUrl.startsWith('rtmp://')
-                  ? 'Streaming server is being configured. Please wait for the stream to connect.'
-                  : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
-              </Text>
-              {playbackUrl && (
-                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
-                  Debug: {playbackUrl.substring(0, 80)}...
-                </Text>
-              )}
-              {(!enrichedStream.ivsPlaybackUrl && !enrichedStream.restreamPlaybackUrl && !enrichedStream.streamUrl) && (
-                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
-                  No playback URL available. Please check server configuration.
-                </Text>
+              {!userRequestedVideo && playbackUrl && isValidStreamUrl(playbackUrl) ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.playButton}
+                    onPress={() => {
+                      // User explicitly requests video - now safe to load
+                      setUserRequestedVideo(true);
+                      // Wait a bit more before loading video
+                      setTimeout(() => {
+                        if (isMountedRef.current) {
+                          setShouldRenderVideo(true);
+                        }
+                      }, 500);
+                    }}>
+                    <Icon name="play-arrow" size={80} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <Text style={styles.placeholderText}>Tap to watch live stream</Text>
+                </>
+              ) : (
+                <>
+                  <Icon name="videocam" size={64} color="#FFFFFF" />
+                  <Text style={styles.placeholderText}>Live stream starting...</Text>
+                  <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7, paddingHorizontal: 20 }]}>
+                    {!playbackUrl || playbackUrl.trim() === ''
+                      ? 'Waiting for playback URL. The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
+                      : playbackUrl.startsWith('rtmp://')
+                      ? 'Streaming server is being configured. Please wait for the stream to connect.'
+                      : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
+                  </Text>
+                  {playbackUrl && (
+                    <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
+                      Debug: {playbackUrl.substring(0, 80)}...
+                    </Text>
+                  )}
+                  {(!enrichedStream.ivsPlaybackUrl && !enrichedStream.restreamPlaybackUrl && !enrichedStream.streamUrl) && (
+                    <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
+                      No playback URL available. Please check server configuration.
+                    </Text>
+                  )}
+                </>
               )}
             </View>
           ) : (
@@ -623,6 +727,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  playButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   liveBadge: {
     position: 'absolute',
@@ -794,6 +907,21 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  bridgeLoadingOverlay: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bridgeLoadingContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bridgeLoadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginTop: 16,
   },
 });
 

@@ -888,15 +888,29 @@
             }
 
             try {
-                // Request camera and microphone access
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: currentFacingMode,
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: true
-                });
+                // Request camera and microphone access with fallback
+                let stream = null;
+                try {
+                    // Try with facingMode first (works on mobile)
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: currentFacingMode,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: true
+                    });
+                } catch (err) {
+                    // Fallback: Try without facingMode (works on desktop)
+                    console.log('Retrying camera access without facingMode constraint...');
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: true
+                    });
+                }
 
                 localStream = stream;
                 const cameraVideo = document.getElementById('cameraVideo');
@@ -976,11 +990,16 @@
             } catch (error) {
                 console.error('Error accessing camera:', error);
                 if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                    showAlert('Camera and microphone permissions are required. Please allow access in your browser settings.', 'error');
+                    showAlert('❌ Camera and microphone permissions denied.\n\nPlease:\n1. Click the camera icon in your browser address bar\n2. Allow camera and microphone access\n3. Refresh the page and try again', 'error');
                 } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                    showAlert('No camera or microphone found. Please connect a camera and microphone.', 'error');
+                    showAlert('❌ No camera or microphone detected.\n\nPlease check:\n1. Camera/microphone is connected\n2. Not being used by another application\n3. Browser has permission to access devices', 'error');
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    showAlert('❌ Camera is already in use by another application.\n\nPlease close other apps using your camera and try again.', 'error');
+                } else if (error.name === 'OverconstrainedError') {
+                    showAlert('❌ Camera does not support the requested settings.\n\nTrying with default settings...', 'error');
+                    // Could add another fallback here with basic constraints
                 } else {
-                    showAlert('Failed to access camera: ' + error.message, 'error');
+                    showAlert('❌ Failed to access camera: ' + error.message + '\n\nPlease check your browser settings and camera permissions.', 'error');
                 }
             }
         }
@@ -1031,31 +1050,59 @@
             if (localStream) {
                 // Stop current tracks
                 localStream.getVideoTracks().forEach(track => track.stop());
-                
+
                 // Switch facing mode
                 currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-                
+
                 try {
-                    // Get new stream with switched camera
-                    const videoStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: currentFacingMode,
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        }
-                    });
+                    // Try to get new stream with switched camera
+                    let videoStream = null;
+                    try {
+                        // Try with facingMode (mobile)
+                        videoStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                facingMode: currentFacingMode,
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        });
+                    } catch (err) {
+                        // Fallback: Get any available camera (desktop)
+                        console.log('FacingMode not supported, getting default camera...');
+                        videoStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            }
+                        });
+                        showAlert('Camera switching not supported on this device. Using default camera.', 'error');
+                    }
 
                     // Replace video track
                     const videoTrack = videoStream.getVideoTracks()[0];
-                    const sender = localStream.getVideoTracks()[0];
-                    localStream.removeTrack(sender);
+                    const oldTrack = localStream.getVideoTracks()[0];
+                    if (oldTrack) {
+                        localStream.removeTrack(oldTrack);
+                    }
                     localStream.addTrack(videoTrack);
 
                     const cameraVideo = document.getElementById('cameraVideo');
                     cameraVideo.srcObject = localStream;
                 } catch (error) {
                     console.error('Error switching camera:', error);
-                    showAlert('Failed to switch camera', 'error');
+                    showAlert('❌ Failed to switch camera: ' + error.message, 'error');
+                    // Restore the stream by restarting
+                    try {
+                        const restoreStream = await navigator.mediaDevices.getUserMedia({
+                            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+                        });
+                        const videoTrack = restoreStream.getVideoTracks()[0];
+                        localStream.addTrack(videoTrack);
+                        const cameraVideo = document.getElementById('cameraVideo');
+                        cameraVideo.srcObject = localStream;
+                    } catch (restoreError) {
+                        console.error('Failed to restore camera:', restoreError);
+                    }
                 }
             }
         }

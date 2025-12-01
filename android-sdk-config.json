@@ -1,0 +1,45 @@
+{
+  "sdk": {
+    "location": "C:\\Users\\saji\\AppData\\Local\\Android\\Sdk",
+    "version": "latest",
+    "components": {
+      "platform-tools": {
+        "required": true,
+        "version": "latest"
+      },
+      "build-tools": {
+        "required": true,
+        "versions": ["30.0.3", "34.0.0"]
+      },
+      "platforms": {
+        "required": true,
+        "versions": ["android-33", "android-34"]
+      },
+      "ndk": {
+        "required": true,
+        "version": "17.2.4988734"
+      },
+      "cmake": {
+        "required": false,
+        "version": "latest"
+      }
+    }
+  },
+  "environment": {
+    "ANDROID_HOME": "C:\\Users\\saji\\AppData\\Local\\Android\\Sdk",
+    "ANDROID_SDK_ROOT": "C:\\Users\\saji\\AppData\\Local\\Android\\Sdk",
+    "PATH": [
+      "${ANDROID_HOME}\\platform-tools",
+      "${ANDROID_HOME}\\tools",
+      "${ANDROID_HOME}\\tools\\bin"
+    ]
+  },
+  "gradle": {
+    "localProperties": {
+      "sdk.dir": "C:\\\\Users\\\\saji\\\\AppData\\\\Local\\\\Android\\\\Sdk",
+      "ndk.dir": "C:\\\\Users\\\\saji\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\17.2.4988734"
+    }
+  }
+}
+
+

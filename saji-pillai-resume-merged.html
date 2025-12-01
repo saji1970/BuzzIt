@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saji Pillai - Product & Technology Leader | Payment Systems Expert</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 30px rgba(0,0,0,0.1);
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        header .tagline {
+            font-size: 1.3em;
+            margin-bottom: 25px;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .contact-info a {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.3s;
+        }
+        .contact-info a:hover {
+            transform: translateY(-2px);
+        }
+        .content {
+            padding: 40px;
+        }
+        section {
+            margin-bottom: 50px;
+        }
+        h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+        .summary {
+            font-size: 1.1em;
+            line-height: 1.8;
+            color: #555;
+            text-align: justify;
+        }
+        .expertise-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .expertise-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .expertise-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .expertise-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+        .experience-item {
+            margin-bottom: 35px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #764ba2;
+        }
+        .experience-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .experience-title {
+            flex: 1;
+            min-width: 300px;
+        }
+        .experience-title h3 {
+            margin: 0;
+            color: #764ba2;
+        }
+        .experience-title .company {
+            color: #667eea;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        .experience-date {
+            background: #667eea;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+        .responsibilities {
+            list-style: none;
+            margin-top: 15px;
+        }
+        .responsibilities li {
+            padding: 8px 0 8px 25px;
+            position: relative;
+            line-height: 1.6;
+        }
+        .responsibilities li:before {
+            content: "▹";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-size: 1.5em;
+            line-height: 1;
+        }
+        .skills-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .skill-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            transition: transform 0.3s;
+        }
+        .skill-tag:hover {
+            transform: scale(1.05);
+        }
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+        .project-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            border-top: 4px solid #667eea;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .project-card h4 {
+            color: #764ba2;
+            margin-bottom: 12px;
+            font-size: 1.3em;
+        }
+        .education-item {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .education-item h4 {
+            color: #764ba2;
+            margin-bottom: 5px;
+        }
+        .achievements {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .achievements h3 {
+            color: white;
+            border-bottom: 2px solid white;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .achievements ul {
+            list-style: none;
+        }
+        .achievements li {
+            padding: 10px 0 10px 30px;
+            position: relative;
+        }
+        .achievements li:before {
+            content: "★";
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+        }
+        footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 30px;
+            margin-top: 50px;
+        }
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2em;
+            }
+            header .tagline {
+                font-size: 1em;
+            }
+            .content {
+                padding: 20px;
+            }
+            .experience-header {
+                flex-direction: column;
+            }
+            .experience-date {
+                margin-top: 10px;
+            }
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+        .github-projects {
+            margin-top: 30px;
+        }
+        .project-category {
+            margin-bottom: 40px;
+        }
+        .project-category h3 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+        .project-card-innovation {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            transition: all 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .project-card-innovation:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            border-left-color: #764ba2;
+        }
+        .project-card-innovation h4 {
+            color: #764ba2;
+            margin-bottom: 12px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .project-icon {
+            font-size: 1.5em;
+        }
+        .project-description {
+            color: #555;
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        .tech-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .github-link {
+            display: inline-block;
+            margin-top: 15px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+        .github-link:hover {
+            color: #764ba2;
+        }
+        .github-link::before {
+            content: "→ ";
+        }
+        .key-features {
+            margin-top: 12px;
+            padding-left: 20px;
+        }
+        .key-features li {
+            color: #555;
+            margin-bottom: 5px;
+            list-style-type: none;
+            position: relative;
+            padding-left: 20px;
+        }
+        .key-features li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .innovation-badge {
+            display: inline-block;
+            background: #ffd700;
+            color: #333;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Saji Pillai</h1>
+            <p class="tagline">Technology Leader | Payment Systems & Banking Expert | Product Management</p>
+            <div class="contact-info">
+                <a href="mailto:saji651970@gmail.com">
+                    <span class="icon">✉</span> saji651970@gmail.com
+                </a>
+                <a href="tel:+12204651248">
+                    <span class="icon">☎</span> (220) 465-1248
+                </a>
+                <a href="https://github.com/saji1970" target="_blank">
+                    <span class="icon">⚡</span> GitHub: saji1970
+                </a>
+                <a>
+                    <span class="icon">📍</span> Duluth, GA 30096
+                </a>
+            </div>
+        </header>
+
+        <div class="content">
+            <section id="summary">
+                <h2>Professional Summary</h2>
+                <p class="summary">
+                    Dynamic and results-driven technology leader with over <strong>30 years of global experience</strong> across Payments, Cards, Core Banking, and Telecom Billing, delivering complex modernization and transformation programs for Tier-1 banks and payment providers across the US, Europe, Middle East, ANZ, and APAC.
+                </p>
+                <p class="summary" style="margin-top: 15px;">
+                    Recognized as a <strong>Techno-Functional Expert</strong> with deep domain knowledge across industry-standard protocols including ISO 20022 (SWIFT MX, CBPR+, HVPS+), ISO 8583, SWIFT MT, Fedwire ANSI, ACH, and ATM device integrations. Proven track record of delivering multimillion-dollar portfolios with innovations recognized by Stevie Awards and client accolades.
+                </p>
+            </section>
+
+            <section id="expertise">
+                <h2>Key Expertise & Capabilities</h2>
+                <div class="expertise-grid">
+                    <div class="expertise-card">
+                        <h4>🏦 Payments & Card Systems</h4>
+                        <p>Retail, Debit, Credit, and Prepaid card systems; Tokenization; Fraud detection (FICO Falcon); Authorization Switches; Clearing & Settlement; PCI DSS standards</p>
+                    </div>
+                    <div class="expertise-card">
+                        <h4>💳 Payment Gateways</h4>
+                        <p>Designed and launched eCommerce Payment Gateways certified for Visa 3D Secure (3DS) and Mastercard SecureCode. Integrated Verifone MPI, Worldpay, Visa Cybersource, Mastercard MPGS</p>
+                    </div>
+                    <div class="expertise-card">
+                        <h4>🏛️ Core Banking & Trade Finance</h4>
+                        <p>Deposits, Lending, Trade Finance, LC/BG processing. Led modernization of ATM Switches, Payment Hubs, and Card Platforms</p>
+                    </div>
+                    <div class="expertise-card">
+                        <h4>🤖 Conversational AI & Search</h4>
+                        <p>Built AI copilots using RASA, VertexAI, OpenAI to interpret ISO 20022 messages. Designed conversational search engines with Hugging Face and OLAMA</p>
+                    </div>
+                    <div class="expertise-card">
+                        <h4>🎨 Product & UX Delivery</h4>
+                        <p>Led end-to-end branding, UI/UX design using Figma and Adobe AEM. Authored SOPs and created merchant training using Adobe Captivate</p>
+                    </div>
+                    <div class="expertise-card">
+                        <h4>⚡ Agile Leadership</h4>
+                        <p>Certified Scrum Master and SAFe-trained Agile Product Owner with experience driving sprints, managing backlogs, and aligning OKRs across global teams</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="experience">
+                <h2>Professional Experience</h2>
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Vice President Product Management</h3>
+                            <p class="company">Chase Bank - USA</p>
+                        </div>
+                        <div class="experience-date">July 2023 - Present</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li>Product Manager for Chase Credit Cards Loyalty Rewards and Benefits, responsible for defining product strategy and roadmap</li>
+                        <li>Integrated product with Adobe Analytics tracking user events, new user registration, page access, and customer retention metrics</li>
+                        <li>Led design sessions with UX team to improve customer journeys using funnel analysis and Figma</li>
+                        <li>Built and designed Conversational Search Engine POC for Card Product Catalog using RASA, Python, and LLMSuite (OLAMA2)</li>
+                        <li>Managed product backlog refinement and sprint planning for Scrum teams using Jira</li>
+                        <li>Defined cloud-native platform requirements and customer experience strategies</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Senior Director Delivery - Payments and Cards</h3>
+                            <p class="company">Virtusa - USA</p>
+                        </div>
+                        <div class="experience-date">February 2014 - July 2023</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li>Led Payment Practice achieving <strong>$50M+ revenue</strong> with 15% YoY growth over four years</li>
+                        <li>Solution Architect for Nordea PSP Payment Gateway, integrating Verifone eCommerce MPI for omnichannel PSP payments</li>
+                        <li>Scaled Citi Bank India payment gateway to support large transaction volumes</li>
+                        <li>Product Management for CDD (Customer Due Diligence), OFAC Screening, Credit Screening, PEP Screening, and Fraud Screening applications</li>
+                        <li>Integrated with Experian for AVS and Credit Screening, and FICO Falcon for fraud detection</li>
+                        <li>Built AI/ML application with rules engine to reduce false positives in legacy FICO case management system</li>
+                        <li>Managed large migration/modernization programs for ATM Switch, Credit Card, and Payment Programs across multiple geographies</li>
+                        <li>Developed and executed Virtusa's payment strategy, securing over 10 new clients in the payment space</li>
+                        <li><strong>Award-winning innovations</strong>: Smart ATM thin client, Augmented Reality Branch Platform (using FrameVR), mPOS platform - Won Stevie Business Award in 2015</li>
+                        <li>Enhanced team billability by 100% through effective leadership, significantly impacting corporate profitability</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Delivery Head - Cards and Ecommerce Payment Gateway</h3>
+                            <p class="company">Plintron Global Services India Limited - Chennai, India</p>
+                        </div>
+                        <div class="experience-date">April 2011 - January 2014</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li>Managed prepaid card platform for Plintron in the UK, leading product line development</li>
+                        <li>Scaled prepaid card operations from <strong>10,000 cards to 5 million</strong> within specified timeframe</li>
+                        <li>Expanded team from 4 to over 50 members</li>
+                        <li>Integrated with Experian API for AVS and PEP Checks during Consumer Due Diligence</li>
+                        <li>Launched prepaid products successfully in Australia, UK, and France markets</li>
+                        <li>Established Postpaid Billing platform and P2P payment platform, generating new revenue streams</li>
+                        <li>Consolidated Lyca's Payment Engine for unified payment solution across regions and providers</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Product & Professional Service Head - Core Banking</h3>
+                            <p class="company">Datavision Software Solution Private Limited - Pune, India</p>
+                        </div>
+                        <div class="experience-date">November 2008 - April 2011</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li>Product Head of flagship products: Datamate, Micromate, Riskmate, AMLOMate, Mobilemate, Loan Appraisal System</li>
+                        <li>Implemented AML transaction monitoring in AMLOMate, creating STR and CRT reports for Reserve Bank of India compliance</li>
+                        <li>Built new products for emerging markets including Islamic Microfinance/Banking for South Asia and Middle East</li>
+                        <li>Developed MRDs, PRDs, and core product messaging</li>
+                        <li>Managed project teams for CBS implementation and provided functional requirements using UML</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Project Manager - Payment and Enterprise Teller</h3>
+                            <p class="company">S1 Enterprise - Pune, India</p>
+                        </div>
+                        <div class="experience-date">December 2006 - November 2008</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li><strong>SEPA Migration - KBC Bank Brussels:</strong> Spearheaded successful SEPA functionality implementation within WISE Application for cross-border and domestic payments, achieving 43% profit margin</li>
+                        <li><strong>Enterprise Teller Implementation - Kasikorn Bank (K-Bank), Thailand:</strong> Managed end-to-end deployment leading 65-member global team across Thailand, India, China, and Dublin</li>
+                        <li>Oversaw integration with Temenos core banking and 200+ backend hosts including Enterprise Teller, CMS, CIS, Transact, and CRM systems</li>
+                        <li>Utilized Agile practices with Whizible and JIRA for project tracking and performance metrics</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-header">
+                        <div class="experience-title">
+                            <h3>Product Head - EFT Switch and Ecommerce Payment Gateway</h3>
+                            <p class="company">Opus Software Solutions Limited - Pune, India</p>
+                        </div>
+                        <div class="experience-date">January 2005 - December 2006</div>
+                    </div>
+                    <ul class="responsibilities">
+                        <li>Led 23-member team managing Electra Switch, ePG - Electra Payment Gateway, Electra MPI (VISA/MC 3D Secure), and Electra ACS</li>
+                        <li>Developed and designed new 3D Secure (ACS and MPI) products as add-on to Electra Payment Gateway</li>
+                        <li>Successfully installed at 43 locations including Central Bank of India (500+ ATMs), Corporation Bank (1000+ ATMs), and Dena Bank (500+ ATMs)</li>
+                        <li>Integrated with LexisNexis for OFAC and PEP checks during card origination</li>
+                        <li>Currently used by ICICI Bank for internet payment and eCommerce transactions</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <h4>Earlier Career Highlights (1993-2005)</h4>
+                    <p><strong>Product Head</strong> - Onward Eservices Limited (2003-2005): Led 45-member team for retail/consumer banking solutions</p>
+                    <p><strong>Delivery Manager</strong> - Datavision Software (2001-2003): Design and development of core banking product "Datamate"</p>
+                    <p><strong>Delivery Manager & Sr. Programmer</strong> - Nextstep Infotech (1997-2001): Designed and developed "Fast Cheque Collection" and "Any Branch Banking" systems</p>
+                    <p><strong>Programmer</strong> - Supertech Software Solution (1994-1997): Developed BankPlus Core Banking Module in COBOL and ported to AS/400</p>
+                </div>
+            </section>
+
+            <!-- Innovation Projects & GitHub Portfolio Section - Inserted after Career Highlights -->
+            <section id="innovation-projects" class="github-projects">
+                <h2>🚀 Innovation Projects & GitHub Portfolio</h2>
+                
+                <div class="project-category">
+                    <h3>🤖 AI & Machine Learning Projects</h3>
+                    
+                    <div class="project-grid">
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">📈</span>
+                                Investment Bot
+                                <span class="innovation-badge">NEW</span>
+                            </h4>
+                            <p class="project-description">
+                                AI-powered trading agent bot that analyzes stock market data and provides intelligent investment recommendations. Features a ChatGPT-like interface for natural language queries about stocks, market trends, and investment strategies.
+                            </p>
+                            <ul class="key-features">
+                                <li>Natural language query interface for stock analysis</li>
+                                <li>Real-time market data integration</li>
+                                <li>AI-driven investment recommendations</li>
+                                <li>ChatGPT-style conversational AI interface</li>
+                                <li>Stock sentiment analysis and prediction models</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Python</span>
+                                <span class="tech-tag">OpenAI</span>
+                                <span class="tech-tag">Machine Learning</span>
+                                <span class="tech-tag">NLP</span>
+                                <span class="tech-tag">Stock APIs</span>
+                            </div>
+                            <a href="https://github.com/saji1970/investmentbot" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">🔍</span>
+                                Payment Support Log Analyzer
+                                <span class="innovation-badge">AI-POWERED</span>
+                            </h4>
+                            <p class="project-description">
+                                Advanced AI model for analyzing payment system support logs, specifically designed for ISO 20022 SWIFT CBPR+ messages. Automatically identifies issues, patterns, and anomalies in payment processing workflows.
+                            </p>
+                            <ul class="key-features">
+                                <li>ISO 20022 SWIFT CBPR+ message parsing</li>
+                                <li>Automated issue detection and classification</li>
+                                <li>Pattern recognition for recurring problems</li>
+                                <li>Intelligent log analysis and reporting</li>
+                                <li>Compliance validation and error prediction</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Python</span>
+                                <span class="tech-tag">AI/ML</span>
+                                <span class="tech-tag">ISO 20022</span>
+                                <span class="tech-tag">SWIFT</span>
+                                <span class="tech-tag">NLP</span>
+                                <span class="tech-tag">Log Analysis</span>
+                            </div>
+                            <a href="https://github.com/saji1970" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">📊</span>
+                                Sentiment Analysis Platform
+                            </h4>
+                            <p class="project-description">
+                                Machine learning platform for sentiment analysis with applications in financial markets, customer feedback, and social media monitoring.
+                            </p>
+                            <ul class="key-features">
+                                <li>Multi-source sentiment analysis</li>
+                                <li>Real-time data processing</li>
+                                <li>Jupyter Notebook visualizations</li>
+                                <li>Custom ML model training</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Python</span>
+                                <span class="tech-tag">Jupyter</span>
+                                <span class="tech-tag">ML Models</span>
+                                <span class="tech-tag">Data Analysis</span>
+                            </div>
+                            <a href="https://github.com/saji1970/SentimentalAnalysus" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="project-category">
+                    <h3>📱 Next-Generation Social Media Apps</h3>
+                    
+                    <div class="project-grid">
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">🎙️</span>
+                                GossipIN
+                                <span class="innovation-badge">AR/VR READY</span>
+                                <span class="innovation-badge" style="background: #28a745;">AI-SAFE</span>
+                            </h4>
+                            <p class="project-description">
+                                Revolutionary voice-enabled chat application designed for the future of AR/VR glasses. Built on the vision that AR/VR glasses will replace mobile devices, GossipIN provides a hands-free, voice-first social experience with intelligent AI safety features.
+                            </p>
+                            <ul class="key-features">
+                                <li>Voice-enabled chat interface optimized for AR/VR</li>
+                                <li>Hands-free operation for smart glasses</li>
+                                <li>Spatial audio integration</li>
+                                <li><strong>AI Vocabulary Learning:</strong> Understands GenX and GenZ slang, evolving language patterns, and generational communication styles</li>
+                                <li><strong>AI-Powered Anti-Bullying:</strong> Real-time chat monitoring to detect and prevent cyberbullying, harassment, and toxic behavior</li>
+                                <li>Adaptive voice commands with contextual understanding</li>
+                                <li>Real-time voice-to-text and text-to-voice</li>
+                                <li>Designed for Meta Quest, Apple Vision Pro compatibility</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">React Native</span>
+                                <span class="tech-tag">Voice Recognition</span>
+                                <span class="tech-tag">AR/VR SDK</span>
+                                <span class="tech-tag">WebRTC</span>
+                                <span class="tech-tag">Spatial Audio</span>
+                                <span class="tech-tag">NLP</span>
+                                <span class="tech-tag">ML Safety</span>
+                                <span class="tech-tag">Sentiment Analysis</span>
+                            </div>
+                            <a href="https://github.com/saji1970" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">📢</span>
+                                BuzzIt
+                                <span class="innovation-badge">LIVE STREAMING</span>
+                            </h4>
+                            <p class="project-description">
+                                Event broadcasting and social sharing platform that enables musicians, event organizers, and social functions to instantly "buzz" their events and share across multiple social media platforms simultaneously.
+                            </p>
+                            <ul class="key-features">
+                                <li>Live event broadcasting using Amazon IVS</li>
+                                <li>Multi-platform sharing (WhatsApp, Instagram, Snapchat, Facebook)</li>
+                                <li>Real-time event notifications and alerts</li>
+                                <li>Musician and performer promotion tools</li>
+                                <li>Social function event management</li>
+                                <li>Cross-platform video streaming</li>
+                                <li>Event discovery and social engagement features</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Amazon IVS</span>
+                                <span class="tech-tag">React Native</span>
+                                <span class="tech-tag">AWS</span>
+                                <span class="tech-tag">Social APIs</span>
+                                <span class="tech-tag">Live Streaming</span>
+                                <span class="tech-tag">WebRTC</span>
+                            </div>
+                            <a href="https://github.com/saji1970" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="project-category">
+                    <h3>💳 Payment & FinTech Innovation</h3>
+                    
+                    <div class="project-grid">
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">🔐</span>
+                                OpenPaymentToken
+                                <span class="innovation-badge">OPEN SOURCE</span>
+                            </h4>
+                            <p class="project-description">
+                                World's first free, open-source, secure token origination and token processing platform. Simplifies payment processing with enterprise-grade tokenization capabilities available to everyone.
+                            </p>
+                            <ul class="key-features">
+                                <li>Secure token origination and processing</li>
+                                <li>PCI-DSS compliant tokenization</li>
+                                <li>Open-source payment security</li>
+                                <li>Multi-provider token management</li>
+                                <li>API-first architecture</li>
+                                <li>Enterprise-grade security, free to use</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Payment Security</span>
+                                <span class="tech-tag">Tokenization</span>
+                                <span class="tech-tag">PCI-DSS</span>
+                                <span class="tech-tag">API</span>
+                                <span class="tech-tag">Open Source</span>
+                            </div>
+                            <a href="https://github.com/saji1970/openpaymenttoken" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                        <div class="project-card-innovation">
+                            <h4>
+                                <span class="project-icon">🏠</span>
+                                BackpackersHome
+                            </h4>
+                            <p class="project-description">
+                                Travel and accommodation platform connecting backpackers with local hosts and experiences worldwide.
+                            </p>
+                            <ul class="key-features">
+                                <li>Peer-to-peer accommodation marketplace</li>
+                                <li>Traveler community platform</li>
+                                <li>Local experience sharing</li>
+                                <li>Booking and payment integration</li>
+                            </ul>
+                            <div class="tech-stack">
+                                <span class="tech-tag">Full Stack</span>
+                                <span class="tech-tag">Payment Gateway</span>
+                                <span class="tech-tag">Social Platform</span>
+                            </div>
+                            <a href="https://github.com/saji1970/backpackershome" target="_blank" class="github-link">View on GitHub</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="highlight-box">
+                    <h3 style="margin-top: 0;">🎯 Innovation Focus Areas</h3>
+                    <p style="margin-top: 10px; color: #555;">
+                        <strong>Future of Computing:</strong> Building applications for the next generation of devices - AR/VR glasses that will replace smartphones<br><br>
+                        <strong>AI-First Approach:</strong> Leveraging AI/ML for financial analysis, payment systems, and conversational interfaces<br><br>
+                        <strong>Open Source Contribution:</strong> Creating free, enterprise-grade solutions accessible to everyone<br><br>
+                        <strong>Cross-Platform Integration:</strong> Building solutions that seamlessly work across multiple social media and communication platforms
+                    </p>
+                </div>
+            </section>
+
+            <section id="github-stats">
+                <h2>📊 GitHub Activity</h2>
+                <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
+                    <div style="text-align: center; flex: 1; min-width: 200px;">
+                        <div style="font-size: 3em; color: #667eea; font-weight: bold;">4+</div>
+                        <div style="color: #555;">Public Repositories</div>
+                    </div>
+                    <div style="text-align: center; flex: 1; min-width: 200px;">
+                        <div style="font-size: 3em; color: #764ba2; font-weight: bold;">AI/ML</div>
+                        <div style="color: #555;">Specialization</div>
+                    </div>
+                    <div style="text-align: center; flex: 1; min-width: 200px;">
+                        <div style="font-size: 3em; color: #667eea; font-weight: bold;">AR/VR</div>
+                        <div style="color: #555;">Innovation Focus</div>
+                    </div>
+                </div>
+                <p style="text-align: center; margin-top: 30px; color: #555;">
+                    <a href="https://github.com/saji1970" target="_blank" style="color: #667eea; text-decoration: none; font-weight: bold; font-size: 1.1em;">
+                        🔗 Visit GitHub Profile: github.com/saji1970
+                    </a>
+                </p>
+            </section>
+
+            <section id="major-projects">
+                <h2>Major Projects</h2>
+                <div class="projects-grid">
+                    <div class="project-card">
+                        <h4>Nordea PSP & Pay</h4>
+                        <p>Led PSP MVP definition using MoSCoW methodology, Verifone integration, operational readiness, and merchant onboarding. Built SOPs, sandbox-based training using Adobe Captivate, and technical documentation. Defined branding and UI/UX using Adobe AEM.</p>
+                    </div>
+                    <div class="project-card">
+                        <h4>Cuscal & ANZ Australia (NPP)</h4>
+                        <p>Designed and implemented real-time clearing and settlement systems. Supported Faster Payments compliance and modernization across Australia.</p>
+                    </div>
+                    <div class="project-card">
+                        <h4>FICO Falcon - Standard Chartered</h4>
+                        <p>Led legacy-to-Neural Engine migration for fraud case ingestion and analytics, implementing advanced fraud detection capabilities.</p>
+                    </div>
+                    <div class="project-card">
+                        <h4>Chase Debit Modernization - JPMC</h4>
+                        <p>Lead SME for Vynamic-based debit switch; led backlog management, Agile ceremonies, Kafka AVRO modeling. Built automation with Cucumber and aligned OKRs for migration from legacy systems.</p>
+                    </div>
+                    <div class="project-card">
+                        <h4>HSBC ATM Migration</h4>
+                        <p>Delivered Smart Vista switch modernization for Bermuda, Malta, and Armenia. Managed ATM software integration and stakeholder engagement, increasing profit margins from 18% to 25%.</p>
+                    </div>
+                    <div class="project-card">
+                        <h4>VisionPlus NextGen - Fiserv</h4>
+                        <p>Defined evaluation criteria and roadmap for cloud-native card management platform. Mapped and validated core payment features: Card Management, TRAMS, Clearing, Settlement.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="skills">
+                <h2>Technical Skills & Domain Expertise</h2>
+                
+                <h3>Product Management & Leadership</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">Product Strategy</span>
+                    <span class="skill-tag">Roadmap Management</span>
+                    <span class="skill-tag">Cross-Functional Collaboration</span>
+                    <span class="skill-tag">Market Research</span>
+                    <span class="skill-tag">UX/UI Design</span>
+                    <span class="skill-tag">Data Analysis</span>
+                    <span class="skill-tag">Stakeholder Management</span>
+                    <span class="skill-tag">Cloud-Native Platforms</span>
+                </div>
+                <h3>Messaging Formats & Protocols</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">ISO 20022 (SWIFT MX, CBPR+, HVPS+)</span>
+                    <span class="skill-tag">ISO 8583</span>
+                    <span class="skill-tag">SWIFT MT</span>
+                    <span class="skill-tag">Fedwire ANSI</span>
+                    <span class="skill-tag">ACH</span>
+                    <span class="skill-tag">SEPA</span>
+                    <span class="skill-tag">IFX/OFX</span>
+                </div>
+                <h3>Functional Domain</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">Debit & Credit Cards</span>
+                    <span class="skill-tag">Card Origination</span>
+                    <span class="skill-tag">Authorization & Acquiring</span>
+                    <span class="skill-tag">Card Issuing</span>
+                    <span class="skill-tag">Payment Gateway</span>
+                    <span class="skill-tag">Tokenization</span>
+                    <span class="skill-tag">Clearing & Settlement</span>
+                    <span class="skill-tag">Fraud Detection</span>
+                    <span class="skill-tag">ATM & POS</span>
+                    <span class="skill-tag">Retail Banking</span>
+                    <span class="skill-tag">Corporate Banking</span>
+                </div>
+                <h3>Programming & Technologies</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">Java</span>
+                    <span class="skill-tag">Node.js</span>
+                    <span class="skill-tag">Python</span>
+                    <span class="skill-tag">Angular JS</span>
+                    <span class="skill-tag">Kafka</span>
+                    <span class="skill-tag">COBOL</span>
+                    <span class="skill-tag">C/C++</span>
+                    <span class="skill-tag">Oracle</span>
+                    <span class="skill-tag">MS-SQL</span>
+                    <span class="skill-tag">DB2/400</span>
+                </div>
+                <h3>AI/ML & Design Tools</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">RASA</span>
+                    <span class="skill-tag">OpenAI</span>
+                    <span class="skill-tag">VertexAI</span>
+                    <span class="skill-tag">Hugging Face</span>
+                    <span class="skill-tag">OLAMA</span>
+                    <span class="skill-tag">Figma</span>
+                    <span class="skill-tag">Adobe AEM</span>
+                    <span class="skill-tag">Adobe Captivate</span>
+                    <span class="skill-tag">Rational Rose</span>
+                </div>
+                <h3>Project Management & Agile</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">Jira</span>
+                    <span class="skill-tag">Confluence</span>
+                    <span class="skill-tag">Scrum</span>
+                    <span class="skill-tag">SAFe Agile</span>
+                    <span class="skill-tag">MS Project</span>
+                    <span class="skill-tag">Whizible</span>
+                    <span class="skill-tag">SWIFT ALM</span>
+                </div>
+                <h3>Compliance & Standards</h3>
+                <div class="skills-container">
+                    <span class="skill-tag">PCI-DSS</span>
+                    <span class="skill-tag">ISMS 27001</span>
+                    <span class="skill-tag">CMM Level 5</span>
+                    <span class="skill-tag">ISO Standards</span>
+                </div>
+            </section>
+
+            <section id="education">
+                <h2>Education & Certifications</h2>
+                <div class="education-item">
+                    <h4>MBA: International Business Management</h4>
+                    <p>University of Wales - Cardiff, Wales | 2009</p>
+                </div>
+                <div class="education-item">
+                    <h4>IBM Certified AI Product Manager</h4>
+                    <p>IBM | Issued 2025</p>
+                </div>
+                <div class="education-item">
+                    <h4>Certified Scrum Master</h4>
+                    <p>Scrum Alliance US | Issued 2014, Valid till 2024</p>
+                </div>
+                <div class="education-item">
+                    <h4>Diploma: Computer Technology</h4>
+                    <p>Bharati Vidyapeeth's Institute Of Technology - Pune, India | 1990</p>
+                </div>
+            </section>
+
+            <section id="achievements">
+                <h2>Key Achievements</h2>
+                <div class="achievements">
+                    <h3>Career Highlights</h3>
+                    <ul>
+                        <li>Increased Payment Practice revenue to over <strong>$50 million</strong> with 15% YoY growth rate over four years at Virtusa</li>
+                        <li>Acquired <strong>10 new clients</strong> in the payment space through strategic business development</li>
+                        <li>Successfully retained two major clients through expert negotiation and relationship management</li>
+                        <li>Doubled team billability through resource optimization and mentoring initiatives</li>
+                        <li>Developed technology-driven retail payment solution that won the <strong>Stevie Business Award</strong> for best innovative product (2015)</li>
+                        <li>Increased HSBC's profit margins from 18% to 25% through low-cost, efficient project delivery</li>
+                        <li>Scaled prepaid card operations from 10,000 to <strong>5 million cards</strong> at Plintron</li>
+                        <li>Successfully delivered SEPA migration ahead of regulatory deadline with 43% profit margin</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="note">
+                <div class="highlight-box">
+                    <p style="font-size: 1.1em; text-align: center;">
+                        <strong>💡 Combining 30 years of enterprise experience with cutting-edge innovation</strong><br>
+                        From building payment systems for Fortune 500 banks to creating the next generation of AI and AR/VR applications
+                    </p>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <p>&copy; 2025 Saji Pillai. All rights reserved.</p>
+            <p>Technology Leader | AI Innovation Expert | Payment Systems & Product Management</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/saji1970" target="_blank" style="color: white; text-decoration: none;">GitHub</a> | 
+                <a href="mailto:saji651970@gmail.com" style="color: white; text-decoration: none;">Email</a>
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
+
+
