@@ -63,36 +63,71 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     const prioritized =
       stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl || '';
     
+    console.log('[StreamViewer] 🔍 Starting playback URL resolution:', {
+      streamId: stream.id,
+      ivsPlaybackUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
+      restreamPlaybackUrl: stream.restreamPlaybackUrl ? stream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
+      streamUrl: stream.streamUrl ? stream.streamUrl.substring(0, 100) + '...' : null,
+      isLive: stream.isLive,
+    });
+    
     // For IVS URLs, use them directly without sanitization if they're already valid
     let playable = '';
     
     if (stream.ivsPlaybackUrl && stream.ivsPlaybackUrl.trim()) {
       // IVS URLs are typically HLS (.m3u8) format
-      // Use IVS URL directly if it's a valid HTTP/HTTPS URL
+      // IVS URLs can be:
+      // - Full HLS URL: https://...amazonaws.com/.../channel-id.m3u8
+      // - Base playback URL: https://...playback.live-video.net/api/video/v1/...
+      // - IVS domain URLs: https://...ivs.video/...
       const ivsUrl = stream.ivsPlaybackUrl.trim();
-      if ((ivsUrl.startsWith('http://') || ivsUrl.startsWith('https://')) && 
-          (ivsUrl.includes('.m3u8') || ivsUrl.includes('.mpd') || ivsUrl.includes('amazonaws.com') || ivsUrl.includes('ivs'))) {
+      const isHttp = ivsUrl.startsWith('http://') || ivsUrl.startsWith('https://');
+      const hasIvsIndicator = ivsUrl.includes('.m3u8') || 
+                              ivsUrl.includes('.mpd') || 
+                              ivsUrl.includes('amazonaws.com') || 
+                              ivsUrl.includes('ivs') ||
+                              ivsUrl.includes('playback.live-video.net') ||
+                              ivsUrl.includes('ivs.video');
+      
+      if (isHttp && hasIvsIndicator) {
         playable = ivsUrl;
-        console.log('[StreamViewer] Using IVS playback URL directly:', playable);
+        console.log('[StreamViewer] ✅ Using IVS playback URL directly:', playable.substring(0, 100) + '...');
       } else {
         // Try sanitization as fallback
-        playable = getPlayableStreamUrl(ivsUrl) || '';
+        const sanitized = getPlayableStreamUrl(ivsUrl);
+        if (sanitized) {
+          playable = sanitized;
+          console.log('[StreamViewer] ✅ Using sanitized IVS URL:', playable.substring(0, 100) + '...');
+        } else {
+          console.warn('[StreamViewer] ⚠️ IVS URL failed validation:', ivsUrl.substring(0, 100));
+        }
       }
-    } else {
-      // For non-IVS URLs, use sanitization
-      playable = getPlayableStreamUrl(prioritized) || '';
     }
     
-    console.log('[StreamViewer] Playback URL resolution:', {
+    // Fallback to restream playback URL
+    if (!playable && stream.restreamPlaybackUrl && stream.restreamPlaybackUrl.trim()) {
+      const sanitized = getPlayableStreamUrl(stream.restreamPlaybackUrl);
+      if (sanitized) {
+        playable = sanitized;
+        console.log('[StreamViewer] ✅ Using restream playback URL:', playable.substring(0, 100) + '...');
+      }
+    }
+    
+    // Final fallback to streamUrl
+    if (!playable && stream.streamUrl && stream.streamUrl.trim()) {
+      const sanitized = getPlayableStreamUrl(stream.streamUrl);
+      if (sanitized) {
+        playable = sanitized;
+        console.log('[StreamViewer] ✅ Using streamUrl as fallback:', playable.substring(0, 100) + '...');
+      }
+    }
+    
+    console.log('[StreamViewer] 📊 Final playback URL resolution:', {
       streamId: stream.id,
-      ivsPlaybackUrl: stream.ivsPlaybackUrl,
-      restreamPlaybackUrl: stream.restreamPlaybackUrl,
-      streamUrl: stream.streamUrl,
-      prioritized,
-      playable,
+      hasPlayableUrl: !!playable,
+      playableUrl: playable ? playable.substring(0, 100) + '...' : null,
       isLive: stream.isLive,
-      hasIvsUrl: !!stream.ivsPlaybackUrl,
-      isIvsUrl: playable === stream.ivsPlaybackUrl,
+      willRenderPlayer: !!(playable && stream.isLive && isValidStreamUrl(playable)),
     });
     
     return playable;
@@ -276,25 +311,31 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   // Check if stream URL is valid (must be a full URL, not a relative path)
   const isValidStreamUrl = (url: string): boolean => {
     if (!url || url.trim() === '') {
-      console.warn('[StreamViewer] Empty stream URL');
+      console.warn('[StreamViewer] ❌ Empty stream URL');
       return false;
     }
     
     const trimmedUrl = url.trim();
     const isHttp = trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://');
     
+    if (!isHttp) {
+      console.warn('[StreamViewer] ❌ URL missing HTTP/HTTPS protocol:', trimmedUrl.substring(0, 50));
+      return false;
+    }
+    
     // Allow HLS (.m3u8) and DASH (.mpd) URLs
     const isHls = trimmedUrl.includes('.m3u8');
     const isDash = trimmedUrl.includes('.mpd');
     
-    // IVS URLs might contain 'ivs' or 'amazonaws.com' or 'ivs.video'
+    // IVS URLs might contain 'ivs', 'amazonaws.com', 'ivs.video', or 'playback.live-video.net'
     const isIvsUrl = trimmedUrl.includes('ivs') || 
                      trimmedUrl.includes('amazonaws.com') || 
-                     trimmedUrl.includes('ivs.video');
+                     trimmedUrl.includes('ivs.video') ||
+                     trimmedUrl.includes('playback.live-video.net');
     
     // For HLS/DASH/IVS streams, be more lenient with validation
     if (isHttp && (isHls || isDash || isIvsUrl)) {
-      console.log('[StreamViewer] Valid playback stream URL detected:', {
+      console.log('[StreamViewer] ✅ Valid playback stream URL detected:', {
         url: trimmedUrl.substring(0, 100) + (trimmedUrl.length > 100 ? '...' : ''),
         isHls,
         isDash,
@@ -303,16 +344,20 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       return true;
     }
     
+    // Use the utility function for additional validation
     const valid = isValidPlaybackStreamUrl(trimmedUrl);
     if (!valid) {
-      console.warn('[StreamViewer] Invalid stream URL detected:', trimmedUrl.substring(0, 100));
-      console.warn('[StreamViewer] URL details:', {
+      console.warn('[StreamViewer] ❌ Invalid stream URL detected:', trimmedUrl.substring(0, 100));
+      console.warn('[StreamViewer] URL validation details:', {
         hasProtocol: isHttp,
         isHls,
         isDash,
         isIvsUrl,
         length: trimmedUrl.length,
+        urlPreview: trimmedUrl.substring(0, 150),
       });
+    } else {
+      console.log('[StreamViewer] ✅ URL passed validation:', trimmedUrl.substring(0, 100) + '...');
     }
     return valid;
   };
@@ -372,13 +417,19 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                 console.error('[IVS Player] Stream Info:', {
                   streamId: stream.id,
                   isLive: stream.isLive,
-                  ivsPlaybackUrl: stream.ivsPlaybackUrl,
+                  ivsPlaybackUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 100) + '...' : null,
+                  restreamPlaybackUrl: stream.restreamPlaybackUrl ? stream.restreamPlaybackUrl.substring(0, 100) + '...' : null,
+                  streamUrl: stream.streamUrl ? stream.streamUrl.substring(0, 100) + '...' : null,
                 });
                 
-                // Show error message to user
+                // Show error message to user with more context
+                const errorMessage = errorType 
+                  ? `Unable to play stream: ${errorType}. ${error || ''}`
+                  : 'Unable to play stream. Please check if the stream is active and the playback URL is valid.';
+                
                 Alert.alert(
                   'Stream Error',
-                  `Unable to play stream: ${errorType || 'Unknown error'}. Please check if the stream is active on Amazon IVS.`,
+                  errorMessage,
                   [{ text: 'OK' }]
                 );
               }}
@@ -392,14 +443,19 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               <Text style={styles.placeholderText}>Live stream starting...</Text>
               <Text style={[styles.placeholderText, { fontSize: 14, marginTop: 8, opacity: 0.7, paddingHorizontal: 20 }]}>
                 {!playbackUrl || playbackUrl.trim() === ''
-                  ? 'The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
+                  ? 'Waiting for playback URL. The broadcaster is setting up their stream. Video will appear once the stream is connected to the media server.'
                   : playbackUrl.startsWith('rtmp://')
                   ? 'Streaming server is being configured. Please wait for the stream to connect.'
                   : 'The broadcaster is using their camera. Stream will be available once connected to media server.'}
               </Text>
-              {playbackUrl && playbackUrl.includes('example.com') && (
-                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5 }]}>
-                  Note: A streaming server needs to be configured for live video playback.
+              {playbackUrl && (
+                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
+                  Debug: {playbackUrl.substring(0, 80)}...
+                </Text>
+              )}
+              {(!stream.ivsPlaybackUrl && !stream.restreamPlaybackUrl && !stream.streamUrl) && (
+                <Text style={[styles.placeholderText, { fontSize: 12, marginTop: 8, opacity: 0.5, paddingHorizontal: 20 }]}>
+                  No playback URL available. Please check server configuration.
                 </Text>
               )}
             </View>

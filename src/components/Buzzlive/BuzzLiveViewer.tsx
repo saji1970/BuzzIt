@@ -31,10 +31,22 @@ const BuzzLiveViewer: React.FC<BuzzLiveViewerProps> = ({
   const [buffering, setBuffering] = useState(false);
   const [errored, setErrored] = useState(false);
 
-  const playableUrl = useMemo(
-    () => getPlayableStreamUrl(playbackUrl),
-    [playbackUrl],
-  );
+  const playableUrl = useMemo(() => {
+    console.log('[BuzzLiveViewer] 🔍 Processing playback URL:', {
+      playbackUrl: playbackUrl ? playbackUrl.substring(0, 100) + '...' : null,
+      hasUrl: !!playbackUrl,
+    });
+    
+    const playable = getPlayableStreamUrl(playbackUrl);
+    
+    console.log('[BuzzLiveViewer] 📊 Playback URL result:', {
+      hasPlayableUrl: !!playable,
+      playableUrl: playable ? playable.substring(0, 100) + '...' : null,
+      isValid: isValidPlaybackStreamUrl(playable || undefined),
+    });
+    
+    return playable;
+  }, [playbackUrl]);
 
   const isPlayable = useMemo(
     () => Boolean(playableUrl && !errored),

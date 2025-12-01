@@ -141,11 +141,25 @@ const GoBuzzLiveScreen: React.FC = () => {
       }
     }
     
-    // Convert RTMPS to RTMP and remove port 443 if present
-    // NodeMediaClient doesn't support RTMPS, so we convert to RTMP
+    // Convert RTMPS to RTMP (NodeMediaClient doesn't support RTMPS)
+    // Try standard RTMP port 1935 instead of 443
     if (normalized.startsWith('rtmps://')) {
-      normalized = normalized.replace('rtmps://', 'rtmp://').replace(':443', '');
-      console.log('[GoBuzzLive] Converted RTMPS to RTMP (NodeMediaClient requirement)');
+      normalized = normalized.replace('rtmps://', 'rtmp://');
+      // Replace port 443 with 1935 (standard RTMP port)
+      // If no port specified, RTMP defaults to 1935
+      if (normalized.includes(':443')) {
+        normalized = normalized.replace(':443', ':1935');
+        console.log('[GoBuzzLive] Converted RTMPS to RTMP, changed port 443 to 1935');
+      } else if (!normalized.match(/:\d+/)) {
+        // No port specified, add standard RTMP port
+        const hostMatch = normalized.match(/^rtmp:\/\/([^\/]+)/);
+        if (hostMatch) {
+          normalized = normalized.replace(/^rtmp:\/\/([^\/]+)/, 'rtmp://$1:1935');
+          console.log('[GoBuzzLive] Converted RTMPS to RTMP, added port 1935');
+        }
+      } else {
+        console.log('[GoBuzzLive] Converted RTMPS to RTMP, keeping existing port');
+      }
     }
 
     // Final validation

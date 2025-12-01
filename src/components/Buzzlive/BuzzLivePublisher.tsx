@@ -111,9 +111,20 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
       // Convert RTMPS to RTMP (NodeMediaClient doesn't support RTMPS)
       if (url.startsWith('rtmps://')) {
         url = url.replace('rtmps://', 'rtmp://');
-        // Remove port 443 if present (RTMP default port is 1935)
-        url = url.replace(':443/', '/').replace(':443', '');
-        console.log('[BuzzLivePublisher] Converted RTMPS to RTMP');
+        // Replace port 443 with 1935 (standard RTMP port)
+        if (url.includes(':443')) {
+          url = url.replace(':443', ':1935');
+          console.log('[BuzzLivePublisher] Converted RTMPS to RTMP, changed port 443 to 1935');
+        } else if (!url.match(/:\d+/)) {
+          // No port specified, add standard RTMP port
+          const hostMatch = url.match(/^rtmp:\/\/([^\/]+)/);
+          if (hostMatch) {
+            url = url.replace(/^rtmp:\/\/([^\/]+)/, 'rtmp://$1:1935');
+            console.log('[BuzzLivePublisher] Converted RTMPS to RTMP, added port 1935');
+          }
+        } else {
+          console.log('[BuzzLivePublisher] Converted RTMPS to RTMP, keeping existing port');
+        }
       }
       
       console.log('[BuzzLivePublisher] ✅ Normalized URL:', {
@@ -321,7 +332,8 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
                 `1. RTMP URL is correct\n` +
                 `2. Network connectivity\n` +
                 `3. IVS service status\n` +
-                `4. Try again`,
+                `4. Note: IVS may require RTMPS (not RTMP)\n` +
+                `5. Try again`,
               );
             }
           }}

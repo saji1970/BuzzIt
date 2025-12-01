@@ -165,6 +165,11 @@ app.use((req, res, next) => {
 
 app.use('/uploads', express.static(uploadsDir));
 
+// Favicon route - return 204 No Content to suppress 404 errors
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // Stream viewer page route - public viewing page for live streams (MUST be before /user-login and /user-streaming)
 app.get('/stream/:id', (req, res) => {
   const streamViewerPath = path.join(publicPath, 'stream-viewer.html');

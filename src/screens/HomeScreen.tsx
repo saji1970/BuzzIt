@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef, useMemo} from 'react';
+import React, {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {
   View,
   Text,
@@ -66,6 +66,25 @@ const HomeScreen: React.FC = () => {
   const [showYourBuzz, setShowYourBuzz] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+
+  // Define renderEmptyState early to ensure it's always available
+  const renderEmptyState = useCallback(() => (
+    <Animatable.View
+      animation="fadeIn"
+      style={[styles.emptyState, {backgroundColor: theme.colors.background}]}>
+      <Icon name="trending-up" size={80} color={theme.colors.textSecondary} />
+      <Text style={[styles.emptyTitle, {color: theme.colors.text}]}>
+        No Buzz Yet!
+      </Text>
+      <Text style={[styles.emptySubtitle, {color: theme.colors.textSecondary}]}>
+        Start following your interests to see buzzes here
+      </Text>
+    </Animatable.View>
+  ), [theme.colors.background, theme.colors.text, theme.colors.textSecondary]);
+
+  // Legacy alias for backwards compatibility - defined early in component to prevent ReferenceError
+  // This ensures compatibility with any cached or external references
+  const renderEmptyList = useCallback(() => renderEmptyState(), [renderEmptyState]);
 
   const primaryLiveStream = useMemo(
     () =>
@@ -700,26 +719,6 @@ const HomeScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  const renderEmptyState = () => (
-    <Animatable.View
-      animation="fadeIn"
-      style={[styles.emptyState, {backgroundColor: theme.colors.background}]}>
-      <Icon name="trending-up" size={80} color={theme.colors.textSecondary} />
-      <Text style={[styles.emptyTitle, {color: theme.colors.text}]}>
-        No Buzz Yet!
-      </Text>
-      <Text style={[styles.emptySubtitle, {color: theme.colors.textSecondary}]}>
-        Start following your interests to see buzzes here
-      </Text>
-    </Animatable.View>
-  );
-
-  // Fallback function to prevent ReferenceError - must be defined before any use
-  // This ensures it's always available in the component scope
-  // Using useMemo to ensure it's stable and accessible
-  const renderEmptyList = useMemo(() => {
-    return () => renderEmptyState();
-  }, [theme.colors.background, theme.colors.text, theme.colors.textSecondary]);
 
   // Wait for auth check to complete first
   if (authLoading) {
