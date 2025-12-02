@@ -28,17 +28,13 @@ import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
 import BuzzerProfileScreen from './BuzzerProfileScreen';
-import StreamViewerScreen from './StreamViewerScreen';
 import CreateStreamScreen from './CreateStreamScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
-import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 import ApiService from '../services/APIService';
 import UserRecommendationCard, {UserRecommendation} from '../components/UserRecommendationCard';
 import ContactSyncService from '../components/ContactSyncService';
 import YourBuzzScreen from './YourBuzzScreen';
 import ScreenContainer from '../components/ScreenContainer';
-import BuzzLiveViewer from '../components/Buzzlive/BuzzLiveViewer';
-import {getPlayableStreamUrl} from '../utils/streamUrl';
 
 const {width} = Dimensions.get('window');
 
@@ -53,9 +49,6 @@ const HomeScreen: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
   const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
-  const [selectedStream, setSelectedStream] = useState<LiveStream | null>(null);
-  const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
-  const [loadingLiveStreams, setLoadingLiveStreams] = useState(false);
   const [userRecommendations, setUserRecommendations] = useState<UserRecommendation[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
@@ -86,17 +79,6 @@ const HomeScreen: React.FC = () => {
   // This ensures compatibility with any cached or external references
   const renderEmptyList = useCallback(() => renderEmptyState(), [renderEmptyState]);
 
-  const primaryLiveStream = useMemo(
-    () =>
-      liveStreams.find(stream => {
-        const playable = getPlayableStreamUrl(
-          stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl,
-        );
-        return Boolean(playable);
-      }) || null,
-    [liveStreams],
-  );
-
   useEffect(() => {
     try {
       // Load the appropriate feed based on current toggle state
@@ -105,22 +87,12 @@ const HomeScreen: React.FC = () => {
       } else {
         loadBuzzes();
       }
-      loadLiveStreams();
       loadUserRecommendations();
     } catch (error) {
       console.error('Error in HomeScreen useEffect:', error);
       // Prevent crash
     }
   }, [user, buzzes, authUser, useSmartFeed]);
-
-  // Refresh live streams periodically - more frequent to catch ended streams
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadLiveStreams();
-    }, 10000); // Every 10 seconds - more frequent to catch ended streams
-
-    return () => clearInterval(interval);
-  }, [user, authUser]); // Recreate interval when user changes
 
   // Refresh buzzes when screen comes into focus
   useFocusEffect(
@@ -401,135 +373,7 @@ const HomeScreen: React.FC = () => {
     setSelectedBuzzerId(null);
   };
 
-  const loadLiveStreams = async () => {
-    try {
-      setLoadingLiveStreams(true);
-      console.log('Loading live streams...');
-      const response = await ApiService.getLiveStreams();
-      console.log('Live streams API response:', response);
-      
-      if (response && response.success && response.data) {
-        console.log('Raw streams from API:', response.data.length);
-        
-        // Filter to only show streams from subscribed channels/users
-        const currentUserData = user || authUser;
-        const subscribedIds = currentUserData?.subscribedChannels || [];
-        
-        // Map response data to LiveStream format and FILTER OUT ENDED STREAMS
-        // Only show streams that are currently live (isLive === true)
-        // Also verify stream hasn't ended by checking if it exists and is actually live
-        const mappedStreams: LiveStream[] = response.data
-          .filter((stream: any) => {
-            // Only show streams that are explicitly marked as live
-            if (!stream.isLive) {
-              console.log('Stream not live, filtering out:', stream.id);
-              return false;
-            }
-            
-            // Additional check: if stream has an endedAt timestamp, don't show it
-            if (stream.endedAt) {
-              const endedAt = new Date(stream.endedAt);
-              const now = new Date();
-              if (endedAt < now) {
-                console.log('Stream has ended, filtering out:', stream.id);
-                return false; // Stream has ended
-              }
-            }
-            
-            return true;
-          })
-          .map((stream: any) => {
-            const normalizedStreamUrl = getPlayableStreamUrl(stream.streamUrl) || stream.streamUrl || '';
-            // For IVS URLs, prefer original if normalization fails (IVS URLs are already valid)
-            const normalizedRestream = getPlayableStreamUrl(stream.restreamPlaybackUrl) || stream.restreamPlaybackUrl || null;
-            const normalizedIvs = getPlayableStreamUrl(stream.ivsPlaybackUrl) || stream.ivsPlaybackUrl || null;
 
-            console.log('[HomeScreen] Mapping stream:', {
-              id: stream.id,
-              hasIvsUrl: !!stream.ivsPlaybackUrl,
-              ivsUrl: stream.ivsPlaybackUrl ? stream.ivsPlaybackUrl.substring(0, 60) + '...' : null,
-              normalizedIvs: normalizedIvs ? normalizedIvs.substring(0, 60) + '...' : null,
-            });
-
-            return {
-              id: stream.id,
-              userId: stream.userId,
-              username: stream.username || 'Unknown',
-              displayName: stream.displayName || stream.username || 'Unknown',
-              title: stream.title || 'Live Stream',
-              description: stream.description,
-              streamUrl: normalizedStreamUrl,
-              thumbnailUrl: stream.thumbnailUrl,
-              isLive: stream.isLive,
-              viewers: stream.viewers || 0,
-              category: stream.category,
-              startedAt: stream.startedAt,
-              tags: stream.tags || [],
-              endedAt: stream.endedAt, // Include endedAt for additional checking
-              restreamPlaybackUrl: normalizedRestream,
-              ivsPlaybackUrl: normalizedIvs,
-            };
-          });
-        
-        console.log('Mapped live streams:', mappedStreams.length);
-        console.log('Stream details:', mappedStreams.map(s => ({
-          id: s.id,
-          username: s.username,
-          isLive: s.isLive,
-          hasPlaybackUrl: !!(s.ivsPlaybackUrl || s.restreamPlaybackUrl || s.streamUrl),
-        })));
-        
-        // Show ALL live streams to all users (not just subscribed ones)
-        // This allows users to discover new streams from anyone
-        // Prioritize streams from subscribed channels, but show all streams
-        let finalStreams: LiveStream[];
-        if (subscribedIds.length > 0) {
-          // Separate streams: subscribed first, then others
-          const subscribedStreams = mappedStreams.filter((stream: LiveStream) =>
-            subscribedIds.includes(stream.userId)
-          );
-          const otherStreams = mappedStreams.filter((stream: LiveStream) =>
-            !subscribedIds.includes(stream.userId)
-          );
-          // Combine: subscribed streams first, then others
-          finalStreams = [...subscribedStreams, ...otherStreams];
-          console.log('Subscribed streams:', subscribedStreams.length, 'Other streams:', otherStreams.length);
-        } else {
-          // If no subscriptions, show ALL streams (for discovery)
-          finalStreams = mappedStreams;
-          console.log('No subscriptions, showing all streams:', finalStreams.length);
-        }
-        
-        // IMPORTANT: Show streams even if they don't have playback URLs yet
-        // Streams might be "starting" and will get playback URLs once streaming begins
-        // Update state - this will automatically remove ended streams (not in mappedStreams)
-        setLiveStreams(finalStreams);
-        console.log('Final live streams set:', finalStreams.length, 'streams visible to all users');
-      } else {
-        // If API returns no data or error, clear all streams
-        console.log('No live streams from API or error:', response?.error);
-        setLiveStreams([]);
-      }
-    } catch (error) {
-      console.error('Error loading live streams:', error);
-      // Silently fail - don't crash the app
-      setLiveStreams([]);
-    } finally {
-      setLoadingLiveStreams(false);
-    }
-  };
-
-  const handleStreamPress = (stream: LiveStream) => {
-    setSelectedStream(stream);
-  };
-
-  const handleCloseStream = () => {
-    setSelectedStream(null);
-  };
-
-  const handleStreamUserPress = (userId: string) => {
-    setSelectedBuzzerId(userId);
-  };
 
   const loadUserRecommendations = async () => {
     if (!user) return;
@@ -688,14 +532,6 @@ const HomeScreen: React.FC = () => {
       onSubscribe={handleSubscribeUser}
       onPress={handleBuzzerPress}
       isSubscribed={user?.subscribedChannels?.includes(item.user.id) || false}
-    />
-  );
-
-  const renderLiveStream = ({item}: {item: LiveStream}) => (
-    <LiveStreamCard
-      stream={item}
-      onPress={handleStreamPress}
-      onUserPress={handleStreamUserPress}
     />
   );
 
@@ -913,31 +749,6 @@ const HomeScreen: React.FC = () => {
         selectedInterests={selectedInterests}
       />
 
-      {/* Live Stream Notification Banner - Show in buzz feed */}
-      {liveStreams.length > 0 && liveStreams[0] && (
-        <TouchableOpacity
-          style={[styles.liveStreamBanner, {backgroundColor: theme.colors.primary}]}
-          onPress={() => handleStreamPress(liveStreams[0])}
-          activeOpacity={0.8}>
-          <View style={styles.liveStreamBannerContent}>
-            <View style={styles.liveStreamBannerLeft}>
-              <View style={styles.liveStreamBannerIcon}>
-                <Icon name="videocam" size={20} color="#FFFFFF" />
-                <View style={styles.liveStreamBannerDot} />
-          </View>
-              <View style={styles.liveStreamBannerText}>
-                <Text style={styles.liveStreamBannerTitle}>
-                  {liveStreams[0].displayName || liveStreams[0].username} is live!
-                </Text>
-                <Text style={styles.liveStreamBannerSubtitle}>
-                  {liveStreams[0].viewers || 0} watching • Tap to join
-                </Text>
-        </View>
-            </View>
-            <Icon name="arrow-forward" size={24} color="#FFFFFF" />
-          </View>
-        </TouchableOpacity>
-      )}
 
     </>
   );
@@ -1004,20 +815,6 @@ const HomeScreen: React.FC = () => {
                   onShare={() => shareBuzz(item.id)}
                   onFollow={handleFollow}
                   onOpenProfile={() => handleBuzzerPress(item.userId)}
-                  onOpenStream={() => handleStreamPress({
-                    id: item.id,
-                    userId: item.userId,
-                    username: item.username,
-                    displayName: item.username,
-                    title: item.content,
-                    streamUrl: '',
-                    thumbnailUrl: item.media?.url || '',
-                    isLive: false,
-                    viewers: 0,
-                    category: '',
-                    startedAt: String(item.createdAt),
-                    tags: [],
-                  })}
                 />
               </View>
             ))
@@ -1026,32 +823,21 @@ const HomeScreen: React.FC = () => {
       </ScrollView>
 
       {selectedBuzz && (
-        <Modal transparent animationType="slide" visible={!!selectedBuzz} onRequestClose={handleCloseDetail}>
         <BuzzDetailScreen
           buzz={selectedBuzz}
+          visible={!!selectedBuzz}
           onClose={handleCloseDetail}
           onNext={handleNextBuzz}
           onPrevious={handlePreviousBuzz}
         />
-        </Modal>
       )}
 
       {selectedBuzzerId && (
-        <Modal transparent animationType="slide" visible={!!selectedBuzzerId} onRequestClose={handleCloseBuzzerProfile}>
-          <BuzzerProfileScreen buzzerId={selectedBuzzerId} visible={!!selectedBuzzerId} onClose={handleCloseBuzzerProfile} />
-        </Modal>
-      )}
-
-      {selectedStream && (
-        <Modal transparent animationType="slide" visible={!!selectedStream} onRequestClose={handleCloseStream}>
-          <StreamViewerScreen stream={selectedStream} onClose={handleCloseStream} />
-        </Modal>
+        <BuzzerProfileScreen buzzerId={selectedBuzzerId} visible={!!selectedBuzzerId} onClose={handleCloseBuzzerProfile} />
       )}
 
       {showYourBuzz && (
-        <Modal transparent animationType="slide" visible={showYourBuzz} onRequestClose={() => setShowYourBuzz(false)}>
-          <YourBuzzScreen visible={showYourBuzz} onClose={() => setShowYourBuzz(false)} />
-        </Modal>
+        <YourBuzzScreen visible={showYourBuzz} onClose={() => setShowYourBuzz(false)} />
       )}
 
     </ScreenContainer>
@@ -1170,26 +956,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  emptyStreamsContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 10,
-  },
-  emptyStreamsText: {
-    marginTop: 12,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  liveStreamsSection: {
-    marginBottom: 16,
-    paddingHorizontal: 15,
-  },
-  liveViewerCard: {
-    marginBottom: 16,
-  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1199,9 +965,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  liveStreamsList: {
-    paddingRight: 15,
   },
   smartFeedContainer: {
     paddingHorizontal: 15,
@@ -1452,57 +1215,6 @@ const styles = StyleSheet.create({
   feedHeading: {
     fontSize: 24,
     fontWeight: 'bold',
-  },
-  liveStreamBanner: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    padding: 16,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  liveStreamBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  liveStreamBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  liveStreamBannerIcon: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  liveStreamBannerDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF0069',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  liveStreamBannerText: {
-    flex: 1,
-  },
-  liveStreamBannerTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  liveStreamBannerSubtitle: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    opacity: 0.9,
   },
 });
 

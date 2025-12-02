@@ -16,6 +16,7 @@ import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import ApiService from '../services/APIService';
+import AdminStreamPreview from '../components/AdminStreamPreview';
 
 const {width} = Dimensions.get('window');
 
@@ -76,7 +77,9 @@ const AdminDashboardScreen: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'buzzes'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'buzzes' | 'streams'>('overview');
+  const [liveStreams, setLiveStreams] = useState<any[]>([]);
+  const [loadingStreams, setLoadingStreams] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -103,8 +106,38 @@ const AdminDashboardScreen: React.FC = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadDashboardData();
+    if (activeTab === 'streams') {
+      await loadLiveStreams();
+    }
     setRefreshing(false);
   };
+
+  const loadLiveStreams = async () => {
+    try {
+      setLoadingStreams(true);
+      const response = await ApiService.getLiveStreams();
+
+      if (response.success && response.data) {
+        // Filter only active/live streams
+        const activeStreams = response.data.filter((stream: any) => stream.isLive);
+        setLiveStreams(activeStreams);
+      } else {
+        setLiveStreams([]);
+      }
+    } catch (error) {
+      console.error('Error loading live streams:', error);
+      setLiveStreams([]);
+    } finally {
+      setLoadingStreams(false);
+    }
+  };
+
+  // Load streams when switching to streams tab
+  useEffect(() => {
+    if (activeTab === 'streams') {
+      loadLiveStreams();
+    }
+  }, [activeTab]);
 
   const StatCard: React.FC<{
     title: string;
@@ -301,6 +334,14 @@ const AdminDashboardScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.tab, activeTab === 'streams' && styles.activeTab]}
+          onPress={() => setActiveTab('streams')}>
+          <Icon name="videocam" size={20} color={activeTab === 'streams' ? theme.colors.primary : theme.colors.textSecondary} />
+          <Text style={[styles.tabText, {color: activeTab === 'streams' ? theme.colors.primary : theme.colors.textSecondary}]}>
+            Live
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'users' && styles.activeTab]}
           onPress={() => setActiveTab('users')}>
           <Icon name="people" size={20} color={activeTab === 'users' ? theme.colors.primary : theme.colors.textSecondary} />
@@ -327,6 +368,51 @@ const AdminDashboardScreen: React.FC = () => {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }>
             {renderOverview()}
+          </ScrollView>
+        )}
+        {activeTab === 'streams' && (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            contentContainerStyle={styles.streamsContainer}>
+            <Text style={[styles.sectionTitle, {color: theme.colors.text, paddingHorizontal: 20, paddingTop: 20}]}>
+              Active Live Streams
+            </Text>
+            {loadingStreams ? (
+              <View style={styles.centered}>
+                <Text style={[styles.loadingText, {color: theme.colors.text}]}>
+                  Loading streams...
+                </Text>
+              </View>
+            ) : liveStreams.length === 0 ? (
+              <View style={styles.centered}>
+                <Icon name="videocam-off" size={64} color={theme.colors.textSecondary} />
+                <Text style={[styles.comingSoon, {color: theme.colors.text, marginTop: 16}]}>
+                  No Active Streams
+                </Text>
+                <Text style={[styles.comingSoonSub, {color: theme.colors.textSecondary}]}>
+                  Streams will appear here when users go live
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.streamsList}>
+                {liveStreams.map((stream, index) => (
+                  <Animatable.View
+                    key={stream.id}
+                    animation="fadeInUp"
+                    delay={index * 100}>
+                    <AdminStreamPreview
+                      playbackUrl={stream.ivsPlaybackUrl || stream.restreamPlaybackUrl || stream.streamUrl || ''}
+                      title={stream.title || 'Untitled Stream'}
+                      username={stream.username || 'Unknown'}
+                      viewers={stream.viewers || 0}
+                    />
+                  </Animatable.View>
+                ))}
+              </View>
+            )}
           </ScrollView>
         )}
         {activeTab === 'users' && (
@@ -544,6 +630,14 @@ const styles = StyleSheet.create({
   },
   comingSoonSub: {
     fontSize: 14,
+  },
+  streamsContainer: {
+    paddingBottom: 20,
+  },
+  streamsList: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    alignItems: 'center',
   },
 });
 

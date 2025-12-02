@@ -7,7 +7,7 @@ import {
   FlatList,
   Image,
   Dimensions,
-  Modal,
+  StatusBar,
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -88,13 +88,11 @@ const YourBuzzScreen: React.FC<YourBuzzScreenProps> = ({visible, onClose}) => {
 
   const currentUser = user || authUser;
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}>
-      <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+    <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
         {/* Header */}
         <LinearGradient
           colors={[theme.colors.primary, theme.colors.secondary]}
@@ -145,45 +143,43 @@ const YourBuzzScreen: React.FC<YourBuzzScreenProps> = ({visible, onClose}) => {
 
         {/* Buzz Detail Modal */}
         {selectedBuzz && (
-          <Modal
-            visible={!!selectedBuzz}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setSelectedBuzz(null)}>
-            <View style={styles.detailModal}>
-              <View style={[styles.detailContent, {backgroundColor: theme.colors.surface}]}>
-                <TouchableOpacity
-                  style={styles.detailCloseButton}
-                  onPress={() => setSelectedBuzz(null)}>
-                  <Icon name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-                <ScrollView style={styles.detailScroll}>
-                  <BuzzCard
-                    buzz={selectedBuzz}
-                    onLike={() => {
-                      likeBuzz(selectedBuzz.id);
-                      setSelectedBuzz(null);
-                    }}
-                    onShare={() => {
-                      shareBuzz(selectedBuzz.id);
-                      setSelectedBuzz(null);
-                    }}
-                    onPress={() => {}}
-                    isFollowing={false}
-                  />
-                </ScrollView>
-              </View>
+          <View style={styles.detailModal}>
+            <View style={[styles.detailContent, {backgroundColor: theme.colors.surface}]}>
+              <TouchableOpacity
+                style={styles.detailCloseButton}
+                onPress={() => setSelectedBuzz(null)}>
+                <Icon name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+              <ScrollView style={styles.detailScroll}>
+                <BuzzCard
+                  buzz={selectedBuzz}
+                  onLike={() => {
+                    likeBuzz(selectedBuzz.id);
+                    setSelectedBuzz(null);
+                  }}
+                  onShare={() => {
+                    shareBuzz(selectedBuzz.id);
+                    setSelectedBuzz(null);
+                  }}
+                  onPress={() => {}}
+                  isFollowing={false}
+                />
+              </ScrollView>
             </View>
-          </Modal>
+          </View>
         )}
       </View>
-    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
   header: {
     paddingTop: 50,

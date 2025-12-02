@@ -8,7 +8,7 @@ import {
   ScrollView,
   FlatList,
   Dimensions,
-  Modal,
+  StatusBar,
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -225,18 +225,12 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     onClose();
   };
 
-  if (!visible) {
-    return null;
-  }
+  if (!visible) return null;
 
   if (!buzzer) {
     return (
-      <Modal
-        visible={visible}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={handleClose}
-      >
+      <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
         <View style={[styles.loadingContainer, {backgroundColor: theme.colors.background}]}>
           <TouchableOpacity onPress={handleClose} style={styles.loadingBackButton}>
             <Icon name="arrow-back" size={24} color={theme.colors.text} />
@@ -245,16 +239,13 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
             Loading profile…
           </Text>
         </View>
-      </Modal>
+      </View>
     );
   }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={handleClose}>
+    <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
       <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
         {/* Header */}
         <View style={[styles.header, {backgroundColor: theme.colors.surface}]}>
@@ -534,11 +525,19 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
           ))}
         </View>
       </View>
-    </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
