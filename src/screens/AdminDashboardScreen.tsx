@@ -89,15 +89,18 @@ const AdminDashboardScreen: React.FC = () => {
     try {
       setLoading(true);
       const response = await ApiService.getAdminDashboard();
-      
+
       if (response.success && response.data) {
         setDashboardData(response.data);
       } else {
-        Alert.alert('Error', response.error || 'Failed to load dashboard data');
+        console.error('Dashboard API error:', response.error);
+        // Don't show alert for dashboard errors - just log them
+        // The user can still use other tabs like Live streams
       }
     } catch (error) {
       console.error('Dashboard error:', error);
-      Alert.alert('Error', 'Failed to load dashboard data');
+      // Don't block the UI - just log the error
+      // The Live tab will still work
     } finally {
       setLoading(false);
     }
@@ -303,14 +306,6 @@ const AdminDashboardScreen: React.FC = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered, {backgroundColor: theme.colors.background}]}>
-        <Text style={[styles.loadingText, {color: theme.colors.text}]}>Loading dashboard...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
       {/* Header */}
@@ -367,7 +362,23 @@ const AdminDashboardScreen: React.FC = () => {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }>
-            {renderOverview()}
+            {loading && !dashboardData ? (
+              <View style={styles.centered}>
+                <Text style={[styles.loadingText, {color: theme.colors.text}]}>Loading dashboard...</Text>
+              </View>
+            ) : !dashboardData ? (
+              <View style={styles.centered}>
+                <Icon name="error-outline" size={64} color={theme.colors.textSecondary} />
+                <Text style={[styles.comingSoon, {color: theme.colors.text, marginTop: 16}]}>
+                  Dashboard Data Unavailable
+                </Text>
+                <Text style={[styles.comingSoonSub, {color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 40}]}>
+                  Unable to load overview data. Please check your admin permissions or try refreshing.
+                </Text>
+              </View>
+            ) : (
+              renderOverview()
+            )}
           </ScrollView>
         )}
         {activeTab === 'streams' && (
