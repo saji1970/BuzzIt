@@ -155,7 +155,16 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
     );
 
     const handleStart = useCallback(async () => {
+      console.log('[BuzzLivePublisher] handleStart called:', {
+        hasUrl: !!normalizedUrl,
+        urlPreview: normalizedUrl ? normalizedUrl.substring(0, 60) + '...' : 'NO URL',
+        status,
+        busy,
+        isSimulator
+      });
+
       if (!normalizedUrl) {
+        console.error('[BuzzLivePublisher] ❌ No RTMP URL provided');
         Alert.alert(
           'Streaming URL missing',
           'We could not find an RTMP ingest URL for this stream yet.',
@@ -163,6 +172,7 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
         return;
       }
       if (isSimulator) {
+        console.warn('[BuzzLivePublisher] ⚠️ Running on simulator');
         Alert.alert(
           'Camera not available',
           'iOS Simulator does not provide camera access. Please test BuzzLive on a physical device.',
@@ -172,18 +182,32 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
 
       const permitted = await ensurePermissions();
       if (!permitted) {
+        console.error('[BuzzLivePublisher] ❌ Permissions denied');
         Alert.alert('Permissions required', 'Camera and microphone permissions are needed.');
         return;
       }
-      if (status === 'live' || busy) {
+      if (status === 'live') {
+        console.log('[BuzzLivePublisher] Already live, skipping start');
+        return;
+      }
+      if (busy) {
+        console.log('[BuzzLivePublisher] Busy, skipping start');
         return;
       }
       try {
+        console.log('[BuzzLivePublisher] 🎬 Starting stream...');
         setBusy(true);
         updateStatus('connecting');
-        cameraRef.current?.start();
+
+        if (!cameraRef.current) {
+          throw new Error('Camera reference not available');
+        }
+
+        console.log('[BuzzLivePublisher] Calling cameraRef.current.start()');
+        cameraRef.current.start();
+        console.log('[BuzzLivePublisher] ✅ Stream start initiated');
       } catch (error: any) {
-        console.error('[BuzzLivePublisher] Start error:', {
+        console.error('[BuzzLivePublisher] ❌ Start error:', {
           message: error.message,
           stack: error.stack,
           error,
@@ -201,7 +225,7 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
           `4. Try again`,
         );
       }
-    }, [busy, ensurePermissions, normalizedUrl, status, updateStatus]);
+    }, [busy, ensurePermissions, normalizedUrl, status, updateStatus, isSimulator]);
 
     const handleStop = useCallback(async () => {
       try {
@@ -247,19 +271,50 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
       [handleStart, handleStop, handleSwitch],
     );
 
+    // Auto-start camera preview when component mounts
+    useEffect(() => {
+      if (isSimulator || !cameraRef.current) {
+        return;
+      }
+
+      console.log('[BuzzLivePublisher] Starting camera preview');
+      try {
+        cameraRef.current.startPreview();
+      } catch (error) {
+        console.error('[BuzzLivePublisher] Preview start error:', error);
+      }
+
+      return () => {
+        console.log('[BuzzLivePublisher] Stopping camera preview');
+        try {
+          cameraRef.current?.stopPreview();
+        } catch (error) {
+          console.error('[BuzzLivePublisher] Preview stop error:', error);
+        }
+      };
+    }, [isSimulator]);
+
+    // Auto-start publishing when rtmpUrl and trigger change
     useEffect(() => {
       if (!normalizedUrl || isSimulator) {
+        console.log('[BuzzLivePublisher] Skipping auto-start:', {
+          hasUrl: !!normalizedUrl,
+          isSimulator
+        });
         return;
       }
       if (startTrigger === undefined || startTrigger === null) {
+        console.log('[BuzzLivePublisher] No start trigger yet');
         return;
       }
       if (lastTriggerRef.current === startTrigger) {
+        console.log('[BuzzLivePublisher] Trigger already processed:', startTrigger);
         return;
       }
       lastTriggerRef.current = startTrigger;
+      console.log('[BuzzLivePublisher] 🚀 Auto-starting stream with trigger:', startTrigger);
       handleStart();
-    }, [handleStart, normalizedUrl, startTrigger]);
+    }, [handleStart, normalizedUrl, startTrigger, isSimulator]);
 
     return (
       <View style={[styles.root, style]}>
