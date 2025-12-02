@@ -119,26 +119,24 @@ const GoBuzzLiveScreen: React.FC = () => {
       streamKeyLength: streamKey.length
     });
     
-    // Remove any path after domain:port (like /app/, etc.)
+    // Preserve path (like /app/) when present
     try {
       const url = new URL(normalized);
-      // Reconstruct to base URL only (protocol + hostname + port)
-      normalized = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+      // Reconstruct URL preserving the path component (protocol + hostname + port + pathname)
+      const pathPart = url.pathname && url.pathname !== '/' ? url.pathname : '';
+      normalized = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}${pathPart}`;
       console.log('[GoBuzzLive] URL parsed successfully:', {
         protocol: url.protocol,
         hostname: url.hostname,
         port: url.port || 'default',
+        pathname: url.pathname,
         normalized: normalized.substring(0, 60) + '...'
       });
     } catch (e) {
       // If URL parsing fails, use simple string manipulation
       console.warn('[GoBuzzLive] URL parsing failed, using string manipulation:', e);
-      normalized = normalized.replace(/\/+$/, ''); // Remove trailing slashes
-      // Remove path if present (everything after domain:port)
-      const match = normalized.match(/^((?:rtmp|rtmps):\/\/[^\/]+)/);
-      if (match) {
-        normalized = match[1];
-      }
+      // Only remove trailing slashes, preserve the path
+      normalized = normalized.replace(/\/+$/, '');
     }
     
     // Convert RTMPS to RTMP (NodeMediaClient doesn't support RTMPS)
