@@ -294,15 +294,26 @@ const CreateBuzzScreen: React.FC = () => {
         }
       }
 
-      const result = await launchCamera({
+      // Build camera options based on media type
+      const cameraOptions: any = {
         mediaType: mediaType === 'video' ? 'video' : 'photo',
         includeBase64: false,
         cameraType: 'back',
         saveToPhotos: true,
         quality: 0.8,
-        videoQuality: 'high',
-        durationLimit: mediaType === 'video' ? 300 : undefined, // 5 minutes max for video
-      });
+      };
+
+      // Set durationLimit based on media type
+      // For photos, set to 0 to prevent native module errors when reading the value
+      // For video, set to 300 seconds (5 minutes max)
+      if (mediaType === 'video') {
+        cameraOptions.videoQuality = 'high';
+        cameraOptions.durationLimit = 300; // 5 minutes max
+      } else {
+        cameraOptions.durationLimit = 0; // Explicitly set to 0 for photos
+      }
+
+      const result = await launchCamera(cameraOptions);
 
       if (result.didCancel) {
         return;
