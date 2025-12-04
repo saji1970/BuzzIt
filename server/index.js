@@ -663,15 +663,22 @@ const verifyAdmin = async (req, res, next) => {
   }
 };
 
-// Import social media routes
-const socialAuthRoutes = require('./routes/socialAuthRoutes');
-const socialShareRoutes = require('./routes/socialShareRoutes');
+// Import social media routes (optional - only if files exist)
+let socialAuthRoutes, socialShareRoutes;
+try {
+  socialAuthRoutes = require('./routes/socialAuthRoutes');
+  socialShareRoutes = require('./routes/socialShareRoutes');
+  
+  // Mount social media routes
+  app.use('/api/social-auth', socialAuthRoutes);
+  app.use('/api/social-share', socialShareRoutes);
+  console.log('✅ Social media routes loaded');
+} catch (error) {
+  console.log('⚠️  Social media routes not available:', error.message);
+  // Routes are optional, continue without them
+}
 
 // API Routes
-
-// Mount social media routes
-app.use('/api/social-auth', socialAuthRoutes);
-app.use('/api/social-share', socialShareRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
