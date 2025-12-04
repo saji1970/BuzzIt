@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
-import * as Animatable from 'react-native-animatable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
@@ -27,7 +26,6 @@ import {useFeatures} from '../context/FeatureContext';
 import BuzzCard from '../components/BuzzCard';
 import InterestFilter from '../components/InterestFilter';
 import BuzzDetailScreen from './BuzzDetailScreen';
-import BuzzerProfileScreen from './BuzzerProfileScreen';
 import CreateStreamScreen from './CreateStreamScreen';
 import SubscribedChannels from '../components/SubscribedChannels';
 import ApiService from '../services/APIService';
@@ -35,6 +33,7 @@ import UserRecommendationCard, {UserRecommendation} from '../components/UserReco
 import ContactSyncService from '../components/ContactSyncService';
 import YourBuzzScreen from './YourBuzzScreen';
 import ScreenContainer from '../components/ScreenContainer';
+import LiveStreamCard, {LiveStream} from '../components/LiveStreamCard';
 
 const {width} = Dimensions.get('window');
 
@@ -48,7 +47,6 @@ const HomeScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedBuzz, setSelectedBuzz] = useState<Buzz | null>(null);
-  const [selectedBuzzerId, setSelectedBuzzerId] = useState<string | null>(null);
   const [userRecommendations, setUserRecommendations] = useState<UserRecommendation[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
@@ -57,13 +55,14 @@ const HomeScreen: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [showYourBuzz, setShowYourBuzz] = useState(false);
+  const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
+  const [loadingStreams, setLoadingStreams] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
   // Define renderEmptyState early to ensure it's always available
   const renderEmptyState = useCallback(() => (
-    <Animatable.View
-      animation="fadeIn"
+    <View
       style={[styles.emptyState, {backgroundColor: theme.colors.background}]}>
       <Icon name="trending-up" size={80} color={theme.colors.textSecondary} />
       <Text style={[styles.emptyTitle, {color: theme.colors.text}]}>
@@ -72,7 +71,7 @@ const HomeScreen: React.FC = () => {
       <Text style={[styles.emptySubtitle, {color: theme.colors.textSecondary}]}>
         Start following your interests to see buzzes here
       </Text>
-    </Animatable.View>
+    </View>
   ), [theme.colors.background, theme.colors.text, theme.colors.textSecondary]);
 
   // Legacy alias for backwards compatibility - defined early in component to prevent ReferenceError
@@ -88,6 +87,7 @@ const HomeScreen: React.FC = () => {
         loadBuzzes();
       }
       loadUserRecommendations();
+      loadLiveStreams();
     } catch (error) {
       console.error('Error in HomeScreen useEffect:', error);
       // Prevent crash
@@ -103,6 +103,7 @@ const HomeScreen: React.FC = () => {
       } else {
         loadBuzzes();
       }
+      loadLiveStreams();
     }, [user, buzzes, useSmartFeed])
   );
 
@@ -171,7 +172,7 @@ const HomeScreen: React.FC = () => {
     );
   };
 
-  // Refresh buzzes more frequently to catch new posts (every 30 seconds)
+  // Refresh buzzes and live streams more frequently (every 30 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
       // Reload buzzes from context (which will trigger feed refresh)
@@ -180,6 +181,7 @@ const HomeScreen: React.FC = () => {
       } else {
         loadBuzzes();
       }
+      loadLiveStreams();
     }, 30000); // Every 30 seconds
 
     return () => clearInterval(interval);
@@ -269,6 +271,7 @@ const HomeScreen: React.FC = () => {
     } else {
       loadBuzzes();
     }
+    loadLiveStreams();
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -366,30 +369,31 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleBuzzerPress = (buzzerId: string) => {
-    setSelectedBuzzerId(buzzerId);
+    navigation.navigate('BuzzerProfile' as never, { buzzerId } as never);
   };
 
-  const handleCloseBuzzerProfile = () => {
-    setSelectedBuzzerId(null);
+  const handleLiveStreamPress = (stream: LiveStream) => {
+    // Navigate to stream viewer
+    navigation.navigate('StreamViewer' as never, { stream } as never);
   };
 
 
 
   const loadUserRecommendations = async () => {
     if (!user) return;
-    
+
     try {
       setLoadingRecommendations(true);
-      
+
       // Sync contacts
       const {contacts, socialConnections} = await ContactSyncService.syncContacts();
-      
+
       // Get recommendations
       const response = await ApiService.getUserRecommendations({
         contacts,
         socialConnections,
       });
-      
+
       if (response.success && response.data) {
         setUserRecommendations(response.data.recommendations || []);
       }
@@ -397,6 +401,28 @@ const HomeScreen: React.FC = () => {
       console.error('Error loading recommendations:', error);
     } finally {
       setLoadingRecommendations(false);
+    }
+  };
+
+  const loadLiveStreams = async () => {
+    try {
+      setLoadingStreams(true);
+      const response = await ApiService.getLiveStreams();
+
+      if (response.success && response.data) {
+        // Filter out the current user's own stream
+        const currentUserId = user?.id || authUser?.id;
+        const otherUsersStreams = response.data.filter(
+          (stream: LiveStream) => stream.userId !== currentUserId && stream.isLive
+        );
+        setLiveStreams(otherUsersStreams);
+        console.log('Loaded live streams:', otherUsersStreams.length);
+      }
+    } catch (error) {
+      console.error('Error loading live streams:', error);
+      setLiveStreams([]);
+    } finally {
+      setLoadingStreams(false);
     }
   };
 
@@ -500,9 +526,9 @@ const HomeScreen: React.FC = () => {
       
       const currentUserId = user?.id || authUser?.id;
       
-      // Filter out blocked users and own buzzes
+      // Filter out blocked users only (include own buzzes like normal feed)
       let eligibleBuzzes = buzzes.filter(buzz => 
-        !isBlocked(buzz.userId) && buzz.userId !== currentUserId
+        !isBlocked(buzz.userId)
       );
       
       // Calculate smart feed scores
@@ -536,9 +562,7 @@ const HomeScreen: React.FC = () => {
   );
 
   const renderBuzz = ({item, index}: {item: Buzz; index: number}) => (
-    <Animatable.View
-      animation="fadeInUp"
-      delay={index * 100}
+    <View
       style={styles.buzzContainer}>
       <BuzzCard
         buzz={item}
@@ -560,7 +584,7 @@ const HomeScreen: React.FC = () => {
         isFollowing={false}
         onFollow={handleFollow}
       />
-    </Animatable.View>
+    </View>
   );
 
 
@@ -693,16 +717,16 @@ const HomeScreen: React.FC = () => {
           style={[
             styles.smartFeedButton,
             {
-              backgroundColor: useSmartFeed 
-                ? theme.colors.primary 
+              backgroundColor: useSmartFeed
+                ? theme.colors.primary
                 : theme.colors.surface,
             },
           ]}
           onPress={handleToggleSmartFeed}>
-          <Icon 
-            name="auto-awesome" 
-            size={18} 
-            color={useSmartFeed ? '#FFFFFF' : theme.colors.text} 
+          <Icon
+            name="auto-awesome"
+            size={18}
+            color={useSmartFeed ? '#FFFFFF' : theme.colors.text}
           />
           <Text
             style={[
@@ -715,6 +739,32 @@ const HomeScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Live Streams Section */}
+      {liveStreams.length > 0 && (
+        <View style={styles.liveStreamsSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="live-tv" size={20} color="#FF0069" />
+            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>Live Now</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.liveStreamsList}
+            nestedScrollEnabled
+          >
+            {liveStreams.map((stream) => (
+              <View key={stream.id} style={styles.liveStreamCardWrapper}>
+                <LiveStreamCard
+                  stream={stream}
+                  onPress={handleLiveStreamPress}
+                  onUserPress={handleBuzzerPress}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={styles.feedHeadingRow}>
         <Text style={[styles.feedHeading, {color: theme.colors.text}]}>buzz feed</Text>
@@ -830,10 +880,6 @@ const HomeScreen: React.FC = () => {
           onNext={handleNextBuzz}
           onPrevious={handlePreviousBuzz}
         />
-      )}
-
-      {selectedBuzzerId && (
-        <BuzzerProfileScreen buzzerId={selectedBuzzerId} visible={!!selectedBuzzerId} onClose={handleCloseBuzzerProfile} />
       )}
 
       {showYourBuzz && (
@@ -1215,6 +1261,17 @@ const styles = StyleSheet.create({
   feedHeading: {
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  liveStreamsSection: {
+    marginBottom: 20,
+    paddingHorizontal: 15,
+  },
+  liveStreamsList: {
+    paddingRight: 15,
+  },
+  liveStreamCardWrapper: {
+    width: 280,
+    marginRight: 12,
   },
 });
 

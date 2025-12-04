@@ -32,7 +32,17 @@
       "Bash(del \"C:\\BuzzIt\\BuzzIt\\src\\screens\\StreamViewerScreen.tsx\" \"C:\\BuzzIt\\BuzzIt\\src\\components\\Buzzlive\\BuzzLiveViewer.tsx\" \"C:\\BuzzIt\\BuzzIt\\src\\components\\StreamVideoPlayer.tsx\")",
       "Bash(del srcscreensStreamViewerScreen.tsx)",
       "Bash(del srccomponentsBuzzliveBuzzLiveViewer.tsx)",
-      "Bash(del srccomponentsStreamVideoPlayer.tsx)"
+      "Bash(del srccomponentsStreamVideoPlayer.tsx)",
+      "Bash(npx tsc:*)",
+      "Bash(adb devices:*)",
+      "Bash(adb shell am start:*)",
+      "Bash(adb logcat:*)",
+      "Bash(adb shell:*)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(del \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-hdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-mdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-mdpi\\node_modules_reactnavigation_elements_src_assets_backiconmask.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xxhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xxxhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\")",
+      "Bash(del /f \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-hdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-mdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-mdpi\\node_modules_reactnavigation_elements_src_assets_backiconmask.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xxhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\" \"C:\\BuzzIt\\BuzzIt\\android\\app\\src\\main\\res\\drawable-xxxhdpi\\node_modules_reactnavigation_elements_src_assets_backicon.png\")",
+      "Bash(timeout 5 bash:*)",
+      "Bash(npx react-native bundle:*)"
     ],
     "deny": [],
     "ask": []

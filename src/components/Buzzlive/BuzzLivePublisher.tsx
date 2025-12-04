@@ -272,8 +272,10 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
     );
 
     // Auto-start camera preview when component mounts
+    const [cameraReady, setCameraReady] = useState(false);
+
     useEffect(() => {
-      if (isSimulator || !cameraRef.current) {
+      if (isSimulator || !cameraReady || !cameraRef.current) {
         return;
       }
 
@@ -292,7 +294,7 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
           console.error('[BuzzLivePublisher] Preview stop error:', error);
         }
       };
-    }, [isSimulator]);
+    }, [isSimulator, cameraReady]);
 
     // Auto-start publishing when rtmpUrl and trigger change
     useEffect(() => {
@@ -327,6 +329,10 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
           style={StyleSheet.absoluteFill}
           ref={ref => {
             cameraRef.current = ref;
+            if (ref && !cameraReady) {
+              console.log('[BuzzLivePublisher] Camera ref ready, triggering preview start');
+              setCameraReady(true);
+            }
           }}
           url={normalizedUrl}
           frontCamera={useFrontCamera}
@@ -354,42 +360,64 @@ const BuzzLivePublisher = forwardRef<BuzzLivePublisherHandle, BuzzLivePublisherP
           enhancedRtmp
           onEvent={(code: number, msg: string) => {
             const mapped = statusFromCode(code);
-            console.log('[BuzzLivePublisher] NodePublisher event:', {
+
+            // Enhanced logging with full details
+            console.log('[BuzzLivePublisher] ========================================');
+            console.log('[BuzzLivePublisher] NodePublisher Event:', {
               code,
-              msg,
-              status: mapped,
-              rtmpUrl: normalizedUrl.substring(0, 60) + '...'
+              message: msg,
+              mappedStatus: mapped,
+              timestamp: new Date().toISOString()
             });
-            
+            console.log('[BuzzLivePublisher] RTMP URL (full):', normalizedUrl);
+            console.log('[BuzzLivePublisher] ========================================');
+
             if (mapped === 'connecting') {
               updateStatus('connecting');
               console.log('[BuzzLivePublisher] 🔄 Connecting to RTMP server...');
+              console.log('[BuzzLivePublisher] Target:', normalizedUrl.split('/').slice(0, 3).join('/'));
             } else if (mapped === 'live') {
               updateStatus('live');
               setBusy(false);
               console.log('[BuzzLivePublisher] ✅ Stream is now live!');
+              console.log('[BuzzLivePublisher] 🎉 Successfully connected to IVS!');
             } else if (mapped === 'idle') {
               updateStatus('idle');
               setBusy(false);
               console.log('[BuzzLivePublisher] ⏸️ Stream idle');
             } else if (mapped === 'error') {
-              console.error('[BuzzLivePublisher] ❌ Streaming error:', {
-                code,
-                message: msg,
-                rtmpUrl: normalizedUrl.substring(0, 60) + '...'
+              console.error('[BuzzLivePublisher] ❌ Streaming error details:', {
+                errorCode: code,
+                errorMessage: msg,
+                rtmpUrl: normalizedUrl,
+                urlProtocol: normalizedUrl.split(':')[0],
+                urlHost: normalizedUrl.split('/')[2] || 'unknown',
+                timestamp: new Date().toISOString()
               });
               updateStatus('error');
               setBusy(false);
-              Alert.alert(
-                'Streaming Error',
-                `Broadcasting error: ${msg || `Code ${code}`}\n\n` +
-                `Please check:\n` +
-                `1. RTMP URL is correct\n` +
-                `2. Network connectivity\n` +
-                `3. IVS service status\n` +
-                `4. Note: IVS may require RTMPS (not RTMP)\n` +
-                `5. Try again`,
-              );
+
+              // More detailed error message
+              let errorDetails = `Error Code: ${code}\nMessage: ${msg || 'Unknown error'}\n\n`;
+              errorDetails += `Troubleshooting:\n`;
+
+              if (code === 2005) {
+                errorDetails += `• Network connection failed\n`;
+                errorDetails += `• Check WiFi/cellular data\n`;
+                errorDetails += `• Try switching networks\n`;
+              } else if (code >= 2000 && code < 2100) {
+                errorDetails += `• RTMP connection issue\n`;
+                errorDetails += `• Verify network allows port 1935\n`;
+                errorDetails += `• Try on different network\n`;
+              } else {
+                errorDetails += `• Check network connectivity\n`;
+                errorDetails += `• Verify IVS channel is active\n`;
+                errorDetails += `• Try again in a moment\n`;
+              }
+
+              errorDetails += `\nRTMP Server: ${normalizedUrl.split('/')[2] || 'unknown'}`;
+
+              Alert.alert('Streaming Error', errorDetails);
             }
           }}
         />

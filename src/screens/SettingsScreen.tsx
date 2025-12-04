@@ -206,58 +206,13 @@ const SettingsScreen: React.FC = () => {
             true
           )}
           {renderSettingItem(
-            'notifications',
-            'Notifications',
-            'Manage your notification preferences',
-            () => {},
-            1,
-            true
-          )}
-          {renderSettingItem(
             'security',
-            'Privacy',
-            'Control your privacy settings',
-            () => {},
-            2,
-            true
-          )}
-        </Animatable.View>
-
-        {/* App Settings */}
-        <Animatable.View animation="fadeInUp" delay={300} style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
-            App
-          </Text>
-          {renderSettingItem(
-            'language',
-            'Language',
-            'English',
-            () => {},
-            0,
-            true
-          )}
-          {renderSettingItem(
-            'folder',
-            'Storage',
-            'Manage app storage',
-            () => {},
+            'Privacy & Social',
+            'Manage privacy settings and social media connections',
+            () => {
+              navigation.navigate('PrivacySettings' as never);
+            },
             1,
-            true
-          )}
-          {renderSettingItem(
-            'help-outline',
-            'Help & Support',
-            'Get help and contact support',
-            () => {},
-            2,
-            true
-          )}
-          {renderSettingItem(
-            'info',
-            'About',
-            'App version 1.0.0',
-            () => {},
-            3,
             true
           )}
         </Animatable.View>

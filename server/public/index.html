@@ -457,6 +457,43 @@
                 <div style="margin-top: 30px; text-align: center;">
                     <button class="btn" onclick="saveFeatures()">Save Changes</button>
                 </div>
+
+                <!-- Feed Retention Settings -->
+                <div style="margin-top: 50px; padding-top: 30px; border-top: 2px solid #e1e5e9;">
+                    <h2 style="margin-bottom: 20px;">Feed Retention Settings</h2>
+                    <p style="margin-bottom: 30px; color: #666;">Configure automatic deletion of old feeds (buzzes)</p>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 15px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label for="retentionDays" style="font-weight: 600; margin-bottom: 10px; display: block;">
+                                Retention Days
+                            </label>
+                            <input 
+                                type="number" 
+                                id="retentionDays" 
+                                min="1" 
+                                value="2" 
+                                style="width: 200px; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px;"
+                                placeholder="Enter days"
+                            >
+                            <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                                Buzzes older than this number of days will be automatically deleted from the database. 
+                                Cleanup runs daily at midnight.
+                            </p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn" onclick="saveRetentionDays()" style="width: auto; padding: 12px 24px;">
+                                Save Retention Days
+                            </button>
+                            <button class="btn" onclick="runManualCleanup()" style="width: auto; padding: 12px 24px; background: #e74c3c;">
+                                Run Cleanup Now
+                            </button>
+                        </div>
+                        
+                        <div id="retentionStatus" style="margin-top: 20px; padding: 15px; border-radius: 8px; display: none;"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Users Tab -->
@@ -721,7 +758,8 @@
                 loadUsers(),
                 loadSubscriptions(),
                 loadStats(),
-                loadActiveStreams()
+                loadActiveStreams(),
+                loadRetentionDays()
             ]);
         }
 
@@ -736,6 +774,108 @@
                 }
             } catch (error) {
                 console.error('Error loading features:', error);
+            }
+        }
+
+        async function loadRetentionDays() {
+            try {
+                const response = await fetch('/api/admin/settings/retention-days', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    document.getElementById('retentionDays').value = data.data.value || '2';
+                }
+            } catch (error) {
+                console.error('Error loading retention days:', error);
+            }
+        }
+
+        async function saveRetentionDays() {
+            const days = parseInt(document.getElementById('retentionDays').value);
+            const statusDiv = document.getElementById('retentionStatus');
+            
+            if (!days || days < 1) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fee';
+                statusDiv.style.color = '#c33';
+                statusDiv.textContent = 'Please enter a valid number of days (minimum 1)';
+                return;
+            }
+
+            try {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#e8f5e9';
+                statusDiv.style.color = '#2e7d32';
+                statusDiv.textContent = 'Saving...';
+
+                const response = await fetch('/api/admin/settings/retention-days', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ days })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    statusDiv.style.background = '#e8f5e9';
+                    statusDiv.style.color = '#2e7d32';
+                    statusDiv.textContent = `✅ Retention days updated to ${days} days. Cleanup runs daily at midnight.`;
+                } else {
+                    statusDiv.style.background = '#fee';
+                    statusDiv.style.color = '#c33';
+                    statusDiv.textContent = data.error || 'Failed to save retention days';
+                }
+            } catch (error) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fee';
+                statusDiv.style.color = '#c33';
+                statusDiv.textContent = 'Network error. Please try again.';
+            }
+        }
+
+        async function runManualCleanup() {
+            const statusDiv = document.getElementById('retentionStatus');
+            
+            if (!confirm('Are you sure you want to run cleanup now? This will delete all buzzes older than the configured retention days.')) {
+                return;
+            }
+
+            try {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fff3cd';
+                statusDiv.style.color = '#856404';
+                statusDiv.textContent = 'Running cleanup...';
+
+                const response = await fetch('/api/admin/buzzes/cleanup', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    statusDiv.style.background = '#e8f5e9';
+                    statusDiv.style.color = '#2e7d32';
+                    statusDiv.textContent = `✅ ${data.message}`;
+                } else {
+                    statusDiv.style.background = '#fee';
+                    statusDiv.style.color = '#c33';
+                    statusDiv.textContent = data.error || 'Failed to run cleanup';
+                }
+            } catch (error) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fee';
+                statusDiv.style.color = '#c33';
+                statusDiv.textContent = 'Network error. Please try again.';
             }
         }
 

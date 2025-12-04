@@ -119,46 +119,23 @@ const GoBuzzLiveScreen: React.FC = () => {
       streamKeyLength: streamKey.length
     });
     
-    // Preserve path (like /app/) when present
-    try {
-      const url = new URL(normalized);
-      // Reconstruct URL preserving the path component (protocol + hostname + port + pathname)
-      const pathPart = url.pathname && url.pathname !== '/' ? url.pathname : '';
-      normalized = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}${pathPart}`;
-      console.log('[GoBuzzLive] URL parsed successfully:', {
-        protocol: url.protocol,
-        hostname: url.hostname,
-        port: url.port || 'default',
-        pathname: url.pathname,
-        normalized: normalized.substring(0, 60) + '...'
-      });
-    } catch (e) {
-      // If URL parsing fails, use simple string manipulation
-      console.warn('[GoBuzzLive] URL parsing failed, using string manipulation:', e);
-      // Only remove trailing slashes, preserve the path
-      normalized = normalized.replace(/\/+$/, '');
-    }
-    
-    // Convert RTMPS to RTMP (NodeMediaClient doesn't support RTMPS)
-    // Try standard RTMP port 1935 instead of 443
+    // Convert RTMPS to RTMP and fix port (NodeMediaClient doesn't support RTMPS)
+    // Use simple string replacement instead of URL() API (not available in React Native)
     if (normalized.startsWith('rtmps://')) {
-      normalized = normalized.replace('rtmps://', 'rtmp://');
-      // Replace port 443 with 1935 (standard RTMP port)
-      // If no port specified, RTMP defaults to 1935
-      if (normalized.includes(':443')) {
-        normalized = normalized.replace(':443', ':1935');
-        console.log('[GoBuzzLive] Converted RTMPS to RTMP, changed port 443 to 1935');
-      } else if (!normalized.match(/:\d+/)) {
-        // No port specified, add standard RTMP port
-        const hostMatch = normalized.match(/^rtmp:\/\/([^\/]+)/);
-        if (hostMatch) {
-          normalized = normalized.replace(/^rtmp:\/\/([^\/]+)/, 'rtmp://$1:1935');
-          console.log('[GoBuzzLive] Converted RTMPS to RTMP, added port 1935');
-        }
-      } else {
-        console.log('[GoBuzzLive] Converted RTMPS to RTMP, keeping existing port');
-      }
+      // Replace protocol and port in one go
+      normalized = normalized.replace('rtmps://', 'rtmp://').replace(':443/', ':1935/');
+      console.log('[GoBuzzLive] Converted RTMPS to RTMP, changed port 443 to 1935');
     }
+
+    // Remove trailing slash from base URL (we'll add it back with the stream key)
+    normalized = normalized.replace(/\/+$/, '');
+
+    console.log('[GoBuzzLive] Normalized base URL:', {
+      original: baseUrl.substring(0, 60) + '...',
+      normalized: normalized.substring(0, 60) + '...',
+      hasPath: normalized.includes('/app'),
+      endsWithSlash: normalized.endsWith('/')
+    });
 
     // Final validation
     if (!normalized || normalized.length < 10) {
@@ -419,6 +396,15 @@ const GoBuzzLiveScreen: React.FC = () => {
           setPublisherTrigger(prev => prev + 1);
           // Set streaming state immediately when stream is created
           setIsStreaming(true);
+
+          // Debug: Show RTMP URL details in development
+          console.log('[GoBuzzLive] 🎬 Starting stream with URL:', {
+            protocol: ingestUrl.substring(0, 7),
+            server: ingestUrl.split('/')[2],
+            hasStreamKey: ingestUrl.includes('sk_'),
+            urlLength: ingestUrl.length,
+            fullUrl: ingestUrl
+          });
         } else {
           setPublishUrl('');
           // Still show controls even without ingest URL
@@ -907,7 +893,6 @@ const GoBuzzLiveScreen: React.FC = () => {
         {/* Live Controls - Show when streaming OR when stream is created (even if not live yet) */}
         {(isStreaming || (currentStream && !showSetup)) && (
           <>
-            {renderBroadcastInfo()}
             {/* Bottom Controls - Always visible when streaming */}
             <View style={styles.bottomControls}>
               {/* Toggle Camera */}

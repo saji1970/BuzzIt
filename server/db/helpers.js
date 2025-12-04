@@ -262,6 +262,73 @@ const deleteBuzzesOlderThan = async (days = 3) => {
   }
 };
 
+// App settings helper functions
+const getAppSetting = async (key, defaultValue = null) => {
+  if (!isConnected()) {
+    return defaultValue;
+  }
+
+  try {
+    const result = await query(
+      'SELECT value FROM app_settings WHERE key = $1',
+      [key]
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0].value;
+    }
+    return defaultValue;
+  } catch (error) {
+    console.error(`Error getting app setting ${key}:`, error);
+    return defaultValue;
+  }
+};
+
+const setAppSetting = async (key, value, description = null, updatedBy = null) => {
+  if (!isConnected()) {
+    return false;
+  }
+
+  try {
+    await query(
+      `INSERT INTO app_settings (key, value, description, updated_at, updated_by)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)
+       ON CONFLICT (key) 
+       DO UPDATE SET value = EXCLUDED.value, 
+                     description = COALESCE(EXCLUDED.description, app_settings.description),
+                     updated_at = CURRENT_TIMESTAMP,
+                     updated_by = EXCLUDED.updated_by`,
+      [key, value, description, updatedBy]
+    );
+    return true;
+  } catch (error) {
+    console.error(`Error setting app setting ${key}:`, error);
+    return false;
+  }
+};
+
+const getAllAppSettings = async () => {
+  if (!isConnected()) {
+    return {};
+  }
+
+  try {
+    const result = await query('SELECT key, value, description, updated_at, updated_by FROM app_settings');
+    const settings = {};
+    result.rows.forEach(row => {
+      settings[row.key] = {
+        value: row.value,
+        description: row.description,
+        updatedAt: row.updated_at,
+        updatedBy: row.updated_by
+      };
+    });
+    return settings;
+  } catch (error) {
+    console.error('Error getting all app settings:', error);
+    return {};
+  }
+};
+
 module.exports = {
   convertDbUserToObject,
   convertDbBuzzToObject,
@@ -274,5 +341,8 @@ module.exports = {
   getAllBuzzes,
   getBuzzesPaginated,
   deleteBuzzesOlderThan,
+  getAppSetting,
+  setAppSetting,
+  getAllAppSettings,
 };
 

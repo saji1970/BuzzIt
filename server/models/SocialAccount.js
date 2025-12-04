@@ -19,6 +19,30 @@ const socialAccountSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  refreshToken: {
+    type: String,
+    default: null,
+  },
+  expiresAt: {
+    type: Date,
+    default: null,
+  },
+  profileId: {
+    type: String,
+    default: null,
+  },
+  profileUrl: {
+    type: String,
+    default: null,
+  },
+  profilePicture: {
+    type: String,
+    default: null,
+  },
+  isConnected: {
+    type: Boolean,
+    default: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

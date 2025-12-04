@@ -14,7 +14,6 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {useUser, Buzz} from '../context/UserContext';
@@ -39,28 +38,30 @@ interface Buzzer {
 }
 
 interface BuzzerProfileScreenProps {
-  buzzerId: string;
-  visible: boolean;
-  onClose: () => void;
+  route: {
+    params: {
+      buzzerId: string;
+    };
+  };
+  navigation: any;
 }
 
 const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
-  buzzerId,
-  visible,
-  onClose,
+  route,
+  navigation,
 }) => {
+  const {buzzerId} = route.params;
   const {theme} = useTheme();
   const {buzzes, likeBuzz, shareBuzz, subscribeToChannel, unsubscribeFromChannel, blockUser, isSubscribed, isBlocked} = useUser();
-  const navigation = useNavigation<any>();
   const [buzzer, setBuzzer] = useState<Buzzer | null>(null);
   const [buzzerBuzzes, setBuzzerBuzzes] = useState<Buzz[]>([]);
   const [activeTab, setActiveTab] = useState<'grid' | 'reels' | 'tagged'>('grid');
 
   useEffect(() => {
-    if (visible && buzzerId) {
+    if (buzzerId) {
       loadBuzzerData();
     }
-  }, [visible, buzzerId, buzzes]);
+  }, [buzzerId, buzzes]);
 
   const loadBuzzerData = async () => {
     try {
@@ -222,10 +223,8 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
     setBuzzer(null);
     setBuzzerBuzzes([]);
     setActiveTab('grid');
-    onClose();
+    navigation.goBack();
   };
-
-  if (!visible) return null;
 
   if (!buzzer) {
     return (
@@ -248,9 +247,11 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
       <View style={[styles.container, {backgroundColor: theme.colors.background}]}>
         {/* Header */}
-        <View style={[styles.header, {backgroundColor: theme.colors.surface}]}>
-          <View style={styles.headerButtonPlaceholder} />
-          <Text style={[styles.headerTitle, {color: theme.colors.text}]}>
+        <View style={[styles.header, {backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border}]}>
+          <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
+            <Icon name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, {color: theme.colors.text, flex: 1, textAlign: 'center'}]}>
             {buzzer.username}
           </Text>
           <View style={styles.headerRight}>
@@ -379,44 +380,6 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
                 <Icon name="person-add" size={16} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-
-            {/* Story Highlights */}
-            <View style={styles.highlightsContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.highlightItem}>
-                  <View style={[styles.highlightCircle, {backgroundColor: theme.colors.border}]}>
-                    <Icon name="add" size={20} color={theme.colors.textSecondary} />
-                  </View>
-                  <Text style={[styles.highlightText, {color: theme.colors.textSecondary}]}>
-                    New
-                  </Text>
-                </View>
-                <View style={styles.highlightItem}>
-                  <View style={[styles.highlightCircle, {backgroundColor: theme.colors.primary}]}>
-                    <Text style={styles.highlightEmoji}>👋</Text>
-                  </View>
-                  <Text style={[styles.highlightText, {color: theme.colors.textSecondary}]}>
-                    It's ya girl
-                  </Text>
-                </View>
-                <View style={styles.highlightItem}>
-                  <View style={[styles.highlightCircle, {backgroundColor: theme.colors.secondary}]}>
-                    <Text style={styles.highlightEmoji}>🌊</Text>
-                  </View>
-                  <Text style={[styles.highlightText, {color: theme.colors.textSecondary}]}>
-                    Vibez
-                  </Text>
-                </View>
-                <View style={styles.highlightItem}>
-                  <View style={[styles.highlightCircle, {backgroundColor: theme.colors.accent}]}>
-                    <Text style={styles.highlightEmoji}>🗼</Text>
-                  </View>
-                  <Text style={[styles.highlightText, {color: theme.colors.textSecondary}]}>
-                    Vibes
-                  </Text>
-                </View>
-              </ScrollView>
-            </View>
           </View>
 
           {/* Content Tabs */}
@@ -531,12 +494,7 @@ const BuzzerProfileScreen: React.FC<BuzzerProfileScreenProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -569,10 +527,10 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
-  },
-  headerButtonPlaceholder: {
-    width: 40,
-    height: 40,
+    minWidth: 40,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -715,29 +673,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     borderRadius: 8,
-  },
-  highlightsContainer: {
-    marginBottom: 16,
-  },
-  highlightItem: {
-    alignItems: 'center',
-    marginRight: 16,
-    width: 70,
-  },
-  highlightCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  highlightEmoji: {
-    fontSize: 24,
-  },
-  highlightText: {
-    fontSize: 12,
-    textAlign: 'center',
   },
   tabsContainer: {
     flexDirection: 'row',

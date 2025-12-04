@@ -8,7 +8,6 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import * as Animatable from 'react-native-animatable';
 
 import {useTheme} from '../context/ThemeContext';
 import {getPlayableStreamUrl} from '../utils/streamUrl';
@@ -77,8 +76,7 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
   );
 
   return (
-    <Animatable.View
-      animation="fadeInUp"
+    <View
       style={[styles.container, {backgroundColor: theme.colors.surface}]}>
       <TouchableOpacity
         activeOpacity={0.9}
@@ -197,7 +195,7 @@ const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
           )}
         </View>
       </TouchableOpacity>
-    </Animatable.View>
+    </View>
   );
 };
 

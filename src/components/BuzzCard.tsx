@@ -518,6 +518,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
       <SocialMediaShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
+        buzzId={buzz.id}
         buzzContent={buzz.content}
         buzzMedia={buzz.media?.url || undefined}
       />

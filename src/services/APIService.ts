@@ -33,6 +33,13 @@ export interface User {
   createdAt: string;
   subscribedChannels: string[];
   blockedUsers: string[];
+  privacySettings?: {
+    shareEmail: boolean;
+    shareMobileNumber: boolean;
+    shareLocation: boolean;
+    shareBio: boolean;
+    shareInterests: boolean;
+  };
 }
 
 export interface Buzz {
@@ -404,6 +411,33 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ platform, ...accountData }),
     });
+  }
+
+  // Social Media Integration (OAuth)
+  async getSocialAuthUrl(platform: string): Promise<ApiResponse<{ authUrl: string; platform: string }>> {
+    return this.makeRequest<{ authUrl: string; platform: string }>(`/api/social-auth/oauth/${platform}/url`);
+  }
+
+  async getConnectedSocialAccounts(): Promise<ApiResponse<{ accounts: any[] }>> {
+    return this.makeRequest<{ accounts: any[] }>('/api/social-auth/connected');
+  }
+
+  async disconnectSocialAccount(platform: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeRequest<{ message: string }>(`/api/social-auth/${platform}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Social Media Sharing
+  async shareBuzzToSocial(buzzId: string, platforms: string[]): Promise<ApiResponse<{ results: any[] }>> {
+    return this.makeRequest<{ results: any[] }>(`/api/social-share/buzz/${buzzId}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ platforms }),
+    });
+  }
+
+  async getSharePreview(buzzId: string, platform: string): Promise<ApiResponse<{ preview: any }>> {
+    return this.makeRequest<{ preview: any }>(`/api/social-share/buzz/${buzzId}/preview?platform=${platform}`);
   }
 
   // Health check

@@ -17,6 +17,9 @@ import LoginScreen from './src/screens/LoginScreen';
 import CreateProfileScreen from './src/screens/CreateProfileScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import GoBuzzLiveScreen from './src/screens/GoBuzzLiveScreen';
+import StreamViewerScreen from './src/screens/StreamViewerScreen';
+import PrivacySettingsScreen from './src/screens/PrivacySettingsScreen';
+import BuzzerProfileScreen from './src/screens/BuzzerProfileScreen';
 import {useTheme} from './src/context/ThemeContext';
 import {createStackNavigator} from '@react-navigation/stack';
 
@@ -154,6 +157,9 @@ const AppContent = () => {
             <>
               <Stack.Screen name="MainTabs" component={MainTabs} />
               <Stack.Screen name="GoBuzzLive" component={GoBuzzLiveScreen} />
+              <Stack.Screen name="StreamViewer" component={StreamViewerScreen} />
+              <Stack.Screen name="BuzzerProfile" component={BuzzerProfileScreen} />
+              <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
             </>
           ) : (
             <>

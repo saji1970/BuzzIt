@@ -344,6 +344,27 @@ const initializeTables = async () => {
     await client.query('CREATE INDEX IF NOT EXISTS idx_channels_name ON channels(name)');
     console.log('  ✅ Created indexes on channels');
 
+    // Create app_settings table
+    console.log('  → Creating app_settings table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT NOT NULL,
+        description TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_by VARCHAR(255)
+      )
+    `);
+    console.log('  ✅ App settings table created');
+
+    // Insert default retention days setting if it doesn't exist
+    await client.query(`
+      INSERT INTO app_settings (key, value, description)
+      VALUES ('buzz_retention_days', '2', 'Number of days to keep buzzes before automatic deletion')
+      ON CONFLICT (key) DO NOTHING
+    `);
+    console.log('  ✅ Default app settings initialized');
+
     // Verify tables were created
     const tablesResult = await client.query(`
       SELECT table_name 

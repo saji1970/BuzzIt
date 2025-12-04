@@ -87,6 +87,28 @@ const userSchema = new mongoose.Schema({
     default: 'user',
     enum: ['user', 'admin', 'super_admin'],
   },
+  privacySettings: {
+    shareEmail: {
+      type: Boolean,
+      default: false,
+    },
+    shareMobileNumber: {
+      type: Boolean,
+      default: false,
+    },
+    shareLocation: {
+      type: Boolean,
+      default: false,
+    },
+    shareBio: {
+      type: Boolean,
+      default: true,
+    },
+    shareInterests: {
+      type: Boolean,
+      default: true,
+    },
+  },
 }, {
   timestamps: true,
 });

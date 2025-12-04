@@ -74,6 +74,9 @@ const {
   getAllBuzzes,
   getBuzzesPaginated,
   deleteBuzzesOlderThan,
+  getAppSetting,
+  setAppSetting,
+  getAllAppSettings,
 } = require('./db/helpers');
 
 // Import services
@@ -526,6 +529,62 @@ const generateToken = (userId) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 };
 
+// Middleware to verify JWT token
+const verifyToken = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Middleware to verify admin access
+const verifyAdmin = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+
+    // Check if user is admin
+    if (db.isConnected()) {
+      try {
+        const result = await db.query('SELECT role FROM users WHERE id = $1', [req.userId]);
+        if (result.rows.length > 0) {
+          const role = result.rows[0].role;
+          if (role === 'admin' || role === 'super_admin') {
+            return next();
+          }
+        }
+      } catch (error) {
+        console.error('Error checking admin role:', error);
+      }
+    }
+
+    // Fallback: check in-memory adminUsers
+    const admin = adminUsers.find(a => a.id === req.userId);
+    if (admin) {
+      return next();
+    }
+
+    return res.status(403).json({ error: 'Admin access required' });
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
 // Restream API helper function
 async function getRestreamStreamKey(streamId, streamTitle) {
   const restreamApiKey = process.env.RESTREAM_API_KEY;
@@ -660,7 +719,15 @@ const verifyAdmin = async (req, res, next) => {
   }
 };
 
+// Import social media routes
+const socialAuthRoutes = require('./routes/socialAuthRoutes');
+const socialShareRoutes = require('./routes/socialShareRoutes');
+
 // API Routes
+
+// Mount social media routes
+app.use('/api/social-auth', socialAuthRoutes);
+app.use('/api/social-share', socialShareRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -672,6 +739,8 @@ app.get('/', (req, res) => {
       users: '/api/users',
       buzzes: '/api/buzzes',
       social: '/api/social',
+      socialAuth: '/api/social-auth',
+      socialShare: '/api/social-share',
     },
   });
 });
@@ -3452,6 +3521,106 @@ app.delete('/api/admin/buzzes/:id', verifyAdmin, async (req, res) => {
   }
 });
 
+// Admin endpoints for app settings (retention days)
+app.get('/api/admin/settings', verifyAdmin, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const settings = await getAllAppSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Get app settings error:', error);
+    res.status(500).json({ error: 'Failed to fetch app settings' });
+  }
+});
+
+app.get('/api/admin/settings/retention-days', verifyAdmin, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const retentionDays = await getAppSetting('buzz_retention_days', '2');
+    res.json({
+      success: true,
+      data: {
+        key: 'buzz_retention_days',
+        value: retentionDays,
+        description: 'Number of days to keep buzzes before automatic deletion',
+      },
+    });
+  } catch (error) {
+    console.error('Get retention days error:', error);
+    res.status(500).json({ error: 'Failed to fetch retention days setting' });
+  }
+});
+
+app.put('/api/admin/settings/retention-days', verifyAdmin, async (req, res) => {
+  try {
+    const { days } = req.body;
+    
+    if (!days || isNaN(days) || parseInt(days) < 1) {
+      return res.status(400).json({ error: 'Days must be a positive number (minimum 1)' });
+    }
+
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const success = await setAppSetting(
+      'buzz_retention_days',
+      String(parseInt(days)),
+      'Number of days to keep buzzes before automatic deletion',
+      req.userId || 'admin'
+    );
+
+    if (success) {
+      console.log(`[Admin] Updated retention days to ${days} by ${req.userId || 'admin'}`);
+      res.json({
+        success: true,
+        message: `Retention days updated to ${days}`,
+        data: {
+          key: 'buzz_retention_days',
+          value: String(parseInt(days)),
+        },
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to update retention days setting' });
+    }
+  } catch (error) {
+    console.error('Update retention days error:', error);
+    res.status(500).json({ error: 'Failed to update retention days setting' });
+  }
+});
+
+// Admin endpoint to manually trigger cleanup
+app.post('/api/admin/buzzes/cleanup', verifyAdmin, async (req, res) => {
+  try {
+    if (!db.isConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const retentionDays = await getAppSetting('buzz_retention_days', '2');
+    const result = await deleteBuzzesOlderThan(parseInt(retentionDays));
+
+    console.log(`[Admin] Manual cleanup triggered: Deleted ${result.deleted} buzzes older than ${retentionDays} days`);
+
+    res.json({
+      success: true,
+      message: `Cleanup completed: Deleted ${result.deleted} buzz(es) older than ${retentionDays} days`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Manual cleanup error:', error);
+    res.status(500).json({ error: 'Failed to run cleanup' });
+  }
+});
+
 // Legacy Mongoose code (commented out for reference)
 // const deletedBuzz = await Buzz.findOneAndDelete({ id: buzzId });
 // if (deletedBuzz) {
@@ -4054,8 +4223,60 @@ const migrateInitialData = async () => {
   }
 };
 
+// Scheduled cleanup job - runs daily at midnight
+const runScheduledCleanup = async () => {
+  try {
+    if (!db.isConnected()) {
+      console.log('[Cleanup] Database not connected, skipping cleanup');
+      return;
+    }
+
+    const retentionDays = await getAppSetting('buzz_retention_days', '2');
+    const result = await deleteBuzzesOlderThan(parseInt(retentionDays));
+
+    if (result.deleted > 0) {
+      console.log(`[Cleanup] Scheduled cleanup completed: Deleted ${result.deleted} buzz(es) older than ${retentionDays} days`);
+    } else {
+      console.log(`[Cleanup] Scheduled cleanup completed: No buzzes older than ${retentionDays} days found`);
+    }
+  } catch (error) {
+    console.error('[Cleanup] Scheduled cleanup error:', error);
+  }
+};
+
+// Schedule daily cleanup at midnight (00:00)
+const scheduleDailyCleanup = () => {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0); // Set to midnight
+
+  const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+  // Run cleanup at midnight
+  setTimeout(() => {
+    runScheduledCleanup();
+    // Then schedule it to run every 24 hours
+    setInterval(runScheduledCleanup, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+
+  console.log(`[Cleanup] Scheduled daily cleanup starting at midnight (in ${Math.round(msUntilMidnight / 1000 / 60)} minutes)`);
+};
+
 // Start the server
 startServer();
+
+// Schedule cleanup after server starts
+if (db.isConnected()) {
+  scheduleDailyCleanup();
+} else {
+  // If DB not connected yet, wait a bit and try again
+  setTimeout(() => {
+    if (db.isConnected()) {
+      scheduleDailyCleanup();
+    }
+  }, 5000);
+}
 
 // Export for testing
 module.exports = app;
