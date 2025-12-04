@@ -529,62 +529,6 @@ const generateToken = (userId) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 };
 
-// Middleware to verify JWT token
-const verifyToken = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
-// Middleware to verify admin access
-const verifyAdmin = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
-
-    // Check if user is admin
-    if (db.isConnected()) {
-      try {
-        const result = await db.query('SELECT role FROM users WHERE id = $1', [req.userId]);
-        if (result.rows.length > 0) {
-          const role = result.rows[0].role;
-          if (role === 'admin' || role === 'super_admin') {
-            return next();
-          }
-        }
-      } catch (error) {
-        console.error('Error checking admin role:', error);
-      }
-    }
-
-    // Fallback: check in-memory adminUsers
-    const admin = adminUsers.find(a => a.id === req.userId);
-    if (admin) {
-      return next();
-    }
-
-    return res.status(403).json({ error: 'Admin access required' });
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
 // Restream API helper function
 async function getRestreamStreamKey(streamId, streamTitle) {
   const restreamApiKey = process.env.RESTREAM_API_KEY;
