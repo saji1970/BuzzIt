@@ -104,6 +104,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const [showShareModal, setShowShareModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
+  const [videoPaused, setVideoPaused] = useState(true);
 
   const handleShareClick = () => {
     setShowShareModal(true);
@@ -307,6 +308,18 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const hasImage = derivedMediaType === 'image' && !!mediaUri;
   const hasVideo = derivedMediaType === 'video' && !!mediaUri;
 
+  // Debug logging for media
+  console.log('BuzzCard Debug:', {
+    buzzId: buzz.id,
+    username: buzz.username,
+    mediaUri,
+    derivedMediaType,
+    hasImage,
+    hasVideo,
+    hasLocalAsset,
+    remoteMediaUrl,
+  });
+
   const normalizeInterests = () => {
     if (!Array.isArray(buzz.interests)) {
       return [];
@@ -377,85 +390,96 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
           animation="fadeInUp"
           style={[styles.card, {backgroundColor: theme.colors.surface}]}
         >
-          <View style={styles.coverContainer}>
-            {hasImage ? (
-              <Image source={{uri: mediaUri as string}} style={styles.coverImage} />
-            ) : hasVideo ? (
-              <View style={styles.coverImage}>
-                <Video
-                  source={{uri: mediaUri as string}}
-                  style={styles.coverImage}
-                  resizeMode={ResizeMode.COVER}
-                  paused
-                  muted
-                />
-                <View style={styles.videoBadge}>
-                  <Icon name="play-arrow" size={18} color="#FFFFFF" />
-                </View>
+          {/* Top Row: Avatar, Username, Timestamp, Menu */}
+          <View style={styles.header}>
+            <View style={styles.userInfo}>
+              <View style={[styles.avatar, {backgroundColor: theme.colors.primary + '20'}]}>
+                {buzz.userAvatar ? (
+                  <Image source={{uri: buzz.userAvatar}} style={styles.avatarImage} />
+                ) : (
+                  <Text style={[styles.avatarText, {color: theme.colors.primary}]}>
+                    {buzz.username.charAt(0).toUpperCase()}
+                  </Text>
+                )}
               </View>
-            ) : (
-              <LinearGradient
-                colors={theme.gradients?.accent || [theme.colors.primary, theme.colors.secondary]}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 1}}
-                style={styles.coverPlaceholder}
-              >
-                <Icon name="bolt" size={30} color="rgba(255,255,255,0.9)" />
-              </LinearGradient>
-            )}
-
-            <LinearGradient
-              colors={["rgba(15,23,42,0.05)", "rgba(15,23,42,0.75)"]}
-              style={styles.coverOverlay}
-            />
-
+              <View style={styles.userTextContainer}>
+                <Text style={[styles.username, {color: theme.colors.text}]}>{buzz.username}</Text>
+                <Text style={[styles.timestamp, {color: theme.colors.textSecondary}]}>
+                  {formatTimeAgo(buzz.createdAt)}
+                </Text>
+              </View>
+            </View>
             <TouchableOpacity
-              style={styles.overlayMenuButton}
+              style={styles.menuButton}
               onPress={() => setShowMenuModal(true)}
             >
-              <Icon name="more-horiz" size={22} color="#FFFFFF" />
+              <Icon name="more-horiz" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
-
-            <View style={styles.overlayFooter}>
-              <View style={styles.overlayUserInfo}>
-                <View style={[styles.overlayAvatar, {borderColor: 'rgba(255,255,255,0.35)'}]}>
-                  {buzz.userAvatar ? (
-                    <Image source={{uri: buzz.userAvatar}} style={styles.overlayAvatarImage} />
-                  ) : (
-                    <Text style={styles.overlayAvatarText}>
-                      {buzz.username.charAt(0).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.overlayTextContainer}>
-                  <Text style={styles.overlayName}>{buzz.username}</Text>
-                  <Text style={styles.overlayMeta}>
-                    {formatTimeAgo(buzz.createdAt)} • {formatDateTime(buzz.createdAt)}
-                  </Text>
-                </View>
-              </View>
-              {!isOwnBuzz && (
-                <TouchableOpacity
-                  style={[styles.followChip, isFollowing && {backgroundColor: '#FFFFFF'}]}
-                  onPress={handleFollow}
-                >
-                  <Text
-                    style={[
-                      styles.followChipText,
-                      isFollowing && {color: theme.colors.primary},
-                    ]}
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
           </View>
 
+          {/* Middle: Content Text */}
           <View style={styles.body}>
             <Text style={[styles.contentText, {color: theme.colors.text}]} numberOfLines={4}>
               {buzz.content}
             </Text>
+
+            {/* Media Thumbnail (if exists) */}
+            {hasImage ? (
+              <Image
+                source={{uri: mediaUri as string}}
+                style={styles.mediaThumbnail}
+                resizeMode="cover"
+                onError={(error) => {
+                  console.log('Image load error:', error.nativeEvent.error);
+                  console.log('Image URI:', mediaUri);
+                }}
+                onLoad={() => {
+                  console.log('Image loaded successfully:', mediaUri);
+                }}
+              />
+            ) : hasVideo ? (
+              <View style={styles.videoContainer}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setVideoPaused(!videoPaused)}
+                  style={styles.mediaThumbnail}>
+                  <Video
+                    source={{uri: mediaUri as string}}
+                    style={styles.mediaThumbnail}
+                    resizeMode={ResizeMode.COVER}
+                    paused={videoPaused}
+                    muted={false}
+                    controls={false}
+                    repeat={false}
+                    onError={(error) => {
+                      console.log('Video load error:', error);
+                      console.log('Video URI:', mediaUri);
+                    }}
+                    onLoad={() => {
+                      console.log('Video loaded successfully:', mediaUri);
+                    }}
+                  />
+                  {videoPaused && (
+                    <View style={styles.videoPlayBadge}>
+                      <Icon name="play-circle-filled" size={60} color="#FFFFFF" />
+                    </View>
+                  )}
+                  {!videoPaused && (
+                    <View style={styles.videoPauseBadge}>
+                      <Icon name="pause-circle-filled" size={60} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {!videoPaused && (
+                  <TouchableOpacity
+                    style={styles.videoStopButton}
+                    onPress={() => setVideoPaused(true)}
+                    activeOpacity={0.8}>
+                    <Icon name="stop" size={24} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
 
             {buzz.eventDate && countdown ? (
               <View style={[styles.countdownPill, {backgroundColor: theme.colors.primary + '20'}]}>
@@ -469,7 +493,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                 {normalizedInterests.slice(0, 3).map(interest => (
                   <View
                     key={interest.id}
-                    style={[styles.chip, {backgroundColor: theme.colors.primary + '18'}]}
+                    style={[styles.chip, {backgroundColor: theme.colors.primary + '15'}]}
                   >
                     <Text style={styles.chipEmoji}>{interest.emoji}</Text>
                     <Text style={[styles.chipLabel, {color: theme.colors.primary}]}>
@@ -478,7 +502,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                   </View>
                 ))}
                 {normalizedInterests.length > 3 && (
-                  <View style={[styles.chip, {backgroundColor: theme.colors.border}]}> 
+                  <View style={[styles.chip, {backgroundColor: theme.colors.border}]}>
                     <Text style={[styles.chipLabel, {color: theme.colors.textSecondary}]}>+{normalizedInterests.length - 3}</Text>
                   </View>
                 )}
@@ -486,31 +510,49 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
             )}
           </View>
 
+          {/* Bottom Row: Actions */}
           <View style={styles.actionsRow}>
-            {features.buzzLikes && renderAction(
-              buzz.isLiked ? 'favorite' : 'favorite-border',
-              `${buzz.likes}`,
-              buzz.isLiked,
-              onLike,
-            )}
+            <View style={styles.actionsLeft}>
+              {features.buzzLikes && (
+                <TouchableOpacity style={styles.actionButton} onPress={onLike} activeOpacity={0.7}>
+                  <Icon
+                    name={buzz.isLiked ? 'favorite' : 'favorite-border'}
+                    size={20}
+                    color={buzz.isLiked ? '#FF0069' : theme.colors.textSecondary}
+                  />
+                  <Text style={[styles.actionCount, {color: theme.colors.textSecondary}]}>
+                    {buzz.likes}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-            {renderAction(
-              'chat-bubble-outline',
-              `${buzz.comments}`,
-              false,
-              () => {
-                if (onPress) {
-                  onPress();
-                }
-              },
-            )}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => onPress && onPress()}
+                activeOpacity={0.7}>
+                <Icon name="chat-bubble-outline" size={20} color={theme.colors.textSecondary} />
+                <Text style={[styles.actionCount, {color: theme.colors.textSecondary}]}>
+                  {buzz.comments}
+                </Text>
+              </TouchableOpacity>
 
-            {features.buzzShares && renderAction(
-              'share',
-              `${buzz.shares}`,
-              false,
-              handleShareClick,
-            )}
+              {features.buzzShares && (
+                <TouchableOpacity style={styles.actionButton} onPress={handleShareClick} activeOpacity={0.7}>
+                  <Icon name="share" size={20} color={theme.colors.textSecondary} />
+                  <Text style={[styles.actionCount, {color: theme.colors.textSecondary}]}>
+                    {buzz.shares}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Go Live button */}
+            <TouchableOpacity
+              style={[styles.goLiveButton, {borderColor: theme.colors.primary}]}
+              onPress={() => {/* Navigate to Go Live */}}
+              activeOpacity={0.8}>
+              <Text style={[styles.goLiveText, {color: theme.colors.primary}]}>Go Live on this</Text>
+            </TouchableOpacity>
           </View>
         </Animatable.View>
       </TouchableOpacity>
@@ -536,170 +578,170 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   );
 };
 
-const COVER_HEIGHT = width * 0.9;
-
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    marginBottom: 24,
-    shadowColor: 'rgba(15,23,42,0.2)',
-    shadowOffset: {width: 0, height: 18},
-    shadowOpacity: 0.25,
-    shadowRadius: 32,
-    elevation: 12,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 12,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  coverContainer: {
-    position: 'relative',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    overflow: 'hidden',
-  },
-  coverImage: {
-    width: '100%',
-    height: COVER_HEIGHT,
-  },
-  coverPlaceholder: {
-    width: '100%',
-    height: COVER_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  overlayMenuButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(15,23,42,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: 18,
-    left: 18,
-    backgroundColor: 'rgba(15,23,42,0.4)',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  overlayFooter: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 16,
   },
-  overlayUserInfo: {
+  userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  overlayAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
     marginRight: 12,
   },
-  overlayAvatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
-  overlayAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+  avatarText: {
+    fontSize: 16,
     fontWeight: '700',
   },
-  overlayTextContainer: {
+  userTextContainer: {
     flex: 1,
   },
-  overlayName: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  username: {
+    fontSize: 15,
     fontWeight: '700',
+    marginBottom: 2,
   },
-  overlayMeta: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 13,
-    marginTop: 2,
+  timestamp: {
+    fontSize: 12,
   },
-  followChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  followChipText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
+  menuButton: {
+    padding: 4,
   },
   body: {
-    paddingHorizontal: 22,
-    paddingVertical: 20,
-    gap: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
   },
   contentText: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '500',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  mediaThumbnail: {
+    width: '100%',
+    height: width * 0.5,
+    borderRadius: 12,
+    backgroundColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  videoContainer: {
+    position: 'relative',
+    width: '100%',
+  },
+  videoPlayBadge: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  videoPauseBadge: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  videoStopButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   countdownPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     alignSelf: 'flex-start',
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   countdownText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
   },
   chipEmoji: {
-    fontSize: 14,
+    fontSize: 12,
   },
   chipLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     gap: 12,
-    paddingHorizontal: 22,
-    paddingBottom: 20,
   },
+  actionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionCount: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  goLiveButton: {
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  goLiveText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  // Keep old styles for compatibility
   actionPill: {
     flex: 1,
     flexDirection: 'row',
@@ -727,6 +769,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+    paddingHorizontal: 16,
     gap: 12,
   },
   menuItemText: {
@@ -737,6 +780,7 @@ const styles = StyleSheet.create({
     height: 1,
     opacity: 0.08,
     marginVertical: 6,
+    marginHorizontal: 16,
   },
 });
 
