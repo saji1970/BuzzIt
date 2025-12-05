@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import Video, {ResizeMode} from 'react-native-video';
 import * as Animatable from 'react-native-animatable';
+import {useNavigation} from '@react-navigation/native';
 
 import {useTheme} from '../context/ThemeContext';
 import {Buzz} from '../context/UserContext';
@@ -100,6 +101,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const {theme} = useTheme();
   const {features} = useFeatures();
   const {user: currentUser} = useAuth();
+  const navigation = useNavigation();
   const isOwnBuzz = currentUser?.id === buzz.userId;
   const [showShareModal, setShowShareModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -392,7 +394,13 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         >
           {/* Top Row: Avatar, Username, Timestamp, Menu */}
           <View style={styles.header}>
-            <View style={styles.userInfo}>
+            <TouchableOpacity
+              style={styles.userInfo}
+              onPress={() => {
+                // Navigate to user profile when avatar/username is clicked
+                navigation.navigate('BuzzerProfile' as never, {buzzerId: buzz.userId} as never);
+              }}
+              activeOpacity={0.7}>
               <View style={[styles.avatar, {backgroundColor: theme.colors.primary + '20'}]}>
                 {buzz.userAvatar ? (
                   <Image source={{uri: buzz.userAvatar}} style={styles.avatarImage} />
@@ -408,7 +416,7 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                   {formatTimeAgo(buzz.createdAt)}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.menuButton}
               onPress={() => setShowMenuModal(true)}
@@ -549,7 +557,14 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
             {/* Go Live button */}
             <TouchableOpacity
               style={[styles.goLiveButton, {borderColor: theme.colors.primary}]}
-              onPress={() => {/* Navigate to Go Live */}}
+              onPress={() => {
+                // Navigate to Go Live screen with buzz context
+                navigation.navigate('GoBuzzLive' as never, {
+                  relatedBuzzId: buzz.id,
+                  relatedBuzzContent: buzz.content,
+                  relatedBuzzInterests: buzz.interests,
+                } as never);
+              }}
               activeOpacity={0.8}>
               <Text style={[styles.goLiveText, {color: theme.colors.primary}]}>Go Live on this</Text>
             </TouchableOpacity>
