@@ -8,6 +8,8 @@ const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const http = require('http');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const streamifier = require('streamifier');
 const { getLiveStreamConfig } = require('./utils/liveStreamConfig');
 // Load environment variables FIRST, before any other imports that might use them
 // Try loading from server directory first, then root directory
@@ -92,24 +94,45 @@ const MEDIA_BASE_URL = (
   ''
 );
 
+// Configure Cloudinary
+const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
+                      process.env.CLOUDINARY_API_KEY &&
+                      process.env.CLOUDINARY_API_SECRET;
+
+if (useCloudinary) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+  console.log('✅ Cloudinary configured successfully');
+} else {
+  console.log('⚠️  Cloudinary not configured - using local storage (files will be lost on Railway restart!)');
+}
+
+// Local storage fallback (for development or if Cloudinary not configured)
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const originalExt = path.extname(file.originalname || '');
-    const inferredExt = originalExt || (file.mimetype ? `.${file.mimetype.split('/')[1]}` : '');
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${inferredExt}`;
-    cb(null, uniqueName);
-  },
-});
+// Use memory storage for multer (we'll upload to Cloudinary from memory)
+const storage = multer.memoryStorage();
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept images and videos
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image and video files are allowed!'), false);
+    }
+  }
+});
 
 const sanitizePlaybackUrl = (rawUrl) => {
   if (!rawUrl || typeof rawUrl !== 'string') {
@@ -1499,38 +1522,86 @@ app.get('/api/buzzes/:id', async (req, res) => {
   }
 });
 
-app.post('/api/uploads', verifyToken, upload.single('file'), (req, res) => {
+app.post('/api/uploads', verifyToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
-    const host = req.get('host') || '';
-    const forwardedProtoHeader = (req.headers['x-forwarded-proto'] || '').toString();
-    const forwardedProto = forwardedProtoHeader.split(',')[0].trim();
-    let protocol = forwardedProto || req.protocol || 'https';
+    // If Cloudinary is configured, upload there
+    if (useCloudinary) {
+      const uploadToCloudinary = () => {
+        return new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: 'auto', // Automatically detect image/video
+              folder: 'buzzit', // Organize files in 'buzzit' folder
+              public_id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`, // Unique filename
+            },
+            (error, result) => {
+              if (error) {
+                console.error('Cloudinary upload error:', error);
+                reject(error);
+              } else {
+                resolve(result);
+              }
+            }
+          );
 
-    if (protocol === 'http' && /railway\.app$/i.test(host)) {
-      protocol = 'https';
+          // Convert buffer to stream and pipe to Cloudinary
+          streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+        });
+      };
+
+      const cloudinaryResult = await uploadToCloudinary();
+
+      res.json({
+        success: true,
+        data: {
+          url: cloudinaryResult.secure_url,
+          mimeType: req.file.mimetype,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          cloudinaryId: cloudinaryResult.public_id,
+        },
+      });
+    } else {
+      // Fallback to local storage (for development)
+      const originalExt = path.extname(req.file.originalname || '');
+      const inferredExt = originalExt || (req.file.mimetype ? `.${req.file.mimetype.split('/')[1]}` : '');
+      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${inferredExt}`;
+      const filePath = path.join(uploadsDir, uniqueName);
+
+      // Write buffer to disk
+      fs.writeFileSync(filePath, req.file.buffer);
+
+      const host = req.get('host') || '';
+      const forwardedProtoHeader = (req.headers['x-forwarded-proto'] || '').toString();
+      const forwardedProto = forwardedProtoHeader.split(',')[0].trim();
+      let protocol = forwardedProto || req.protocol || 'https';
+
+      if (protocol === 'http' && /railway\.app$/i.test(host)) {
+        protocol = 'https';
+      }
+
+      let baseUrl = MEDIA_BASE_URL ? MEDIA_BASE_URL.trim() : `${protocol}://${host}`;
+      if (baseUrl.startsWith('http://') && /railway\.app/i.test(baseUrl) && process.env.FORCE_HTTPS_MEDIA_URL !== 'false') {
+        baseUrl = baseUrl.replace(/^http:\/\//i, 'https://');
+      }
+
+      baseUrl = baseUrl.replace(/\/$/, '');
+      const fileUrl = `${baseUrl}/uploads/${uniqueName}`;
+
+      res.json({
+        success: true,
+        data: {
+          url: fileUrl,
+          mimeType: req.file.mimetype,
+          originalName: req.file.originalname,
+          size: req.file.size,
+        },
+      });
     }
-
-    let baseUrl = MEDIA_BASE_URL ? MEDIA_BASE_URL.trim() : `${protocol}://${host}`;
-    if (baseUrl.startsWith('http://') && /railway\.app/i.test(baseUrl) && process.env.FORCE_HTTPS_MEDIA_URL !== 'false') {
-      baseUrl = baseUrl.replace(/^http:\/\//i, 'https://');
-    }
-
-    baseUrl = baseUrl.replace(/\/$/, '');
-    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
-
-    res.json({
-      success: true,
-      data: {
-        url: fileUrl,
-        mimeType: req.file.mimetype,
-        originalName: req.file.originalname,
-        size: req.file.size,
-      },
-    });
   } catch (error) {
     console.error('Media upload error:', error);
     res.status(500).json({ success: false, error: 'Failed to upload media' });
@@ -3994,6 +4065,58 @@ setInterval(() => {
     }
   }
 }, 60 * 60 * 1000); // 1 hour
+
+// Clean up old buzzes every hour
+const cleanupOldBuzzes = async () => {
+  try {
+    const retentionDays = parseInt(process.env.BUZZ_RETENTION_DAYS || '3', 10);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    console.log(`🧹 Running buzz cleanup: deleting buzzes older than ${retentionDays} days (before ${cutoffDate.toISOString()})`);
+
+    // Delete from database if connected
+    if (db.isConnected()) {
+      const query = `
+        DELETE FROM buzzes
+        WHERE created_at < $1
+        RETURNING id
+      `;
+      const result = await db.query(query, [cutoffDate]);
+
+      if (result.rows && result.rows.length > 0) {
+        console.log(`✅ Deleted ${result.rows.length} old buzzes from database`);
+
+        // Optionally delete from Cloudinary if we stored cloudinary IDs
+        // This would require storing cloudinary public_id in the buzzes table
+        if (useCloudinary) {
+          console.log('💡 Tip: Consider storing Cloudinary IDs in buzzes table to clean up cloud storage');
+        }
+      } else {
+        console.log('✅ No old buzzes to delete');
+      }
+    }
+
+    // Also clean up in-memory array (fallback mode)
+    const originalLength = buzzes.length;
+    buzzes = buzzes.filter(buzz => {
+      const buzzDate = new Date(buzz.createdAt);
+      return buzzDate >= cutoffDate;
+    });
+
+    if (buzzes.length < originalLength) {
+      console.log(`✅ Deleted ${originalLength - buzzes.length} old buzzes from memory`);
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning up old buzzes:', error);
+  }
+};
+
+// Run cleanup on startup
+cleanupOldBuzzes();
+
+// Schedule cleanup to run every hour
+setInterval(cleanupOldBuzzes, 60 * 60 * 1000); // 1 hour
 
 // Initialize database and start server
 const startServer = async () => {
