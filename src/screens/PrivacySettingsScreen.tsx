@@ -87,7 +87,7 @@ const PrivacySettingsScreen: React.FC = () => {
         }
       } catch (error) {
         console.error('Error updating privacy settings:', error);
-        Alert.alert('Error', 'Failed to update privacy settings. Please try again.');
+        // Log error but don't show alert
         setPrivacySettings(privacySettings);
       } finally {
         setSaving(false);
@@ -99,33 +99,30 @@ const PrivacySettingsScreen: React.FC = () => {
     try {
       const response = await ApiService.getSocialAuthUrl(platform);
       if (response.success && response.authUrl) {
+        // Show info that OAuth is not fully implemented yet
         Alert.alert(
-          `Connect ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
-          'This will open your browser to authorize the connection. Please complete the authorization and return to the app.',
-          [
-            {text: 'Cancel', style: 'cancel'},
-            {
-              text: 'Continue',
-              onPress: () => {
-                // In a real app, this would open the OAuth URL in a browser/webview
-                Alert.alert(
-                  'OAuth URL',
-                  `Please open this URL in your browser:\n\n${response.authUrl}`,
-                  [
-                    {text: 'Copy URL', onPress: () => {}},
-                    {text: 'OK'},
-                  ]
-                );
-              },
-            },
-          ]
+          `${platform.charAt(0).toUpperCase() + platform.slice(1)} Integration`,
+          'Social media integration is being configured. This feature will be available soon!\n\nWhat you can do:\n• Share buzzes manually\n• Export content to share\n• Stay tuned for updates',
+          [{text: 'Got it'}]
         );
+        console.log(`${platform} auth URL:`, response.authUrl);
       } else {
-        Alert.alert('Error', response.error || `${platform} integration is not configured on the server.`);
+        // Show user-friendly message instead of technical error
+        Alert.alert(
+          'Feature Not Available',
+          `Social media integration for ${platform} is currently being set up and will be available soon!\n\nIn the meantime, you can still share your buzzes manually.`,
+          [{text: 'OK'}]
+        );
+        console.error(`Failed to get ${platform} auth URL:`, response.error);
       }
     } catch (error) {
+      // Show user-friendly error
+      Alert.alert(
+        'Coming Soon',
+        `We're working on ${platform} integration! This feature will be available in a future update.`,
+        [{text: 'OK'}]
+      );
       console.error(`Error connecting to ${platform}:`, error);
-      Alert.alert('Error', `Failed to connect to ${platform}. Please try again.`);
     }
   };
 
@@ -143,13 +140,14 @@ const PrivacySettingsScreen: React.FC = () => {
               const response = await ApiService.disconnectSocialAccount(platform);
               if (response.success) {
                 setConnectedAccounts(connectedAccounts.filter(acc => acc.platform !== platform));
-                Alert.alert('Success', `${platform} account disconnected successfully.`);
+                // Success handled silently - no alert
               } else {
-                Alert.alert('Error', response.error || 'Failed to disconnect account.');
+                // Log error but don't show alert
+                console.error(`Failed to disconnect ${platform}:`, response.error);
               }
             } catch (error) {
+              // Log error but don't show alert
               console.error(`Error disconnecting ${platform}:`, error);
-              Alert.alert('Error', `Failed to disconnect ${platform}. Please try again.`);
             }
           },
         },
