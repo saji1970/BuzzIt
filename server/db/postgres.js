@@ -365,6 +365,67 @@ const initializeTables = async () => {
     `);
     console.log('  ✅ Default app settings initialized');
 
+    // Create social_accounts table
+    console.log('  → Creating social_accounts table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS social_accounts (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        platform VARCHAR(50) NOT NULL,
+        platform_user_id VARCHAR(255),
+        username VARCHAR(255),
+        display_name VARCHAR(255),
+        profile_picture_url TEXT,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT,
+        token_expires_at TIMESTAMP,
+        scope TEXT,
+        is_connected BOOLEAN DEFAULT true,
+        last_published_at TIMESTAMP,
+        publish_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, platform),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('  ✅ Social accounts table created');
+
+    // Create indexes for social accounts
+    console.log('  → Creating social accounts indexes...');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_social_accounts_user_id ON social_accounts(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_social_accounts_platform ON social_accounts(platform)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_social_accounts_user_platform ON social_accounts(user_id, platform)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_social_accounts_is_connected ON social_accounts(is_connected)');
+    console.log('  ✅ Social accounts indexes created');
+
+    // Create buzz_publications table (tracks which buzzes were published to which platforms)
+    console.log('  → Creating buzz_publications table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS buzz_publications (
+        id SERIAL PRIMARY KEY,
+        buzz_id VARCHAR(255) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        platform VARCHAR(50) NOT NULL,
+        platform_post_id VARCHAR(255),
+        platform_post_url TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        error_message TEXT,
+        published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (buzz_id) REFERENCES buzzes(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('  ✅ Buzz publications table created');
+
+    // Create indexes for buzz publications
+    console.log('  → Creating buzz publications indexes...');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_buzz_publications_buzz_id ON buzz_publications(buzz_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_buzz_publications_user_id ON buzz_publications(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_buzz_publications_platform ON buzz_publications(platform)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_buzz_publications_status ON buzz_publications(status)');
+    console.log('  ✅ Buzz publications indexes created');
+
     // Verify tables were created
     const tablesResult = await client.query(`
       SELECT table_name 
