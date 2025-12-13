@@ -10,14 +10,16 @@ const SOCIAL_CONFIG = {
     userInfoUrl: 'https://graph.facebook.com/me',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
-    scope: 'email,public_profile,publish_to_groups',
+    scope: 'email,public_profile,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish',
   },
   instagram: {
-    authUrl: 'https://api.instagram.com/oauth/authorize',
-    tokenUrl: 'https://api.instagram.com/oauth/access_token',
+    // Instagram uses Facebook Graph API - same endpoints as Facebook
+    authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    userInfoUrl: 'https://graph.facebook.com/me',
     clientId: process.env.INSTAGRAM_CLIENT_ID || '',
     clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
-    scope: 'user_profile,user_media',
+    scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
   },
   snapchat: {
     authUrl: 'https://accounts.snapchat.com/accounts/oauth2/auth',
@@ -112,13 +114,27 @@ router.get('/oauth/:platform/callback', async (req, res) => {
     // Exchange code for access token
     const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
 
-    const tokenResponse = await axios.post(config.tokenUrl, {
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      code: code,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    });
+    let tokenResponse;
+    if (platform === 'facebook' || platform === 'instagram') {
+      // Facebook Graph API uses GET with query params for token exchange
+      tokenResponse = await axios.get(config.tokenUrl, {
+        params: {
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code: code,
+          redirect_uri: redirectUri,
+        },
+      });
+    } else {
+      // Other platforms use POST
+      tokenResponse = await axios.post(config.tokenUrl, {
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code: code,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      });
+    }
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
@@ -137,16 +153,54 @@ router.get('/oauth/:platform/callback', async (req, res) => {
         profilePicture: profileResponse.data.picture?.data?.url,
       };
     } else if (platform === 'instagram') {
-      const profileResponse = await axios.get('https://graph.instagram.com/me', {
+      // For Instagram, first get Facebook pages
+      const pagesResponse = await axios.get('https://graph.facebook.com/me/accounts', {
         params: {
-          fields: 'id,username',
           access_token: access_token,
         },
       });
-      profileData = {
-        profileId: profileResponse.data.id,
-        username: profileResponse.data.username,
-      };
+
+      // Get Instagram business account connected to the first page
+      if (pagesResponse.data.data && pagesResponse.data.data.length > 0) {
+        const pageId = pagesResponse.data.data[0].id;
+        const pageAccessToken = pagesResponse.data.data[0].access_token;
+
+        try {
+          const igAccountResponse = await axios.get(`https://graph.facebook.com/${pageId}`, {
+            params: {
+              fields: 'instagram_business_account',
+              access_token: pageAccessToken,
+            },
+          });
+
+          if (igAccountResponse.data.instagram_business_account) {
+            const igUserId = igAccountResponse.data.instagram_business_account.id;
+            const igProfileResponse = await axios.get(`https://graph.facebook.com/${igUserId}`, {
+              params: {
+                fields: 'id,username,profile_picture_url',
+                access_token: pageAccessToken,
+              },
+            });
+
+            profileData = {
+              profileId: igProfileResponse.data.id,
+              username: igProfileResponse.data.username,
+              profilePicture: igProfileResponse.data.profile_picture_url,
+            };
+          } else {
+            profileData = {
+              profileId: pageId,
+              username: pagesResponse.data.data[0].name,
+            };
+          }
+        } catch (igError) {
+          console.error('Error fetching Instagram account:', igError);
+          profileData = {
+            profileId: pageId,
+            username: pagesResponse.data.data[0].name,
+          };
+        }
+      }
     }
 
     // Store the social account connection (this will be handled by the main server)
@@ -208,13 +262,27 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
     // Exchange code for access token
     const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
 
-    const tokenResponse = await axios.post(config.tokenUrl, {
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      code: code,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    });
+    let tokenResponse;
+    if (platform === 'facebook' || platform === 'instagram') {
+      // Facebook Graph API uses GET with query params for token exchange
+      tokenResponse = await axios.get(config.tokenUrl, {
+        params: {
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code: code,
+          redirect_uri: redirectUri,
+        },
+      });
+    } else {
+      // Other platforms use POST
+      tokenResponse = await axios.post(config.tokenUrl, {
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code: code,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      });
+    }
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
@@ -233,16 +301,54 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
         profilePicture: profileResponse.data.picture?.data?.url,
       };
     } else if (platform === 'instagram') {
-      const profileResponse = await axios.get('https://graph.instagram.com/me', {
+      // For Instagram, first get Facebook pages
+      const pagesResponse = await axios.get('https://graph.facebook.com/me/accounts', {
         params: {
-          fields: 'id,username',
           access_token: access_token,
         },
       });
-      profileData = {
-        profileId: profileResponse.data.id,
-        username: profileResponse.data.username,
-      };
+
+      // Get Instagram business account connected to the first page
+      if (pagesResponse.data.data && pagesResponse.data.data.length > 0) {
+        const pageId = pagesResponse.data.data[0].id;
+        const pageAccessToken = pagesResponse.data.data[0].access_token;
+
+        try {
+          const igAccountResponse = await axios.get(`https://graph.facebook.com/${pageId}`, {
+            params: {
+              fields: 'instagram_business_account',
+              access_token: pageAccessToken,
+            },
+          });
+
+          if (igAccountResponse.data.instagram_business_account) {
+            const igUserId = igAccountResponse.data.instagram_business_account.id;
+            const igProfileResponse = await axios.get(`https://graph.facebook.com/${igUserId}`, {
+              params: {
+                fields: 'id,username,profile_picture_url',
+                access_token: pageAccessToken,
+              },
+            });
+
+            profileData = {
+              profileId: igProfileResponse.data.id,
+              username: igProfileResponse.data.username,
+              profilePicture: igProfileResponse.data.profile_picture_url,
+            };
+          } else {
+            profileData = {
+              profileId: pageId,
+              username: pagesResponse.data.data[0].name,
+            };
+          }
+        } catch (igError) {
+          console.error('Error fetching Instagram account:', igError);
+          profileData = {
+            profileId: pageId,
+            username: pagesResponse.data.data[0].name,
+          };
+        }
+      }
     } else if (platform === 'snapchat') {
       const profileResponse = await axios.get('https://kit.snapchat.com/v1/me', {
         headers: {

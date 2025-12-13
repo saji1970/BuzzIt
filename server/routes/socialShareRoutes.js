@@ -135,9 +135,9 @@ async function shareInstagramPost(buzz, account) {
   const accessToken = account.accessToken;
 
   if (buzz.media && buzz.media.url) {
-    // Post with media
+    // Post with media using Facebook Graph API (not graph.instagram.com)
     const response = await axios.post(
-      `https://graph.instagram.com/${account.profileId}/media`,
+      `https://graph.facebook.com/v18.0/${account.profileId}/media`,
       {
         image_url: buzz.media.url,
         caption: message,
@@ -145,9 +145,9 @@ async function shareInstagramPost(buzz, account) {
       }
     );
 
-    // Publish the media
+    // Publish the media using Facebook Graph API
     const publishResponse = await axios.post(
-      `https://graph.instagram.com/${account.profileId}/media_publish`,
+      `https://graph.facebook.com/v18.0/${account.profileId}/media_publish`,
       {
         creation_id: response.data.id,
         access_token: accessToken
@@ -358,7 +358,7 @@ async function publishToInstagram(content, mediaUrl, mediaType, account) {
     throw new Error('Instagram profile ID not found. Please reconnect your Instagram account.');
   }
 
-  // Create media container
+  // Create media container using Facebook Graph API (correct API for Instagram Business)
   const containerParams = {
     access_token: accessToken,
     caption: content,
@@ -373,16 +373,17 @@ async function publishToInstagram(content, mediaUrl, mediaType, account) {
     throw new Error('Invalid media type for Instagram. Only images and videos are supported.');
   }
 
+  // Use Facebook Graph API endpoint (not graph.instagram.com)
   const containerResponse = await axios.post(
-    `https://graph.instagram.com/v18.0/${profileId}/media`,
+    `https://graph.facebook.com/v18.0/${profileId}/media`,
     containerParams
   );
 
   const creationId = containerResponse.data.id;
 
-  // Publish the media container
+  // Publish the media container using Facebook Graph API
   const publishResponse = await axios.post(
-    `https://graph.instagram.com/v18.0/${profileId}/media_publish`,
+    `https://graph.facebook.com/v18.0/${profileId}/media_publish`,
     {
       creation_id: creationId,
       access_token: accessToken
