@@ -1,7 +1,18 @@
-const { query } = require('./postgres');
+const { query, isConnected } = require('./postgres');
+
+// Flag to track if table has been created
+let tableInitialized = false;
 
 // Create social_accounts table if it doesn't exist
 async function createSocialAccountsTable() {
+  if (tableInitialized) return;
+
+  // Check if database is connected
+  if (!isConnected()) {
+    console.log('⏳ Database not ready yet, will create social_accounts table later');
+    return;
+  }
+
   const createTableQuery = `
     CREATE TABLE IF NOT EXISTS social_accounts (
       id SERIAL PRIMARY KEY,
@@ -26,21 +37,26 @@ async function createSocialAccountsTable() {
 
   try {
     await query(createTableQuery);
+    tableInitialized = true;
     console.log('✅ Social accounts table ready');
   } catch (error) {
-    console.error('Error creating social accounts table:', error);
+    console.error('❌ Error creating social accounts table:', error.message);
+    throw error;
   }
 }
 
-// Initialize table on import (with error handling)
-createSocialAccountsTable().catch(err => {
-  console.error('Failed to create social_accounts table:', err.message);
-  // Don't block module loading if table creation fails
-});
+// Helper function to ensure table exists before operations
+async function ensureTableExists() {
+  if (!tableInitialized) {
+    await createSocialAccountsTable();
+  }
+}
 
 // Social Account operations
 class SocialAccount {
   static async findOne(conditions) {
+    await ensureTableExists();
+
     const { userId, platform, isConnected } = conditions;
 
     // Build query dynamically based on conditions
@@ -60,6 +76,8 @@ class SocialAccount {
   }
 
   static async find(conditions) {
+    await ensureTableExists();
+
     const { userId, platform, isConnected } = conditions;
 
     // Build query dynamically based on conditions
@@ -109,6 +127,8 @@ class SocialAccount {
   }
 
   static async findOneAndUpdate(conditions, updates, options = {}) {
+    await ensureTableExists();
+
     const { userId, platform } = conditions;
     const {
       userId: updateUserId,
@@ -250,6 +270,8 @@ class SocialAccount {
   }
 
   static async findOneAndDelete(conditions) {
+    await ensureTableExists();
+
     const { userId, platform } = conditions;
     const result = await query(
       'DELETE FROM social_accounts WHERE user_id = $1 AND platform = $2 RETURNING *',
