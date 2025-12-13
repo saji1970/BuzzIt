@@ -60,6 +60,12 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
     });
   }
 
+  // Debug logging for environment variables
+  console.log(`[OAuth] ${platform} - clientId configured:`, !!config.clientId);
+  console.log(`[OAuth] ${platform} - env var name:`, platform.toUpperCase() + '_CLIENT_ID');
+  console.log(`[OAuth] Environment check - FACEBOOK_CLIENT_ID exists:`, !!process.env.FACEBOOK_CLIENT_ID);
+  console.log(`[OAuth] Environment check - INSTAGRAM_CLIENT_ID exists:`, !!process.env.INSTAGRAM_CLIENT_ID);
+
   if (!config.clientId) {
     return res.status(500).json({
       success: false,
