@@ -35,7 +35,7 @@ router.post('/buzz/:buzzId/share', verifyToken, async (req, res) => {
 
   try {
     const Buzz = require('../models/Buzz');
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     // Get the buzz
     const buzz = await Buzz.findOne({ id: buzzId });
@@ -233,7 +233,7 @@ router.post('/:platform/publish', verifyToken, async (req, res) => {
   }
 
   try {
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     // Get the connected account for this platform
     const account = await SocialAccount.findOne({

@@ -204,7 +204,7 @@ router.get('/oauth/:platform/callback', async (req, res) => {
     }
 
     // Store the social account connection (this will be handled by the main server)
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     await SocialAccount.findOneAndUpdate(
       { userId, platform },
@@ -362,7 +362,7 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
     }
 
     // Store the social account connection
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     const account = await SocialAccount.findOneAndUpdate(
       { userId, platform },
@@ -407,7 +407,7 @@ router.delete('/:platform', verifyToken, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     const result = await SocialAccount.findOneAndDelete({ userId, platform });
 
@@ -434,7 +434,7 @@ router.delete('/:platform', verifyToken, async (req, res) => {
 // Get connected social accounts
 router.get('/connected', verifyToken, async (req, res) => {
   try {
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
 
     const accounts = await SocialAccount.find({ userId: req.userId });
 
@@ -488,7 +488,7 @@ router.post('/:platform/refresh-token', verifyToken, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const SocialAccount = require('../models/SocialAccount');
+    const SocialAccount = require('../db/socialAccounts');
     const account = await SocialAccount.findOne({ userId, platform });
 
     if (!account) {
