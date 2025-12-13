@@ -85,7 +85,7 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
   });
 });
 
-// OAuth callback handler
+// OAuth callback handler (GET - for browser redirects)
 router.get('/oauth/:platform/callback', async (req, res) => {
   const { platform } = req.params;
   const { code, state, error, error_description } = req.query;
@@ -176,6 +176,125 @@ router.get('/oauth/:platform/callback', async (req, res) => {
   }
 });
 
+// OAuth callback handler (POST - for mobile app callbacks)
+router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
+  const { platform } = req.params;
+  const { code, state } = req.body;
+  const userId = req.userId;
+
+  if (!code) {
+    return res.status(400).json({
+      success: false,
+      error: 'Authorization code is required'
+    });
+  }
+
+  const config = SOCIAL_CONFIG[platform];
+  if (!config) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid platform. Supported platforms: facebook, instagram, snapchat'
+    });
+  }
+
+  if (!config.clientId) {
+    return res.status(500).json({
+      success: false,
+      error: `${platform} OAuth is not configured on the server`
+    });
+  }
+
+  try {
+    // Exchange code for access token
+    const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
+
+    const tokenResponse = await axios.post(config.tokenUrl, {
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code: code,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    });
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+    // Get user profile info from the platform
+    let profileData = {};
+    if (platform === 'facebook') {
+      const profileResponse = await axios.get(config.userInfoUrl, {
+        params: {
+          fields: 'id,name,picture',
+          access_token: access_token,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.id,
+        username: profileResponse.data.name,
+        profilePicture: profileResponse.data.picture?.data?.url,
+      };
+    } else if (platform === 'instagram') {
+      const profileResponse = await axios.get('https://graph.instagram.com/me', {
+        params: {
+          fields: 'id,username',
+          access_token: access_token,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.id,
+        username: profileResponse.data.username,
+      };
+    } else if (platform === 'snapchat') {
+      const profileResponse = await axios.get('https://kit.snapchat.com/v1/me', {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.me?.id,
+        username: profileResponse.data.me?.display_name || profileResponse.data.me?.external_id,
+      };
+    }
+
+    // Store the social account connection
+    const SocialAccount = require('../models/SocialAccount');
+
+    const account = await SocialAccount.findOneAndUpdate(
+      { userId, platform },
+      {
+        userId,
+        platform,
+        username: profileData.username || 'Unknown',
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: expires_in ? new Date(Date.now() + expires_in * 1000) : null,
+        profileId: profileData.profileId,
+        profilePicture: profileData.profilePicture,
+        isConnected: true,
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      account: {
+        platform: account.platform,
+        username: account.username,
+        profileId: account.profileId,
+        profilePicture: account.profilePicture,
+        connectedAt: account.createdAt,
+        isConnected: account.isConnected,
+        expiresAt: account.expiresAt,
+      }
+    });
+  } catch (error) {
+    console.error(`OAuth ${platform} callback error:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.error_description || error.message || `Failed to connect ${platform} account`
+    });
+  }
+});
+
 // Disconnect social account
 router.delete('/:platform', verifyToken, async (req, res) => {
   const { platform } = req.params;
@@ -211,17 +330,38 @@ router.get('/connected', verifyToken, async (req, res) => {
   try {
     const SocialAccount = require('../models/SocialAccount');
 
-    const accounts = await SocialAccount.find({ userId: req.userId, isConnected: true });
+    const accounts = await SocialAccount.find({ userId: req.userId });
 
     // Don't send sensitive tokens to client
-    const sanitizedAccounts = accounts.map(account => ({
-      platform: account.platform,
-      username: account.username,
-      profileId: account.profileId,
-      profilePicture: account.profilePicture,
-      profileUrl: account.profileUrl,
-      connectedAt: account.createdAt,
-    }));
+    const sanitizedAccounts = accounts.map(account => {
+      const now = new Date();
+      const expiresAt = account.expiresAt ? new Date(account.expiresAt) : null;
+      let status = 'connected';
+
+      if (!account.isConnected) {
+        status = 'disconnected';
+      } else if (expiresAt && expiresAt < now) {
+        status = 'expired';
+      } else if (!account.accessToken) {
+        status = 'error';
+      }
+
+      return {
+        platform: account.platform,
+        username: account.username,
+        name: account.username,
+        profileId: account.profileId,
+        profilePicture: account.profilePicture,
+        picture: account.profilePicture,
+        profileUrl: account.profileUrl,
+        connectedAt: account.createdAt,
+        createdAt: account.createdAt,
+        isConnected: account.isConnected && status === 'connected',
+        expiresAt: account.expiresAt,
+        status: status,
+        lastRefresh: account.updatedAt,
+      };
+    });
 
     res.json({
       success: true,
@@ -232,6 +372,105 @@ router.get('/connected', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch connected accounts'
+    });
+  }
+});
+
+// Refresh access token for a platform
+router.post('/:platform/refresh-token', verifyToken, async (req, res) => {
+  const { platform } = req.params;
+  const userId = req.userId;
+
+  try {
+    const SocialAccount = require('../models/SocialAccount');
+    const account = await SocialAccount.findOne({ userId, platform });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: `No ${platform} account found`
+      });
+    }
+
+    if (!account.refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: `No refresh token available for ${platform}. Please reconnect your account.`
+      });
+    }
+
+    const config = SOCIAL_CONFIG[platform];
+    if (!config) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid platform'
+      });
+    }
+
+    // Refresh the token
+    try {
+      let tokenResponse;
+
+      if (platform === 'facebook' || platform === 'instagram') {
+        // Facebook/Instagram use the Graph API for token refresh
+        tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+          params: {
+            grant_type: 'fb_exchange_token',
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            fb_exchange_token: account.accessToken,
+          },
+        });
+      } else if (platform === 'snapchat') {
+        // Snapchat uses OAuth2 token refresh
+        tokenResponse = await axios.post(config.tokenUrl, {
+          grant_type: 'refresh_token',
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          refresh_token: account.refreshToken,
+        });
+      }
+
+      const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+      // Update the account with new tokens
+      account.accessToken = access_token;
+      if (refresh_token) {
+        account.refreshToken = refresh_token;
+      }
+      if (expires_in) {
+        account.expiresAt = new Date(Date.now() + expires_in * 1000);
+      }
+      await account.save();
+
+      res.json({
+        success: true,
+        message: `${platform} token refreshed successfully`,
+        account: {
+          platform: account.platform,
+          username: account.username,
+          expiresAt: account.expiresAt,
+          isConnected: true,
+        }
+      });
+    } catch (tokenError) {
+      console.error(`Token refresh error for ${platform}:`, tokenError);
+
+      // Mark account as expired if refresh fails
+      account.isConnected = false;
+      await account.save();
+
+      res.status(400).json({
+        success: false,
+        error: `Failed to refresh ${platform} token. Please reconnect your account.`,
+        details: tokenError.response?.data?.error_description || tokenError.message
+      });
+    }
+  } catch (error) {
+    console.error(`Error refreshing ${platform} token:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh token'
     });
   }
 });
