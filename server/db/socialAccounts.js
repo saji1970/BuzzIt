@@ -32,26 +32,67 @@ async function createSocialAccountsTable() {
   }
 }
 
-// Initialize table on import
-createSocialAccountsTable();
+// Initialize table on import (with error handling)
+createSocialAccountsTable().catch(err => {
+  console.error('Failed to create social_accounts table:', err.message);
+  // Don't block module loading if table creation fails
+});
 
 // Social Account operations
 class SocialAccount {
   static async findOne(conditions) {
-    const { userId, platform } = conditions;
-    const result = await query(
-      'SELECT * FROM social_accounts WHERE user_id = $1 AND platform = $2 LIMIT 1',
-      [userId, platform]
-    );
+    const { userId, platform, isConnected } = conditions;
+
+    // Build query dynamically based on conditions
+    let queryText = 'SELECT * FROM social_accounts WHERE user_id = $1 AND platform = $2';
+    const params = [userId, platform];
+
+    // Handle isConnected filter
+    if (isConnected !== undefined) {
+      queryText += ' AND is_connected = $3';
+      params.push(isConnected);
+    }
+
+    queryText += ' LIMIT 1';
+
+    const result = await query(queryText, params);
     return result.rows[0] || null;
   }
 
   static async find(conditions) {
-    const { userId } = conditions;
-    const result = await query(
-      'SELECT * FROM social_accounts WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
-    );
+    const { userId, platform, isConnected } = conditions;
+
+    // Build query dynamically based on conditions
+    let queryText = 'SELECT * FROM social_accounts WHERE user_id = $1';
+    const params = [userId];
+    let paramCount = 1;
+
+    // Handle platform filter (supports both single value and MongoDB $in operator)
+    if (platform) {
+      if (platform.$in && Array.isArray(platform.$in)) {
+        // MongoDB-style $in operator
+        const placeholders = platform.$in.map((_, i) => `$${paramCount + i + 1}`).join(', ');
+        queryText += ` AND platform IN (${placeholders})`;
+        params.push(...platform.$in);
+        paramCount += platform.$in.length;
+      } else {
+        // Single platform value
+        paramCount++;
+        queryText += ` AND platform = $${paramCount}`;
+        params.push(platform);
+      }
+    }
+
+    // Handle isConnected filter
+    if (isConnected !== undefined) {
+      paramCount++;
+      queryText += ` AND is_connected = $${paramCount}`;
+      params.push(isConnected);
+    }
+
+    queryText += ' ORDER BY created_at DESC';
+
+    const result = await query(queryText, params);
     return result.rows.map(row => ({
       ...row,
       userId: row.user_id,
