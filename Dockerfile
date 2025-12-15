@@ -14,6 +14,7 @@ COPY server/index.js ./
 COPY server/config ./config/
 COPY server/utils ./utils/
 COPY server/models ./models/
+COPY server/routes ./routes/
 COPY server/services ./services/
 COPY server/db ./db/
 COPY server/public ./public/
