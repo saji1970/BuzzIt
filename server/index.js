@@ -688,18 +688,45 @@ const verifyAdmin = async (req, res, next) => {
 
 // Import social media routes (optional - only if files exist)
 let socialAuthRoutes, socialShareRoutes;
+let socialRoutesLoaded = false;
+let socialRoutesError = null;
+
 try {
   socialAuthRoutes = require('./routes/socialAuthRoutes');
   socialShareRoutes = require('./routes/socialShareRoutes');
-  
+
   // Mount social media routes
   app.use('/api/social-auth', socialAuthRoutes);
   app.use('/api/social-share', socialShareRoutes);
-  console.log('✅ Social media routes loaded');
+  socialRoutesLoaded = true;
+  console.log('✅ Social media routes loaded successfully');
+  console.log('  - /api/social-auth routes registered');
+  console.log('  - /api/social-share routes registered');
 } catch (error) {
-  console.log('⚠️  Social media routes not available:', error.message);
+  socialRoutesError = {
+    message: error.message,
+    stack: error.stack
+  };
+  console.error('❌ Social media routes failed to load:', error.message);
+  console.error('Error stack:', error.stack);
   // Routes are optional, continue without them
 }
+
+// Debug endpoint to check social routes status
+app.get('/api/social-routes-status', (req, res) => {
+  res.json({
+    loaded: socialRoutesLoaded,
+    error: socialRoutesError,
+    timestamp: new Date().toISOString(),
+    message: socialRoutesLoaded
+      ? 'Social media routes are loaded and active'
+      : 'Social media routes failed to load - check error details',
+    routes: socialRoutesLoaded ? {
+      auth: '/api/social-auth',
+      share: '/api/social-share'
+    } : null
+  });
+});
 
 // API Routes
 
