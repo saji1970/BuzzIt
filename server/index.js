@@ -688,45 +688,18 @@ const verifyAdmin = async (req, res, next) => {
 
 // Import social media routes (optional - only if files exist)
 let socialAuthRoutes, socialShareRoutes;
-let socialRoutesLoaded = false;
-let socialRoutesError = null;
-
 try {
   socialAuthRoutes = require('./routes/socialAuthRoutes');
   socialShareRoutes = require('./routes/socialShareRoutes');
-
+  
   // Mount social media routes
   app.use('/api/social-auth', socialAuthRoutes);
   app.use('/api/social-share', socialShareRoutes);
-  socialRoutesLoaded = true;
-  console.log('✅ Social media routes loaded successfully');
-  console.log('  - /api/social-auth routes registered');
-  console.log('  - /api/social-share routes registered');
+  console.log('✅ Social media routes loaded');
 } catch (error) {
-  socialRoutesError = {
-    message: error.message,
-    stack: error.stack
-  };
-  console.error('❌ Social media routes failed to load:', error.message);
-  console.error('Error stack:', error.stack);
+  console.log('⚠️  Social media routes not available:', error.message);
   // Routes are optional, continue without them
 }
-
-// Debug endpoint to check social routes status
-app.get('/api/social-routes-status', (req, res) => {
-  res.json({
-    loaded: socialRoutesLoaded,
-    error: socialRoutesError,
-    timestamp: new Date().toISOString(),
-    message: socialRoutesLoaded
-      ? 'Social media routes are loaded and active'
-      : 'Social media routes failed to load - check error details',
-    routes: socialRoutesLoaded ? {
-      auth: '/api/social-auth',
-      share: '/api/social-share'
-    } : null
-  });
-});
 
 // API Routes
 
@@ -743,6 +716,24 @@ app.get('/', (req, res) => {
       socialAuth: '/api/social-auth',
       socialShare: '/api/social-share',
     },
+  });
+});
+
+// Debug endpoint for checking environment variables (for troubleshooting only)
+app.get('/api/debug/env', (req, res) => {
+  res.json({
+    success: true,
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'not set',
+      hasDatabase: !!process.env.DATABASE_URL,
+      hasFacebookClientId: !!process.env.FACEBOOK_CLIENT_ID,
+      hasFacebookClientSecret: !!process.env.FACEBOOK_CLIENT_SECRET,
+      hasInstagramClientId: !!process.env.INSTAGRAM_CLIENT_ID,
+      hasInstagramClientSecret: !!process.env.INSTAGRAM_CLIENT_SECRET,
+      hasSnapchatClientId: !!process.env.SNAPCHAT_CLIENT_ID,
+      hasSnapchatClientSecret: !!process.env.SNAPCHAT_CLIENT_SECRET,
+      appBaseUrl: process.env.APP_BASE_URL || 'not set',
+    }
   });
 });
 
