@@ -3,13 +3,17 @@ const router = express.Router();
 const axios = require('axios');
 
 // Social media OAuth configuration
+console.log('🔍 [socialAuthRoutes] Loading OAuth configuration...');
+console.log('🔍 [socialAuthRoutes] FACEBOOK_CLIENT_ID:', process.env.FACEBOOK_CLIENT_ID ? 'SET' : 'NOT SET');
+console.log('🔍 [socialAuthRoutes] FACEBOOK_CLIENT_SECRET:', process.env.FACEBOOK_CLIENT_SECRET ? 'SET' : 'NOT SET');
+
 const SOCIAL_CONFIG = {
   facebook: {
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
     userInfoUrl: 'https://graph.facebook.com/me',
-    clientId: process.env.FACEBOOK_APP_ID || '',
-    clientSecret: process.env.FACEBOOK_APP_SECRET || '',
+    clientId: process.env.FACEBOOK_CLIENT_ID || '',
+    clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
     scope: 'email,public_profile,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish',
   },
   instagram: {
@@ -17,8 +21,8 @@ const SOCIAL_CONFIG = {
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
     userInfoUrl: 'https://graph.facebook.com/me',
-    clientId: process.env.INSTAGRAM_APP_ID || '',
-    clientSecret: process.env.INSTAGRAM_APP_SECRET || '',
+    clientId: process.env.INSTAGRAM_CLIENT_ID || '',
+    clientSecret: process.env.INSTAGRAM_CLIENT_SECRET || '',
     scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
   },
   snapchat: {
@@ -62,9 +66,9 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
 
   // Debug logging for environment variables
   console.log(`[OAuth] ${platform} - clientId configured:`, !!config.clientId);
-  console.log(`[OAuth] ${platform} - env var name:`, platform.toUpperCase() + '_APP_ID');
-  console.log(`[OAuth] Environment check - FACEBOOK_APP_ID exists:`, !!process.env.FACEBOOK_APP_ID);
-  console.log(`[OAuth] Environment check - INSTAGRAM_APP_ID exists:`, !!process.env.INSTAGRAM_APP_ID);
+  console.log(`[OAuth] ${platform} - env var name:`, platform.toUpperCase() + '_CLIENT_ID');
+  console.log(`[OAuth] Environment check - FACEBOOK_CLIENT_ID exists:`, !!process.env.FACEBOOK_CLIENT_ID);
+  console.log(`[OAuth] Environment check - INSTAGRAM_CLIENT_ID exists:`, !!process.env.INSTAGRAM_CLIENT_ID);
 
   if (!config.clientId) {
     return res.status(500).json({
@@ -585,19 +589,6 @@ router.post('/:platform/refresh-token', verifyToken, async (req, res) => {
       error: 'Failed to refresh token'
     });
   }
-});
-
-// Health check endpoint to verify routes are loaded
-router.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Social auth routes are working',
-    timestamp: new Date().toISOString(),
-    availablePlatforms: Object.keys(SOCIAL_CONFIG),
-    facebookConfigured: !!SOCIAL_CONFIG.facebook.clientId,
-    instagramConfigured: !!SOCIAL_CONFIG.instagram.clientId,
-    snapchatConfigured: !!SOCIAL_CONFIG.snapchat.clientId,
-  });
 });
 
 module.exports = router;
