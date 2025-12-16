@@ -14,7 +14,7 @@ const SOCIAL_CONFIG = {
     userInfoUrl: 'https://graph.facebook.com/me',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
-    scope: 'email,public_profile,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish',
+    scope: 'public_profile,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish',
   },
   instagram: {
     // Instagram uses Facebook Graph API - same endpoints as Facebook
