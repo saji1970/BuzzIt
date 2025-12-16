@@ -52,6 +52,30 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+// Test endpoint to check OAuth configuration (no auth required for debugging)
+router.get('/test-config', (req, res) => {
+  res.json({
+    success: true,
+    config: {
+      facebook: {
+        hasClientId: !!SOCIAL_CONFIG.facebook.clientId,
+        hasClientSecret: !!SOCIAL_CONFIG.facebook.clientSecret,
+        clientIdLength: SOCIAL_CONFIG.facebook.clientId.length,
+      },
+      instagram: {
+        hasClientId: !!SOCIAL_CONFIG.instagram.clientId,
+        hasClientSecret: !!SOCIAL_CONFIG.instagram.clientSecret,
+        clientIdLength: SOCIAL_CONFIG.instagram.clientId.length,
+      },
+      snapchat: {
+        hasClientId: !!SOCIAL_CONFIG.snapchat.clientId,
+        hasClientSecret: !!SOCIAL_CONFIG.snapchat.clientSecret,
+        clientIdLength: SOCIAL_CONFIG.snapchat.clientId.length,
+      }
+    }
+  });
+});
+
 // Get OAuth URL for a platform
 router.get('/oauth/:platform/url', verifyToken, (req, res) => {
   const { platform } = req.params;
