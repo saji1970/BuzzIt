@@ -1,0 +1,93 @@
+====================================================================
+🚀 COPY & PASTE THESE TO RAILWAY - CRITICAL VARIABLES
+====================================================================
+
+Step 1: Copy these variables one by one into Railway
+Step 2: Replace CLOUDINARY values with YOUR actual values from cloudinary.com
+Step 3: Click "Deploy" in Railway
+
+====================================================================
+REQUIRED - Add These NOW
+====================================================================
+
+JWT_SECRET=BuzzIt-7k9mP2nQ8vL3xR5wN1jH4bC6yT0zF-2025-SecureKey
+
+NODE_ENV=production
+
+FACEBOOK_APP_ID=1385131833212514
+
+FACEBOOK_OAUTH_REDIRECT_URI=https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+
+INSTAGRAM_APP_ID=1393033811657781
+
+INSTAGRAM_OAUTH_REDIRECT_URI=https://buzzit-production.up.railway.app/api/social-auth/oauth/instagram/callback
+
+CLOUDINARY_CLOUD_NAME=YOUR_CLOUD_NAME_HERE
+
+CLOUDINARY_API_KEY=YOUR_API_KEY_HERE
+
+CLOUDINARY_API_SECRET=YOUR_API_SECRET_HERE
+
+====================================================================
+HOW TO GET CLOUDINARY CREDENTIALS
+====================================================================
+
+1. Go to: https://cloudinary.com/users/register_free
+2. Sign up (free)
+3. Dashboard will show:
+   - Cloud Name (copy this)
+   - API Key (copy this)
+   - API Secret (copy this, click "Reveal" if hidden)
+4. Replace the YOUR_*_HERE values above with your actual values
+
+====================================================================
+FACEBOOK DEVELOPER CONSOLE - ADD REDIRECT URIS
+====================================================================
+
+1. Go to: https://developers.facebook.com/apps
+2. Select your app (ID: 1385131833212514)
+3. Settings → Basic → Add Platform → Website
+4. Add these URLs to "Valid OAuth Redirect URIs":
+
+https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+https://buzzit-production.up.railway.app/api/social-auth/oauth/instagram/callback
+https://buzzit-production.up.railway.app/settings
+
+5. Save Changes
+
+====================================================================
+AFTER ADDING TO RAILWAY
+====================================================================
+
+✅ Click "Deploy" button in Railway
+✅ Wait for deployment to complete
+✅ Check logs for:
+   - "PostgreSQL connected successfully"
+   - "Social media routes loaded"
+   - "Server running on port..."
+
+✅ Test OAuth config:
+   GET https://buzzit-production.up.railway.app/api/social-auth/test-config
+
+====================================================================
+OPTIONAL (Add Later If Needed)
+====================================================================
+
+# Twilio (For SMS verification during registration)
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your-auth-token
+TWILIO_PHONE_NUMBER=+1234567890
+
+# Twitter (Requires $100/month API subscription)
+TWITTER_CLIENT_ID=your-twitter-client-id
+TWITTER_CLIENT_SECRET=your-twitter-client-secret
+TWITTER_OAUTH_REDIRECT_URI=https://buzzit-production.up.railway.app/api/social-auth/oauth/twitter/callback
+
+# Snapchat (Requires API approval, 1-2 weeks wait)
+SNAPCHAT_CLIENT_ID=your-snapchat-client-id
+SNAPCHAT_CLIENT_SECRET=your-snapchat-client-secret
+SNAPCHAT_OAUTH_REDIRECT_URI=https://buzzit-production.up.railway.app/api/social-auth/oauth/snapchat/callback
+
+====================================================================
+END
+====================================================================
