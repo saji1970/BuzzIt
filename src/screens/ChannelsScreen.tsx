@@ -160,8 +160,24 @@ const ChannelsScreen: React.FC = () => {
       const response = await ApiService.getLiveStreams();
 
       if (response.success && response.data) {
-        // Get only live streams
-        const liveStreamData = response.data.filter((stream: any) => stream.isLive);
+        // Filter to only show web-based streams (streams with streamUrl that are NOT IVS/BuzzLive)
+        const liveStreamData = response.data.filter((stream: any) => {
+          if (!stream.isLive) return false;
+          
+          // Check if stream has a streamUrl
+          const hasStreamUrl = stream.streamUrl && stream.streamUrl.trim() !== '';
+          
+          // Check if it's an IVS/BuzzLive stream (contains IVS indicators)
+          const isIvsStream = stream.streamUrl && (
+            stream.streamUrl.includes('ivs') ||
+            stream.streamUrl.includes('amazonaws.com') ||
+            stream.streamUrl.includes('playback.live-video.net') ||
+            stream.ivsPlaybackUrl
+          );
+          
+          // Only show web-based streams (have streamUrl but NOT IVS)
+          return hasStreamUrl && !isIvsStream;
+        });
         setLiveStreams(liveStreamData);
       }
     } catch (error) {

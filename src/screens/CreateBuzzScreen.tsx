@@ -35,8 +35,10 @@ import {useUser, Interest} from '../context/UserContext';
 import {useFeatures} from '../context/FeatureContext';
 import {useAuth} from '../context/AuthContext';
 import ApiService from '../services/APIService';
+import SocialMediaService, {SocialPlatform, PublishResult} from '../services/SocialMediaService';
 import ScreenContainer from '../components/ScreenContainer';
 import BuzzitButton from '../components/BuzzitButton';
+import SocialPlatformSelector from '../components/SocialPlatformSelector';
 
 type BuzzType = 'event' | 'gossip' | 'thought' | 'poll';
 
@@ -79,6 +81,10 @@ const CreateBuzzScreen: React.FC = () => {
   const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>([]);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<SocialPlatform[]>([]);
+  const [publishingResults, setPublishingResults] = useState<PublishResult[]>([]);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   type PermissionResolution = 'retry' | 'settings' | 'cancel';
 
@@ -664,31 +670,146 @@ const CreateBuzzScreen: React.FC = () => {
       ...newBuzz,
       isLiked: false,
     }, false) // false = don't skip API call, let addBuzz handle it
-      .then(() => {
-        // Reset form
-        setContent('');
-        setSelectedInterests([]);
-        setBuzzType(null);
-        setEventDate('');
-        setPollOptions([
-          {id: '1', text: 'Yes'},
-          {id: '2', text: 'No'},
-          {id: '3', text: "Don't Know"},
+      .then(async (createdBuzz) => {
+        // Publish to selected social platforms if any
+        if (selectedPlatforms.length > 0) {
+          const mediaUrl = uploadedMedia?.url;
+          const mediaType = uploadedMedia?.type;
+          if (mediaUrl) {
+            await publishToSocialPlatforms(buzzContent, mediaUrl, mediaType);
+          } else {
+            // Text-only post
+            await publishToSocialPlatforms(buzzContent);
+          }
+        }
+
+        // Show success notification
+        Alert.alert('Success', 'Buzz has been created!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Reset form after user acknowledges
+              setContent('');
+              setSelectedInterests([]);
+              setBuzzType(null);
+              setEventDate('');
+              setPollOptions([
+                {id: '1', text: 'Yes'},
+                {id: '2', text: 'No'},
+                {id: '3', text: "Don't Know"},
+              ]);
+              setMedia(null);
+              setIncludeLocation(false);
+              setUserLocation(null);
+              setLocationSearchQuery('');
+              setLocationSearchResults([]);
+              setShowLocationSearch(false);
+              setSelectedPlatforms([]);
+              setPublishingResults([]);
+              setIsCreating(false);
+            }
+          }
         ]);
-        setMedia(null);
-        setIncludeLocation(false);
-        setUserLocation(null);
-        setLocationSearchQuery('');
-        setLocationSearchResults([]);
-        setShowLocationSearch(false);
-        
-        setIsCreating(false);
       })
       .catch((error: any) => {
         console.error('Error creating buzz:', error);
         setIsCreating(false);
         Alert.alert('Error', 'Failed to create buzz. Please try again.');
       });
+  };
+
+  const publishToSocialPlatforms = async (
+    content: string,
+    mediaUrl?: string,
+    mediaType?: 'image' | 'video'
+  ) => {
+    if (selectedPlatforms.length === 0) return;
+
+    setIsPublishing(true);
+    setPublishingResults([]);
+
+    try {
+      const results = await SocialMediaService.publishToPlatforms({
+        content,
+        mediaUrl,
+        mediaType,
+        platforms: selectedPlatforms,
+      });
+
+      setPublishingResults(results);
+
+      // Show results
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      if (successCount > 0 && failCount === 0) {
+        Alert.alert(
+          'Success',
+          `Buzz published to ${successCount} platform${successCount > 1 ? 's' : ''}!`
+        );
+      } else if (successCount > 0 && failCount > 0) {
+        const failedPlatforms = results
+          .filter(r => !r.success)
+          .map(r => r.platform)
+          .join(', ');
+        Alert.alert(
+          'Partial Success',
+          `Published to ${successCount} platform${successCount > 1 ? 's' : ''}. Failed: ${failedPlatforms}`
+        );
+      } else {
+        const errors = results
+          .filter(r => !r.success)
+          .map(r => `${r.platform}: ${r.error}`)
+          .join('\n');
+        Alert.alert('Publishing Failed', `Failed to publish to all platforms:\n${errors}`);
+      }
+    } catch (error: any) {
+      console.error('Error publishing to social platforms:', error);
+      Alert.alert('Error', 'Failed to publish to social platforms. Please try again.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Load connected platforms on mount
+  useEffect(() => {
+    loadConnectedPlatforms();
+  }, []);
+
+  const loadConnectedPlatforms = async () => {
+    try {
+      const accounts = await SocialMediaService.getConnectedAccounts();
+      const connected = accounts
+        .filter(acc => acc.isConnected && acc.status === 'connected')
+        .map(acc => acc.platform);
+      setConnectedPlatforms(connected);
+    } catch (error) {
+      console.error('Error loading connected platforms:', error);
+    }
+  };
+
+  const togglePlatform = (platform: SocialPlatform) => {
+    if (selectedPlatforms.includes(platform)) {
+      setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform));
+    } else {
+      if (!connectedPlatforms.includes(platform)) {
+        Alert.alert(
+          'Not Connected',
+          `Please connect ${platform.charAt(0).toUpperCase() + platform.slice(1)} in Settings first.`,
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {
+              text: 'Go to Settings',
+              onPress: () => {
+                navigation.navigate('Settings' as never);
+              },
+            },
+          ]
+        );
+        return;
+      }
+      setSelectedPlatforms([...selectedPlatforms, platform]);
+    }
   };
 
   const handleShareToSocial = async () => {
@@ -1090,8 +1211,48 @@ const CreateBuzzScreen: React.FC = () => {
             </View>
           </Animatable.View>
 
-          {/* Share Out Section */}
+          {/* Social Platform Selection */}
           <Animatable.View animation="fadeInUp" delay={240} style={styles.section}>
+            <SocialPlatformSelector
+              selectedPlatforms={selectedPlatforms}
+              onPlatformsChange={setSelectedPlatforms}
+              mediaType={media?.type}
+              contentLength={content.length}
+            />
+            {isPublishing && (
+              <View style={styles.publishingIndicator}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={[styles.publishingText, {color: theme.colors.textSecondary}]}>
+                  Publishing to {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? 's' : ''}...
+                </Text>
+              </View>
+            )}
+            {publishingResults.length > 0 && (
+              <View style={styles.publishingResults}>
+                {publishingResults.map(result => (
+                  <View key={result.platform} style={styles.publishingResultItem}>
+                    <Icon
+                      name={result.success ? 'check-circle' : 'error'}
+                      size={16}
+                      color={result.success ? theme.colors.primary : theme.colors.error}
+                    />
+                    <Text
+                      style={[
+                        styles.publishingResultText,
+                        {
+                          color: result.success ? theme.colors.primary : theme.colors.error,
+                        },
+                      ]}>
+                      {result.platform}: {result.success ? 'Published' : result.error}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Animatable.View>
+
+          {/* Share Out Section */}
+          <Animatable.View animation="fadeInUp" delay={280} style={styles.section}>
             <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>Share Beyond Buzzit</Text>
             <Text style={[styles.sectionSubtitle, {color: theme.colors.textSecondary}]}>Instantly send this buzz to other apps while you create.</Text>
             <BuzzitButton
@@ -1448,6 +1609,50 @@ const styles = StyleSheet.create({
   },
   fullWidthAction: {
     width: '100%',
+  },
+  platformsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    gap: 10,
+  },
+  platformButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 8,
+  },
+  platformButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  platformNotConnected: {
+    fontSize: 10,
+    marginLeft: 4,
+  },
+  publishingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  publishingText: {
+    fontSize: 14,
+  },
+  publishingResults: {
+    marginTop: 12,
+    gap: 8,
+  },
+  publishingResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  publishingResultText: {
+    fontSize: 12,
   },
 });
 

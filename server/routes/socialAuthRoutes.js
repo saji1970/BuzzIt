@@ -14,7 +14,7 @@ const SOCIAL_CONFIG = {
     userInfoUrl: 'https://graph.facebook.com/me',
     clientId: process.env.FACEBOOK_CLIENT_ID || '',
     clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '',
-    scope: 'public_profile,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish',
+    scope: 'public_profile',
   },
   instagram: {
     // Instagram uses Facebook Graph API - same endpoints as Facebook
@@ -28,9 +28,19 @@ const SOCIAL_CONFIG = {
   snapchat: {
     authUrl: 'https://accounts.snapchat.com/accounts/oauth2/auth',
     tokenUrl: 'https://accounts.snapchat.com/accounts/oauth2/token',
+    userInfoUrl: 'https://kit.snapchat.com/v1/me',
     clientId: process.env.SNAPCHAT_CLIENT_ID || '',
     clientSecret: process.env.SNAPCHAT_CLIENT_SECRET || '',
-    scope: 'https://auth.snapchat.com/oauth2/api/user.display_name',
+    scope: 'https://auth.snapchat.com/oauth2/api/user.display_name https://auth.snapchat.com/oauth2/api/user.bitmoji.avatar',
+  },
+  twitter: {
+    authUrl: 'https://twitter.com/i/oauth2/authorize',
+    tokenUrl: 'https://api.twitter.com/2/oauth2/token',
+    userInfoUrl: 'https://api.twitter.com/2/users/me',
+    revokeUrl: 'https://api.twitter.com/2/oauth2/revoke',
+    clientId: process.env.TWITTER_CLIENT_ID || '',
+    clientSecret: process.env.TWITTER_CLIENT_SECRET || '',
+    scope: 'tweet.read tweet.write users.read offline.access',
   },
 };
 
@@ -84,7 +94,7 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
   if (!config) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid platform. Supported platforms: facebook, instagram, snapchat'
+      error: 'Invalid platform. Supported platforms: facebook, instagram, snapchat, twitter'
     });
   }
 
@@ -159,8 +169,27 @@ router.get('/oauth/:platform/callback', async (req, res) => {
           redirect_uri: redirectUri,
         },
       });
+    } else if (platform === 'twitter') {
+      // Twitter OAuth 2.0 uses Basic Auth
+      const credentials = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
+      tokenResponse = await axios.post(
+        config.tokenUrl,
+        new URLSearchParams({
+          code: code,
+          grant_type: 'authorization_code',
+          client_id: config.clientId,
+          redirect_uri: redirectUri,
+          code_verifier: 'challenge', // PKCE not required for confidential clients
+        }),
+        {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }
+      );
     } else {
-      // Other platforms use POST
+      // Other platforms (Snapchat) use standard POST
       tokenResponse = await axios.post(config.tokenUrl, {
         client_id: config.clientId,
         client_secret: config.clientSecret,
@@ -235,6 +264,34 @@ router.get('/oauth/:platform/callback', async (req, res) => {
           };
         }
       }
+    } else if (platform === 'twitter') {
+      // Twitter API v2 - Get user profile
+      const profileResponse = await axios.get(config.userInfoUrl, {
+        params: {
+          'user.fields': 'id,name,username,profile_image_url',
+        },
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.data.id,
+        username: profileResponse.data.data.username,
+        name: profileResponse.data.data.name,
+        profilePicture: profileResponse.data.data.profile_image_url,
+      };
+    } else if (platform === 'snapchat') {
+      // Snapchat API - Get user profile
+      const profileResponse = await axios.get(config.userInfoUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.data?.me?.id,
+        username: profileResponse.data.data?.me?.display_name || profileResponse.data.data?.me?.external_id,
+        profilePicture: profileResponse.data.data?.me?.bitmoji?.avatar,
+      };
     }
 
     // Store the social account connection (this will be handled by the main server)
@@ -281,7 +338,7 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
   if (!config) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid platform. Supported platforms: facebook, instagram, snapchat'
+      error: 'Invalid platform. Supported platforms: facebook, instagram, snapchat, twitter'
     });
   }
 
@@ -307,8 +364,27 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
           redirect_uri: redirectUri,
         },
       });
+    } else if (platform === 'twitter') {
+      // Twitter OAuth 2.0 uses Basic Auth
+      const credentials = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
+      tokenResponse = await axios.post(
+        config.tokenUrl,
+        new URLSearchParams({
+          code: code,
+          grant_type: 'authorization_code',
+          client_id: config.clientId,
+          redirect_uri: redirectUri,
+          code_verifier: 'challenge', // PKCE not required for confidential clients
+        }),
+        {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }
+      );
     } else {
-      // Other platforms use POST
+      // Other platforms (Snapchat) use standard POST
       tokenResponse = await axios.post(config.tokenUrl, {
         client_id: config.clientId,
         client_secret: config.clientSecret,
@@ -383,6 +459,22 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
           };
         }
       }
+    } else if (platform === 'twitter') {
+      // Twitter API v2 - Get user profile
+      const profileResponse = await axios.get(config.userInfoUrl, {
+        params: {
+          'user.fields': 'id,name,username,profile_image_url',
+        },
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      profileData = {
+        profileId: profileResponse.data.data.id,
+        username: profileResponse.data.data.username,
+        name: profileResponse.data.data.name,
+        profilePicture: profileResponse.data.data.profile_image_url,
+      };
     } else if (platform === 'snapchat') {
       const profileResponse = await axios.get('https://kit.snapchat.com/v1/me', {
         headers: {
@@ -392,6 +484,7 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
       profileData = {
         profileId: profileResponse.data.me?.id,
         username: profileResponse.data.me?.display_name || profileResponse.data.me?.external_id,
+        profilePicture: profileResponse.data.me?.bitmoji?.avatar,
       };
     }
 

@@ -597,7 +597,7 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
 
   const subscribeToChannel = async (channelId: string) => {
     if (!user) return;
-    
+
     if (!user.subscribedChannels.includes(channelId)) {
       const updatedUser = {
         ...user,
@@ -605,9 +605,16 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
         following: user.following + 1,
       };
       setUserState(updatedUser);
-      
+
       try {
+        // Save to AsyncStorage
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+        // Persist to database
+        await ApiService.updateUser(user.id, {
+          subscribedChannels: updatedUser.subscribedChannels,
+          following: updatedUser.following,
+        });
       } catch (error) {
         console.log('Error subscribing to channel:', error);
       }
@@ -616,16 +623,23 @@ export const UserProvider: React.FC<{children: React.ReactNode}> = ({
 
   const unsubscribeFromChannel = async (channelId: string) => {
     if (!user) return;
-    
+
     const updatedUser = {
       ...user,
       subscribedChannels: user.subscribedChannels.filter(id => id !== channelId),
       following: Math.max(0, user.following - 1),
     };
     setUserState(updatedUser);
-    
+
     try {
+      // Save to AsyncStorage
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+      // Persist to database
+      await ApiService.updateUser(user.id, {
+        subscribedChannels: updatedUser.subscribedChannels,
+        following: updatedUser.following,
+      });
     } catch (error) {
       console.log('Error unsubscribing from channel:', error);
     }

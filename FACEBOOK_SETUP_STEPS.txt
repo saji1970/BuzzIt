@@ -1,0 +1,79 @@
+========================================
+FACEBOOK APP SETUP - FOLLOW THESE STEPS
+========================================
+
+Your New App Credentials:
+- App ID: 1385131833212514
+- App Secret: 7c9ef833260de03a7101248e24ad3aa9
+
+========================================
+STEP 1: Configure Facebook App
+========================================
+
+1. Open: https://developers.facebook.com/apps/1385131833212514/fb-login/settings/
+
+2. Scroll to "Valid OAuth Redirect URIs"
+
+3. Add these TWO URLs (copy exactly):
+   - https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+   - com.buzzit.app://oauth/callback/facebook
+
+4. Turn ON:
+   - Client OAuth Login
+   - Web OAuth Login
+
+5. Click "Save Changes"
+
+6. WAIT 1-2 MINUTES
+
+========================================
+STEP 2: Update Railway Variables
+========================================
+
+1. Open: https://railway.app
+
+2. Go to your backend service → Variables tab
+
+3. Update these 4 variables:
+
+   FACEBOOK_CLIENT_ID = 1385131833212514
+   FACEBOOK_CLIENT_SECRET = 7c9ef833260de03a7101248e24ad3aa9
+   INSTAGRAM_CLIENT_ID = 1385131833212514
+   INSTAGRAM_CLIENT_SECRET = 7c9ef833260de03a7101248e24ad3aa9
+
+4. Save and wait for deployment (1-2 minutes)
+
+========================================
+STEP 3: Test OAuth URL
+========================================
+
+1. After Railway redeploys, run:
+   test-new-facebook-app.bat
+
+2. Should see Facebook login page (NOT an error!)
+
+========================================
+STEP 4: Test from Mobile App
+========================================
+
+1. Run: quick-deploy.bat
+
+2. In app: Settings → Privacy & Social Media → Connect Facebook
+
+3. Should see Facebook login and successfully connect!
+
+========================================
+TIMELINE
+========================================
+
+Total time: 5-10 minutes
+- Step 1: 2 minutes
+- Step 2: 3 minutes (including deployment wait)
+- Step 3: 1 minute
+- Step 4: 2 minutes
+
+========================================
+START NOW!
+========================================
+
+Begin with STEP 1 - Configure Facebook App

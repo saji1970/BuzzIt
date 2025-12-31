@@ -160,3 +160,9 @@ adb logcat | Select-String -Pattern "StreamViewerScreen|IVS Player" -CaseSensiti
 ## Dependencies Added
 - `amazon-ivs-react-native-player@^1.5.0` - For AWS IVS stream playback
 
+
+
+
+
+
+

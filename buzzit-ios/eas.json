@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "bundleIdentifier": "com.buzzit.app"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.buzzit.app"
+      },
+      "channel": "preview"
+    },
+    "production": {
+      "distribution": "store",
+      "ios": {
+        "bundleIdentifier": "com.buzzit.app"
+      },
+      "channel": "production"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "",
+        "ascAppId": "",
+        "appleTeamId": ""
+      }
+    }
+  }
+}
+

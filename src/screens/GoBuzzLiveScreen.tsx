@@ -23,7 +23,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
-import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import {useNavigation, useFocusEffect, useRoute} from '@react-navigation/native';
 import ApiService from '../services/APIService';
 import BuzzLivePublisher, {
   BuzzLivePublisherHandle,
@@ -46,6 +46,9 @@ const GoBuzzLiveScreen: React.FC = () => {
   const {theme} = useTheme();
   const {user: currentUser} = useAuth();
   const navigation = useNavigation();
+  const route = useRoute();
+  const routeParams = route.params as {relatedBuzzId?: string; relatedBuzzContent?: string; relatedBuzzInterests?: any[]} | undefined;
+  
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamStatus, setStreamStatus] = useState<BuzzLivePublisherStatus>('idle');
   const [showSetup, setShowSetup] = useState(true);
@@ -213,6 +216,29 @@ const GoBuzzLiveScreen: React.FC = () => {
       clearTimeout(timeoutId);
     };
   }, [currentUser?.id]);
+
+  // Pre-fill title and description from related buzz if provided
+  useEffect(() => {
+    if (routeParams?.relatedBuzzContent && !title) {
+      // Pre-fill description with buzz content
+      const buzzContent = routeParams.relatedBuzzContent;
+      setDescription(buzzContent.length > 200 ? buzzContent.substring(0, 200) + '...' : buzzContent);
+      
+      // Generate a title based on buzz content or interests
+      if (routeParams.relatedBuzzInterests && routeParams.relatedBuzzInterests.length > 0) {
+        const interestNames = routeParams.relatedBuzzInterests
+          .map((interest: any) => typeof interest === 'string' ? interest : interest.name || interest.id)
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(' & ');
+        setTitle(`Live: ${interestNames}`);
+      } else {
+        // Use first part of content as title
+        const firstLine = buzzContent.split('\n')[0] || buzzContent;
+        setTitle(firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine);
+      }
+    }
+  }, [routeParams]);
 
   useEffect(() => {
     if (isStreaming && currentStream) {

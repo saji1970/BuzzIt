@@ -2,7 +2,7 @@ import ApiService from './APIService';
 import {Linking, Platform} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type SocialPlatform = 'facebook' | 'instagram' | 'snapchat';
+export type SocialPlatform = 'facebook' | 'instagram' | 'snapchat' | 'twitter';
 
 export interface SocialAccount {
   platform: SocialPlatform;
@@ -76,15 +76,32 @@ class SocialMediaService {
         }, 5 * 60 * 1000);
       }
 
-      // Open OAuth URL in browser
-      const canOpen = await Linking.canOpenURL(authUrl);
+      // On Android, add display=popup to try to force browser instead of Facebook app
+      console.log('🔵 FACEBOOK OAUTH: Starting connection flow');
+      console.log('🔵 Platform:', Platform.OS);
+      console.log('🔵 Auth URL:', authUrl);
+
+      let urlToOpen = authUrl;
+      if (Platform.OS === 'android' && platform === 'facebook') {
+        console.log('🔵 Android Facebook detected - adding display=popup');
+        // Add display=popup parameter to encourage browser handling
+        const separator = authUrl.includes('?') ? '&' : '?';
+        urlToOpen = `${authUrl}${separator}display=popup`;
+        console.log('🔵 URL with display=popup:', urlToOpen);
+      }
+
+      // Check if URL can be opened
+      const canOpen = await Linking.canOpenURL(urlToOpen);
       if (!canOpen) {
         const error = `Cannot open ${platform} authentication URL.`;
+        console.log('🔴 Cannot open URL:', error);
         onComplete?.(false, error);
         return {success: false, error};
       }
 
-      await Linking.openURL(authUrl);
+      console.log('🔵 Opening URL...');
+      await Linking.openURL(urlToOpen);
+      console.log('🔵 URL opened successfully');
 
       // Return success - actual connection will be confirmed via OAuth callback
       return {success: true};
@@ -323,6 +340,17 @@ class SocialMediaService {
         }
         return {valid: false, error: 'Snapchat requires an image or video'};
 
+      case 'twitter':
+        // Twitter supports text-only, images, and videos
+        if (!mediaType) {
+          // Text-only tweets are allowed
+          return {valid: true};
+        }
+        if (mediaType === 'image' || mediaType === 'video') {
+          return {valid: true};
+        }
+        return {valid: false, error: 'Twitter supports images and videos'};
+
       default:
         return {valid: false, error: 'Unknown platform'};
     }
@@ -543,6 +571,14 @@ class SocialMediaService {
           maxVideoSize: '50MB',
           supportedFormats: ['jpg', 'png', 'mp4'],
           maxContentLength: 250,
+        };
+
+      case 'twitter':
+        return {
+          maxImageSize: '5MB',
+          maxVideoSize: '512MB',
+          supportedFormats: ['jpg', 'png', 'gif', 'mp4'],
+          maxContentLength: 280,
         };
 
       default:

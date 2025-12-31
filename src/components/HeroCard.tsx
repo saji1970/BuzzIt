@@ -29,6 +29,9 @@ interface HeroCardProps {
   onBuzzLivePress: () => void;
   onBuzzerPress: (buzzerId: string) => void;
   onRefresh?: () => void;
+  username?: string;
+  displayName?: string;
+  userAvatar?: string | null;
 }
 
 const HeroCard: React.FC<HeroCardProps> = ({
@@ -41,6 +44,9 @@ const HeroCard: React.FC<HeroCardProps> = ({
   onBuzzLivePress,
   onBuzzerPress,
   onRefresh,
+  username,
+  displayName,
+  userAvatar,
 }) => {
   const {theme} = useTheme();
 
@@ -57,16 +63,34 @@ const HeroCard: React.FC<HeroCardProps> = ({
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={onRefresh || onSearchIconPress}
-            activeOpacity={0.8}>
-            <Icon
-              name={onRefresh ? 'refresh' : 'auto-awesome'}
-              size={22}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
+          <View style={styles.rightSection}>
+            {username && (
+              <View style={styles.userInfo}>
+                {userAvatar ? (
+                  <Image source={{uri: userAvatar}} style={styles.userAvatar} />
+                ) : (
+                  <View style={styles.userAvatarPlaceholder}>
+                    <Text style={styles.userAvatarText}>
+                      {(displayName || username).charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.usernameText} numberOfLines={1}>
+                  @{username}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={onRefresh || onSearchIconPress}
+              activeOpacity={0.8}>
+              <Icon
+                name={onRefresh ? 'refresh' : 'auto-awesome'}
+                size={22}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Row 2: Top Buzzers */}
@@ -148,13 +172,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.15)',
-    shadowOffset: {width: 0, height: 8},
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    borderRadius: 28,
+    padding: 24,
+    shadowColor: 'rgba(47, 128, 255, 0.25)',
+    shadowOffset: {width: 0, height: 12},
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
   },
   headerRow: {
     flexDirection: 'row',
@@ -163,23 +187,69 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 4,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  userAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  userAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  userAvatarText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  usernameText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    maxWidth: 100,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   topBuzzersSection: {
     marginBottom: 16,
@@ -205,16 +275,16 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderWidth: 2.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   avatarPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 2.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -238,12 +308,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 10,
-    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    gap: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   searchInput: {
     flex: 1,
@@ -252,14 +324,14 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   buzzLiveButton: {
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: 'hidden',
     height: 44,
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: 'rgba(47, 128, 255, 0.4)',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   buzzLiveGradient: {
     flexDirection: 'row',

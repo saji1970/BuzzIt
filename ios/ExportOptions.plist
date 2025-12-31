@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 
+    Distribution Methods:
+    - development: For development/testing
+    - ad-hoc: For testing on registered devices (up to 100 devices)
+    - enterprise: For enterprise distribution (requires Enterprise account)
+    - app-store: For App Store submission
+    -->
+    <key>method</key>
+    <string>ad-hoc</string>
+    
+    <!-- Replace with your Apple Developer Team ID -->
+    <!-- Find it at: https://developer.apple.com/account -->
+    <key>teamID</key>
+    <string>YOUR_TEAM_ID</string>
+    
+    <!-- Disable bitcode (React Native doesn't use it) -->
+    <key>compileBitcode</key>
+    <false/>
+    
+    <!-- Strip Swift symbols for smaller IPA -->
+    <key>stripSwiftSymbols</key>
+    <true/>
+    
+    <!-- Thinning: all, thin-for-all-variants, or none -->
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+    
+    <!-- Embed app extensions if any -->
+    <key>embed</key>
+    <false/>
+    
+    <!-- Signing certificate for distribution -->
+    <!-- Options: Apple Development, Apple Distribution, etc. -->
+    <key>signingStyle</key>
+    <string>automatic</string>
+</dict>
+</plist>
+

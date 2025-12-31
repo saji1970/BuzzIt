@@ -1,280 +1,229 @@
-# Social Media Integration - Implementation Summary
+# Social Media Integration Module
 
 ## Overview
-I've implemented a complete social media integration system that allows users to:
-1. Connect their Instagram, Facebook, and Snapchat accounts via OAuth
-2. Control privacy settings for their profile information
-3. Share buzz posts directly to their connected social media accounts
 
-## What Was Implemented
+Complete social media integration module that allows users to connect Facebook, Instagram, and Snapchat accounts via OAuth and automatically publish buzzes to selected platforms.
 
-### 1. Database Updates
+## Features
 
-#### User Model (`server/models/User.js`)
-- Added `privacySettings` object with the following fields:
-  - `shareEmail`: Control if email is visible to others (default: false)
-  - `shareMobileNumber`: Control if mobile number is visible (default: false)
-  - `shareLocation`: Control if location is visible (default: false)
-  - `shareBio`: Control if bio is visible (default: true)
-  - `shareInterests`: Control if interests are visible (default: true)
+### ✅ Implemented Features
 
-#### SocialAccount Model (`server/models/SocialAccount.js`)
-- Enhanced with additional fields:
-  - `refreshToken`: Store OAuth refresh token
-  - `expiresAt`: Token expiration date
-  - `profileId`: Social media profile ID
-  - `profileUrl`: Link to social media profile
-  - `profilePicture`: Profile picture URL
-  - `isConnected`: Connection status
+1. **OAuth Connection**
+   - Connect Facebook, Instagram, and Snapchat from Settings
+   - Official OAuth flows for each platform
+   - Token refresh and expiration handling
+   - Connection status indicators
 
-### 2. Backend API Routes
+2. **Platform Selection in Create Buzz**
+   - Visual platform selector with connection status
+   - Real-time validation (content length, media requirements)
+   - Multi-platform selection
+   - Clear error messages
 
-#### OAuth Routes (`server/routes/socialAuthRoutes.js`)
-- `GET /api/social-auth/oauth/:platform/url` - Get OAuth authorization URL
-- `GET /api/social-auth/oauth/:platform/callback` - Handle OAuth callback
-- `GET /api/social-auth/connected` - Get user's connected accounts
-- `DELETE /api/social-auth/:platform` - Disconnect a social account
+3. **Automatic Publishing**
+   - Publishes to selected platforms when buzz is created
+   - Handles media uploads per platform
+   - Platform-specific validation
+   - Error reporting per platform
 
-#### Share Routes (`server/routes/socialShareRoutes.js`)
-- `POST /api/social-share/buzz/:buzzId/share` - Share buzz to social media platforms
-- `GET /api/social-share/buzz/:buzzId/preview` - Preview what will be shared
+4. **Token Management**
+   - Automatic token refresh
+   - Expiration detection
+   - Reconnection prompts
+   - Status indicators (connected, expired, error)
 
-### 3. Frontend Components
+5. **Error Handling**
+   - User-friendly error messages
+   - Platform-specific error handling
+   - Rate limit detection
+   - Permission error handling
+   - Network error handling
 
-#### PrivacySettingsScreen (`src/screens/PrivacySettingsScreen.tsx`)
-New screen that allows users to:
-- Toggle privacy settings for each field
-- View connected social media accounts
-- Connect/disconnect social accounts
-- See connection status with username
+## Architecture
 
-#### Updated SocialMediaShareModal (`src/components/SocialMediaShareModal.tsx`)
-- Now uses real API instead of local storage
-- Shows connected accounts from server
-- Allows sharing to individual platforms or all at once
-- Displays loading and sharing states
-- Provides feedback on success/failure
+### Components
 
-#### Updated SettingsScreen (`src/screens/SettingsScreen.tsx`)
-- Removed non-working static items:
-  - Notifications
-  - Language
-  - Storage
-  - Help & Support
-  - About
-- Added "Privacy & Social" menu item
-- Cleaner, more focused UI
+1. **PrivacySettingsScreen** (`src/screens/PrivacySettingsScreen.tsx`)
+   - Social account connection UI
+   - Connection status display
+   - Connect/Disconnect/Reconnect actions
 
-#### Updated APIService (`src/services/APIService.ts`)
-- Added `getSocialAuthUrl(platform)` method
-- Added `getConnectedSocialAccounts()` method
-- Added `disconnectSocialAccount(platform)` method
-- Added `shareBuzzToSocial(buzzId, platforms)` method
-- Added `getSharePreview(buzzId, platform)` method
-- Updated User interface to include `privacySettings`
+2. **SocialPlatformSelector** (`src/components/SocialPlatformSelector.tsx`)
+   - Platform selection UI for Create Buzz
+   - Real-time validation
+   - Connection status indicators
 
-### 4. Server Integration (`server/index.js`)
-- Imported and mounted new routes:
-  - `/api/social-auth` for OAuth operations
-  - `/api/social-share` for sharing functionality
+3. **SocialMediaService** (`src/services/SocialMediaService.ts`)
+   - OAuth flow management
+   - Token refresh logic
+   - Publishing logic
+   - Platform validation
 
-## Next Steps to Complete Setup
+4. **APIService** (`src/services/APIService.ts`)
+   - Backend API calls
+   - OAuth callback handling
+   - Publishing endpoints
 
-### 1. Install Required Dependencies
+### Deep Linking
 
-The OAuth integration requires the `axios` package:
+- **URL Scheme**: `com.buzzit.app://oauth/callback/:platform`
+- **HTTPS**: `https://buzzit-production.up.railway.app/oauth/callback/:platform`
+- Handles OAuth redirects automatically
 
-```bash
-cd server
-npm install axios
+## Platform Requirements
+
+### Facebook
+- **Content**: Max 5,000 characters
+- **Images**: Max 4MB (JPG, PNG, GIF)
+- **Videos**: Max 1GB (MP4, MOV)
+- **Permissions**: `pages_manage_posts`, `pages_read_engagement`
+
+### Instagram
+- **Content**: Max 2,200 characters
+- **Images**: Max 8MB (JPG, PNG)
+- **Videos**: Max 100MB (MP4)
+- **Aspect Ratios**: 1:1, 4:5, 16:9
+- **Permissions**: `instagram_basic`, `instagram_content_publish`
+
+### Snapchat
+- **Content**: Max 250 characters
+- **Images**: Max 10MB (JPG, PNG)
+- **Videos**: Max 50MB (MP4)
+- **Permissions**: `snapchat.ads.management`
+
+## Usage
+
+### Connecting Accounts
+
+1. Navigate to **Settings** → **Privacy & Social**
+2. Tap **Connect** on desired platform
+3. Complete OAuth flow in browser
+4. App automatically handles callback
+
+### Publishing Buzzes
+
+1. Create a buzz in **Create** screen
+2. Select platforms in **Publish to Social Media** section
+3. Tap **Create Buzz**
+4. App automatically publishes to selected platforms
+
+### Reconnecting Expired Accounts
+
+1. Go to **Settings** → **Privacy & Social**
+2. Tap **Reconnect** on expired platform
+3. Complete OAuth flow again
+
+## API Endpoints
+
+### Backend Endpoints (Required)
+
+```
+GET  /api/social-auth/oauth/:platform/url
+     - Get OAuth authorization URL
+
+POST /api/social-auth/oauth/:platform/callback
+     - Exchange authorization code for tokens
+     - Body: { code, state }
+
+GET  /api/social-auth/connected
+     - Get all connected accounts
+
+DELETE /api/social-auth/:platform
+     - Disconnect platform
+
+POST /api/social-auth/:platform/refresh-token
+     - Refresh access token
+
+POST /api/social-share/:platform/publish
+     - Publish content to platform
+     - Body: { content, mediaUrl?, mediaType? }
 ```
 
-### 2. Configure OAuth Credentials
+## Error Handling
 
-Create a `.env` file in the `server` directory with your OAuth credentials:
+### Token Errors
+- **Expired**: Automatically attempts refresh
+- **Invalid**: Prompts user to reconnect
+- **Missing**: Shows connection prompt
 
-```env
-# Facebook OAuth
-FACEBOOK_CLIENT_ID=your_facebook_app_id
-FACEBOOK_CLIENT_SECRET=your_facebook_app_secret
+### Publishing Errors
+- **Rate Limit**: Shows user-friendly message
+- **Permission**: Prompts to reconnect with permissions
+- **Media Validation**: Shows platform-specific requirements
+- **Network**: Retry prompt with clear message
 
-# Instagram OAuth (uses Facebook Graph API)
-INSTAGRAM_CLIENT_ID=your_instagram_app_id
-INSTAGRAM_CLIENT_SECRET=your_instagram_app_secret
+### OAuth Errors
+- **User Cancelled**: Silent failure
+- **Access Denied**: Clear error message
+- **Network Error**: Retry prompt
 
-# Snapchat OAuth
-SNAPCHAT_CLIENT_ID=your_snapchat_client_id
-SNAPCHAT_CLIENT_SECRET=your_snapchat_client_secret
+## Platform-Specific Notes
 
-# App Base URL (for OAuth redirects)
-APP_BASE_URL=https://buzzit-production.up.railway.app
-```
+### Facebook
+- Requires Facebook Page (not personal profile)
+- Uses Facebook Graph API
+- Long-lived tokens (60 days)
+- Auto-refresh supported
 
-### 3. Register OAuth Apps
+### Instagram
+- Requires Instagram Business Account
+- Uses Instagram Graph API
+- Media container creation required
+- Publishing can take 1-2 minutes
 
-#### Facebook
-1. Go to https://developers.facebook.com/
-2. Create a new app
-3. Add "Facebook Login" product
-4. Set redirect URI: `https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback`
-5. Request permissions: `email`, `public_profile`, `publish_to_groups`
+### Snapchat
+- Requires Snapchat Ads Manager account
+- Uses Snapchat Marketing API
+- Media must be uploaded first
+- Supports stories and ads
 
-#### Instagram
-1. Instagram uses Facebook's Graph API
-2. Follow Facebook setup above
-3. Add Instagram Basic Display product
-4. Set redirect URI: `https://buzzit-production.up.railway.app/api/social-auth/oauth/instagram/callback`
+## Testing
 
-#### Snapchat
-1. Go to https://kit.snapchat.com/
-2. Create a new app
-3. Add OAuth2 credentials
-4. Set redirect URI: `https://buzzit-production.up.railway.app/api/social-auth/oauth/snapchat/callback`
+### Test OAuth Flow
+1. Connect account in Settings
+2. Verify callback URL handling
+3. Check token storage
+4. Verify connection status
 
-### 4. Add Navigation Route
+### Test Publishing
+1. Create buzz with media
+2. Select platforms
+3. Verify publishing results
+4. Check error handling
 
-You need to add the `PrivacySettingsScreen` to your navigation stack. In your main navigation file (likely `App.tsx` or navigation config):
+## Troubleshooting
 
-```typescript
-import PrivacySettingsScreen from './src/screens/PrivacySettingsScreen';
+### OAuth Callback Not Working
+- Check deep linking configuration
+- Verify URL scheme in AndroidManifest
+- Check iOS Info.plist URL schemes
+- Ensure backend callback URL matches
 
-// Add to your stack navigator:
-<Stack.Screen
-  name="PrivacySettings"
-  component={PrivacySettingsScreen}
-  options={{ headerShown: false }}
-/>
-```
+### Publishing Fails
+- Check token expiration
+- Verify platform permissions
+- Check media requirements
+- Review API rate limits
 
-### 5. Database Migration (if using PostgreSQL)
+### Token Refresh Fails
+- Check refresh token validity
+- Verify backend refresh endpoint
+- Check network connectivity
+- Review platform API status
 
-If you're using PostgreSQL, you'll need to run migrations to add the new fields to the `users` table:
+## Security Considerations
 
-```sql
--- Add privacy settings column
-ALTER TABLE users
-ADD COLUMN privacy_settings JSONB DEFAULT '{
-  "shareEmail": false,
-  "shareMobileNumber": false,
-  "shareLocation": false,
-  "shareBio": true,
-  "shareInterests": true
-}'::jsonb;
+1. **Token Storage**: Tokens stored securely on backend
+2. **HTTPS Only**: All API calls use HTTPS
+3. **Token Refresh**: Automatic refresh before expiration
+4. **Permission Scopes**: Minimal required permissions
+5. **Error Messages**: No sensitive data in error messages
 
--- Ensure social_accounts table exists with new fields
--- (Schema should already be defined in the models)
-```
+## Future Enhancements
 
-## How Users Will Use the Feature
-
-### Connecting Social Media Accounts
-
-1. User goes to **Settings** > **Privacy & Social**
-2. Taps on a platform (Facebook, Instagram, or Snapchat)
-3. Clicks "Connect"
-4. Is redirected to OAuth authorization page
-5. Authorizes the app
-6. Is redirected back and sees "Connected" status
-
-### Adjusting Privacy Settings
-
-1. User goes to **Settings** > **Privacy & Social**
-2. Toggles each privacy setting:
-   - Share Email
-   - Share Mobile Number
-   - Share Location
-   - Share Bio
-   - Share Interests
-3. Settings are saved automatically
-
-### Sharing a Buzz
-
-1. User creates or views a buzz
-2. Taps the **Share** button
-3. Modal opens showing all platforms
-4. User can either:
-   - Tap individual platform to share there
-   - Tap "Share to All Connected" to share everywhere
-5. Receives confirmation on success
-
-## API Testing
-
-Test the endpoints using curl or Postman:
-
-```bash
-# Get OAuth URL
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3000/api/social-auth/oauth/facebook/url
-
-# Get connected accounts
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3000/api/social-auth/connected
-
-# Share a buzz
-curl -X POST \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"platforms": ["facebook", "instagram"]}' \
-  http://localhost:3000/api/social-share/buzz/BUZZ_ID/share
-```
-
-## Important Notes
-
-### Security Considerations
-- OAuth tokens are stored securely in the database
-- Tokens are never sent to the client (except during OAuth flow)
-- Privacy settings are enforced on the backend
-- All social media endpoints require authentication
-
-### Platform Limitations
-- **Instagram**: Requires media (image/video) to post - text-only posts are not supported
-- **Snapchat**: API has limited availability and requires special approval
-- **Facebook**: Posts go to user's timeline (not pages/groups by default)
-
-### Error Handling
-- Users are notified if OAuth credentials are not configured
-- Connection errors are caught and displayed to the user
-- Failed shares show which platforms succeeded/failed
-
-## Testing Checklist
-
-- [ ] Install axios in server directory
-- [ ] Add OAuth credentials to .env file
-- [ ] Add PrivacySettingsScreen to navigation
-- [ ] Test OAuth connection for each platform
-- [ ] Test privacy settings updates
-- [ ] Test sharing to individual platforms
-- [ ] Test sharing to all platforms at once
-- [ ] Test disconnecting accounts
-- [ ] Verify token security
-- [ ] Test error scenarios
-
-## Files Modified/Created
-
-### Created:
-- `server/routes/socialAuthRoutes.js`
-- `server/routes/socialShareRoutes.js`
-- `src/screens/PrivacySettingsScreen.tsx`
-- This documentation file
-
-### Modified:
-- `server/models/User.js` - Added privacySettings
-- `server/models/SocialAccount.js` - Added OAuth fields
-- `server/index.js` - Added route imports
-- `src/services/APIService.ts` - Added social media methods
-- `src/screens/SettingsScreen.tsx` - Removed static items, added Privacy & Social
-- `src/components/SocialMediaShareModal.tsx` - Integrated with real API
-- `src/components/BuzzCard.tsx` - Added buzzId prop to share modal
-
-## Support
-
-If you encounter any issues:
-1. Check that all OAuth credentials are properly configured
-2. Verify axios is installed in the server
-3. Check server logs for detailed error messages
-4. Ensure the redirect URIs match exactly in OAuth app settings
-5. Test API endpoints directly before testing in the app
-
----
-
-**Status**: ✅ Implementation Complete - Ready for OAuth Configuration and Testing
+- [ ] Scheduled publishing
+- [ ] Post analytics
+- [ ] Multi-account support per platform
+- [ ] Draft management
+- [ ] Publishing queue
+- [ ] Content templates

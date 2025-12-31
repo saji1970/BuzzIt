@@ -12,6 +12,7 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import {Slider} from '@react-native-community/slider';
 import IVSPlayer from 'amazon-ivs-react-native-player';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useTheme} from '../context/ThemeContext';
@@ -55,8 +56,13 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showComments, setShowComments] = useState(false);
   const [playerState, setPlayerState] = useState<string>('Idle');
   const [isStreamEnded, setIsStreamEnded] = useState(!stream.isLive || !!stream.endedAt);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const commentListRef = useRef<FlatList>(null);
   const playerRef = useRef<any>(null);
 
@@ -64,18 +70,24 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     // Load initial comments
     loadComments();
 
-    // Poll for new comments every 3 seconds
+    // Poll for new comments every 3 seconds (only if stream is not ended)
     const commentInterval = setInterval(() => {
-      loadComments();
+      if (!isStreamEnded) {
+        loadComments();
+      }
     }, 3000);
 
-    // Update viewer count every 5 seconds
+    // Update viewer count every 5 seconds (only if stream is not ended)
     const viewerInterval = setInterval(() => {
-      updateViewers();
+      if (!isStreamEnded) {
+        updateViewers();
+      }
     }, 5000);
 
     // Increment viewer count when joining
-    incrementViewerCount();
+    if (!isStreamEnded) {
+      incrementViewerCount();
+    }
 
     // Auto-hide controls after 3 seconds
     const controlsTimeout = setTimeout(() => {
@@ -86,12 +98,17 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
       clearInterval(commentInterval);
       clearInterval(viewerInterval);
       clearTimeout(controlsTimeout);
-      // Decrement viewer count when leaving
-      decrementViewerCount();
+      // Decrement viewer count when leaving (only if stream was active)
+      if (!isStreamEnded) {
+        decrementViewerCount();
+      }
     };
-  }, [stream.id]);
+  }, [stream.id, isStreamEnded]);
 
   const loadComments = async () => {
+    // Don't load comments if stream has ended
+    if (isStreamEnded) return;
+
     try {
       const response = await ApiService.getStreamComments(stream.id);
       if (response.success && response.data) {
@@ -105,13 +122,22 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
             timestamp: new Date(c.timestamp),
           })),
         );
+      } else if (response.error && response.error.includes('not found')) {
+        // Stream might have ended
+        setIsStreamEnded(true);
       }
-    } catch (error) {
-      console.error('Error loading comments:', error);
+    } catch (error: any) {
+      // Silently handle errors if stream ended
+      if (!error?.message?.includes('not found')) {
+        console.error('Error loading comments:', error);
+      }
     }
   };
 
   const updateViewers = async () => {
+    // Don't update if stream has already ended
+    if (isStreamEnded) return;
+
     try {
       const response = await ApiService.getLiveStream(stream.id);
       if (response.success && response.data) {
@@ -119,35 +145,53 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         // Check if stream has ended
         const streamEnded = !response.data.isLive || !!response.data.endedAt;
         setIsStreamEnded(prev => {
-          if (prev !== streamEnded) {
-            console.log('[StreamViewerScreen] Stream ended status changed:', streamEnded);
+          if (prev !== streamEnded && streamEnded) {
+            console.log('[StreamViewerScreen] Stream has ended');
           }
           return streamEnded;
         });
+      } else if (response.error && response.error.includes('not found')) {
+        // Stream not found, it has ended
+        console.log('[StreamViewerScreen] Stream not found - marking as ended');
+        setIsStreamEnded(true);
       }
-    } catch (error) {
-      console.error('Error updating viewers:', error);
+    } catch (error: any) {
+      // Silently handle errors if it's a "not found" error
+      if (error?.message?.includes('not found') || error?.response?.status === 404) {
+        console.log('[StreamViewerScreen] Stream ended (404)');
+        setIsStreamEnded(true);
+      } else {
+        console.error('Error updating viewers:', error);
+      }
     }
   };
 
   const incrementViewerCount = async () => {
+    if (isStreamEnded) return;
+
     try {
       await ApiService.updateViewers(stream.id, 'increment');
-    } catch (error) {
-      console.error('Error incrementing viewer count:', error);
+    } catch (error: any) {
+      // Silently handle if stream not found
+      if (!error?.message?.includes('not found') && error?.response?.status !== 404) {
+        console.error('Error incrementing viewer count:', error);
+      }
     }
   };
 
   const decrementViewerCount = async () => {
     try {
       await ApiService.updateViewers(stream.id, 'decrement');
-    } catch (error) {
-      console.error('Error decrementing viewer count:', error);
+    } catch (error: any) {
+      // Silently handle if stream not found (already ended)
+      if (!error?.message?.includes('not found') && error?.response?.status !== 404) {
+        console.error('Error decrementing viewer count:', error);
+      }
     }
   };
 
   const handleSendComment = async () => {
-    if (!newComment.trim() || !user) return;
+    if (!newComment.trim() || !user || isStreamEnded) return;
 
     const comment: StreamComment = {
       id: Date.now().toString(),
@@ -176,14 +220,20 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
           ),
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending comment:', error);
-      Alert.alert('Error', 'Failed to send comment');
+      // Check if stream ended
+      if (error?.message?.includes('not found') || error?.response?.status === 404) {
+        setIsStreamEnded(true);
+        Alert.alert('Stream Ended', 'This stream has ended.');
+      } else {
+        Alert.alert('Error', 'Failed to send comment');
+      }
       setComments(prev => prev.filter(c => c.id !== comment.id));
     }
   };
 
-  const formatTime = (timestamp: Date): string => {
+  const formatTimeAgo = (timestamp: Date): string => {
     const now = new Date();
     const diff = now.getTime() - timestamp.getTime();
     const seconds = Math.floor(diff / 1000);
@@ -203,8 +253,48 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     return count.toString();
   };
 
+  const formatTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const toggleControls = () => {
     setShowControls(prev => !prev);
+  };
+
+  const handleSeekStart = () => {
+    setIsSeeking(true);
+  };
+
+  const handleSeekChange = (value: number) => {
+    setCurrentTime(value);
+  };
+
+  const handleSeekComplete = (value: number) => {
+    setIsSeeking(false);
+    if (playerRef.current && playerRef.current.seek) {
+      playerRef.current.seek(value);
+    }
+    setCurrentTime(value);
+  };
+
+  const toggleFullscreen = () => {
+    const newFullscreenState = !isFullscreen;
+    setIsFullscreen(newFullscreenState);
+    
+    // Handle status bar visibility
+    if (Platform.OS === 'android') {
+      StatusBar.setHidden(newFullscreenState, 'fade');
+    } else if (Platform.OS === 'ios') {
+      StatusBar.setHidden(newFullscreenState, 'fade');
+    }
   };
 
   const playableUrl = getPlayableStreamUrl(
@@ -232,19 +322,19 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
     <View style={[styles.commentItem, {backgroundColor: 'rgba(0, 0, 0, 0.6)'}]}>
       <Text style={styles.commentAuthor}>{item.displayName}</Text>
       <Text style={styles.commentText}>{item.comment}</Text>
-      <Text style={styles.commentTime}>{formatTime(item.timestamp)}</Text>
+      <Text style={styles.commentTime}>{formatTimeAgo(item.timestamp)}</Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar hidden />
+    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      <StatusBar hidden={isFullscreen} />
 
       {/* Video Player */}
       <TouchableOpacity
         activeOpacity={1}
         onPress={toggleControls}
-        style={styles.videoContainer}>
+        style={[styles.videoContainer, isFullscreen && styles.videoContainerFullscreen]}>
         {playableUrl && !isStreamEnded ? (
           <IVSPlayer
             ref={playerRef}
@@ -304,10 +394,17 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
             onRebuffering={() => {
               console.log('[StreamViewerScreen] IVS Player rebuffering');
             }}
-            onDurationChange={(duration) => {
-              console.log('[StreamViewerScreen] IVS Player duration:', duration);
+            onDurationChange={(newDuration) => {
+              console.log('[StreamViewerScreen] IVS Player duration:', newDuration);
+              if (newDuration !== undefined && newDuration > 0) {
+                setDuration(newDuration);
+              }
             }}
             onProgress={(progress) => {
+              // Update current time for seek bar
+              if (!isSeeking && progress !== undefined) {
+                setCurrentTime(progress);
+              }
               // Only log occasionally to avoid spam
               if (progress && progress % 5 < 0.1) {
                 console.log('[StreamViewerScreen] IVS Player progress:', progress, 's');
@@ -325,14 +422,20 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
 
         {/* Stream Ended Overlay */}
         {isStreamEnded && playableUrl && (
-          <View style={[styles.endedOverlay, {backgroundColor: 'rgba(0, 0, 0, 0.8)'}]}>
+          <View style={[styles.endedOverlay, {backgroundColor: 'rgba(0, 0, 0, 0.9)'}]}>
             <Icon name="stop-circle" size={80} color={theme.colors.textSecondary} />
-            <Text style={[styles.endedText, {color: theme.colors.text}]}>
+            <Text style={[styles.endedText, {color: '#FFFFFF'}]}>
               Stream Ended
             </Text>
             <Text style={[styles.endedSubtext, {color: theme.colors.textSecondary}]}>
               The broadcaster has ended this stream
             </Text>
+            <TouchableOpacity
+              style={[styles.goBackButton, {backgroundColor: theme.colors.primary}]}
+              onPress={() => navigation.goBack()}>
+              <Icon name="arrow-back" size={20} color="#FFFFFF" />
+              <Text style={styles.goBackButtonText}>Go Back</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -359,6 +462,36 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
               </View>
             </View>
 
+            {/* Seek Bar - Only show for VOD content (non-live streams with duration) */}
+            {duration > 0 && !isStreamEnded && !stream.isLive && (
+              <View style={styles.seekBarContainer}>
+                <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                <Slider
+                  style={styles.seekBar}
+                  minimumValue={0}
+                  maximumValue={duration}
+                  value={currentTime}
+                  minimumTrackTintColor="#FF0069"
+                  maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+                  thumbTintColor="#FF0069"
+                  onSlidingStart={handleSeekStart}
+                  onValueChange={handleSeekChange}
+                  onSlidingComplete={handleSeekComplete}
+                />
+                <Text style={styles.timeText}>{formatTime(duration)}</Text>
+              </View>
+            )}
+            
+            {/* Live Stream Progress Indicator */}
+            {stream.isLive && !isStreamEnded && (
+              <View style={styles.liveProgressContainer}>
+                <View style={styles.liveProgressBar}>
+                  <View style={styles.liveProgressIndicator} />
+                </View>
+                <Text style={styles.liveProgressText}>LIVE</Text>
+              </View>
+            )}
+
             {/* Bottom Bar - Stream Info */}
             <View style={styles.bottomBar}>
               <View style={styles.streamInfo}>
@@ -375,6 +508,20 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                 </View>
 
                 <View style={styles.videoControls}>
+                  <TouchableOpacity
+                    style={styles.controlButton}
+                    onPress={() => setShowComments(!showComments)}>
+                    <Icon
+                      name="chat-bubble-outline"
+                      size={24}
+                      color="#FFFFFF"
+                    />
+                    {comments.length > 0 && (
+                      <View style={styles.commentBadge}>
+                        <Text style={styles.commentBadgeText}>{comments.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.controlButton}
                     onPress={() => {
@@ -408,6 +555,15 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
                       color="#FFFFFF"
                     />
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.controlButton}
+                    onPress={toggleFullscreen}>
+                    <Icon
+                      name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
+                      size={24}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -415,65 +571,73 @@ const StreamViewerScreen: React.FC<StreamViewerScreenProps> = ({
         )}
       </TouchableOpacity>
 
-      {/* Comments Section */}
-      <View style={[styles.commentsSection, {backgroundColor: theme.colors.surface}]}>
-        <View style={styles.commentsHeader}>
-          <Icon name="chat" size={20} color={theme.colors.primary} />
-          <Text style={[styles.commentsTitle, {color: theme.colors.text}]}>
-            Live Comments
-          </Text>
-          <Text style={[styles.commentsCount, {color: theme.colors.textSecondary}]}>
-            {comments.length}
-          </Text>
-        </View>
-
-        <FlatList
-          ref={commentListRef}
-          data={comments}
-          renderItem={renderComment}
-          keyExtractor={item => item.id}
-          style={styles.commentsList}
-          contentContainerStyle={styles.commentsContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text style={[styles.emptyComments, {color: theme.colors.textSecondary}]}>
-              No comments yet. Be the first!
+      {/* Comments Section - Collapsible */}
+      {showComments && (
+        <View style={[styles.commentsSection, {backgroundColor: theme.colors.surface}]}>
+          <View style={styles.commentsHeader}>
+            <Icon name="chat" size={20} color={theme.colors.primary} />
+            <Text style={[styles.commentsTitle, {color: theme.colors.text}]}>
+              Live Comments
             </Text>
-          }
-        />
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-          <View style={[styles.commentInputContainer, {borderTopColor: theme.colors.border}]}>
-            <TextInput
-              style={[
-                styles.commentInput,
-                {
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Add a comment..."
-              placeholderTextColor={theme.colors.textSecondary}
-              value={newComment}
-              onChangeText={setNewComment}
-              maxLength={500}
-              multiline
-            />
+            <Text style={[styles.commentsCount, {color: theme.colors.textSecondary}]}>
+              {comments.length}
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.sendButton,
-                {backgroundColor: theme.colors.primary},
-                !newComment.trim() && styles.sendButtonDisabled,
-              ]}
-              onPress={handleSendComment}
-              disabled={!newComment.trim()}>
-              <Icon name="send" size={20} color="#FFFFFF" />
+              style={styles.closeCommentsButton}
+              onPress={() => setShowComments(false)}>
+              <Icon name="close" size={20} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+
+          <FlatList
+            ref={commentListRef}
+            data={comments}
+            renderItem={renderComment}
+            keyExtractor={item => item.id}
+            style={styles.commentsList}
+            contentContainerStyle={styles.commentsContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <Text style={[styles.emptyComments, {color: theme.colors.textSecondary}]}>
+                No comments yet. Be the first!
+              </Text>
+            }
+          />
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+            <View style={[styles.commentInputContainer, {borderTopColor: theme.colors.border}]}>
+              <TextInput
+                style={[
+                  styles.commentInput,
+                  {
+                    backgroundColor: theme.colors.background,
+                    color: theme.colors.text,
+                  },
+                ]}
+                placeholder={isStreamEnded ? "Stream has ended" : "Add a comment..."}
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newComment}
+                onChangeText={setNewComment}
+                maxLength={500}
+                multiline
+                editable={!isStreamEnded}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  {backgroundColor: theme.colors.primary},
+                  (!newComment.trim() || isStreamEnded) && styles.sendButtonDisabled,
+                ]}
+                onPress={handleSendComment}
+                disabled={!newComment.trim() || isStreamEnded}>
+                <Icon name="send" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </View>
   );
 };
@@ -483,9 +647,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
   videoContainer: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  videoContainerFullscreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    width: '100%',
+    height: '100%',
   },
   video: {
     width: '100%',
@@ -516,6 +698,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     paddingHorizontal: 40,
+    marginBottom: 24,
+  },
+  goBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  goBackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -618,12 +814,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   controlButton: {
+    position: 'relative',
     padding: 8,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 24,
   },
+  commentBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF0069',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  commentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
   commentsSection: {
-    height: height * 0.35,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.5,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -640,10 +858,14 @@ const styles = StyleSheet.create({
   commentsTitle: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
   },
   commentsCount: {
     fontSize: 14,
-    marginLeft: 'auto',
+    marginRight: 12,
+  },
+  closeCommentsButton: {
+    padding: 4,
   },
   commentsList: {
     flex: 1,
@@ -704,6 +926,52 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.5,
+  },
+  seekBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  seekBar: {
+    flex: 1,
+    height: 40,
+  },
+  timeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 45,
+    textAlign: 'center',
+  },
+  liveProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  liveProgressBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  liveProgressIndicator: {
+    height: '100%',
+    width: '30%',
+    backgroundColor: '#FF0069',
+    borderRadius: 2,
+  },
+  liveProgressText: {
+    color: '#FF0069',
+    fontSize: 12,
+    fontWeight: 'bold',
+    minWidth: 40,
   },
 });
 

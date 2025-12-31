@@ -126,17 +126,42 @@ class ApiService {
         console.log('Response text:', text);
         if (text && text.trim()) {
           try {
-            data = JSON.parse(text);
-          } catch (parseError) {
-            // If JSON parse fails, log but don't throw - return empty object
-            console.error('JSON parse error (silent):', parseError);
-            // Return success with empty data if status is ok, otherwise return error
-            if (response.ok) {
-              data = {};
+            // Check if response looks like JSON before parsing
+            const trimmedText = text.trim();
+            if (trimmedText && (trimmedText.startsWith('{') || trimmedText.startsWith('['))) {
+              data = JSON.parse(text);
+            } else if (trimmedText) {
+              // Non-JSON response (HTML error page, plain text, etc.)
+              console.warn('Non-JSON response received:', trimmedText.substring(0, 100));
+              if (response.ok) {
+                data = { message: trimmedText };
+              } else {
+                return {
+                  success: false,
+                  error: trimmedText.length > 100 ? trimmedText.substring(0, 100) + '...' : trimmedText,
+                };
+              }
             } else {
+              // Empty response
+              data = {};
+            }
+          } catch (parseError: any) {
+            // If JSON parse fails, log but don't show error to user
+            console.error('JSON parse error:', parseError?.message || parseError);
+            console.error('Response text (first 200 chars):', text?.substring(0, 200));
+            
+            // Return error response instead of showing parse error
+            if (response.ok) {
+              // Status is OK but JSON is invalid - treat as server error
               return {
                 success: false,
-                error: 'Invalid response from server',
+                error: 'Server returned invalid response. Please try again.',
+              };
+            } else {
+              // Status is not OK - return error with status
+              return {
+                success: false,
+                error: `Server error (${response.status}). Please try again.`,
               };
             }
           }
@@ -506,6 +531,21 @@ class ApiService {
     });
   }
 
+  async createBuzz(buzzData: Omit<Buzz, 'id' | 'createdAt'>): Promise<ApiResponse<Buzz>> {
+    try {
+      return this.makeRequest<Buzz>('/api/buzzes', {
+        method: 'POST',
+        body: JSON.stringify(buzzData),
+      });
+    } catch (error: any) {
+      console.error('Error creating buzz:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to create buzz. Please try again.',
+      };
+    }
+  }
+
   async deleteBuzz(buzzId: string): Promise<ApiResponse<{ message: string }>> {
     // Use the regular user endpoint which checks ownership
     return this.makeRequest<{ message: string }>(`/api/buzzes/${buzzId}`, {
@@ -735,6 +775,35 @@ class ApiService {
         error: `Failed to disconnect ${platform} account.`,
       };
     }
+  }
+
+  // Social Media Publishing
+  async publishToSocialPlatform(
+    platform: string,
+    data: {content: string; mediaUrl?: string; mediaType?: 'image' | 'video'}
+  ): Promise<ApiResponse<{postId?: string; message?: string}>> {
+    return this.makeRequest<{postId?: string; message?: string}>(
+      `/api/social-share/${platform}/publish`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  // OAuth Callback
+  async handleOAuthCallback(
+    platform: string,
+    code: string,
+    state?: string
+  ): Promise<ApiResponse<{success: boolean; account?: any}>> {
+    return this.makeRequest<{success: boolean; account?: any}>(
+      `/api/social-auth/oauth/${platform}/callback`,
+      {
+        method: 'POST',
+        body: JSON.stringify({code, state}),
+      }
+    );
   }
 }
 

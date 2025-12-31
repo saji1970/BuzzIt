@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import Video, {ResizeMode} from 'react-native-video';
+import Slider from '@react-native-community/slider';
 import * as Animatable from 'react-native-animatable';
 import {useNavigation} from '@react-navigation/native';
 
@@ -107,6 +108,17 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
   const [videoPaused, setVideoPaused] = useState(true);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [showFullScreen, setShowFullScreen] = useState(false);
+  const videoRef = useRef<any>(null);
+  const fullScreenVideoRef = useRef<any>(null);
+  const [selectedPollOption, setSelectedPollOption] = useState<string | null>(null);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [pollVotes, setPollVotes] = useState<{[key: string]: number}>({});
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState(false);
 
   const handleShareClick = () => {
     setShowShareModal(true);
@@ -176,6 +188,30 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     );
   };
 
+  const handlePollVote = (optionId: string) => {
+    if (hasVoted) {
+      return;
+    }
+
+    setSelectedPollOption(optionId);
+    setHasVoted(true);
+
+    // Update local vote count
+    setPollVotes(prev => ({
+      ...prev,
+      [optionId]: (prev[optionId] || 0) + 1,
+    }));
+
+    // TODO: Submit vote to backend via ApiService
+    // ApiService.votePoll(buzz.id, optionId);
+  };
+
+  // Reset media error states when buzz changes
+  useEffect(() => {
+    setImageLoadError(false);
+    setVideoLoadError(false);
+  }, [buzz.id]);
+
   // Countdown timer for scheduled streams/events
   useEffect(() => {
     if (buzz.eventDate) {
@@ -217,11 +253,18 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
     // Convert to Date if it's a string
     const dateObj = date instanceof Date ? date : new Date(date);
     const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
-    
+
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
     return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const formatDateTime = (date: Date | string) => {
@@ -431,61 +474,242 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
               {buzz.content}
             </Text>
 
+            {/* Poll Options (if this is a poll) */}
+            {buzz.buzzType === 'poll' && buzz.pollOptions && buzz.pollOptions.length > 0 && (
+              <View style={styles.pollContainer}>
+                {isOwnBuzz ? (
+                  // Owner's poll: Show all options with vote counts (non-interactive)
+                  <>
+                    <View style={styles.pollHeader}>
+                      <Icon name="poll" size={18} color={theme.colors.primary} />
+                      <Text style={[styles.pollTitle, {color: theme.colors.text}]}>
+                        Poll Results
+                      </Text>
+                    </View>
+                    {buzz.pollOptions.map((option) => {
+                      const voteCount = pollVotes[option.id] || 0;
+                      const totalVotes = Object.values(pollVotes).reduce((sum, count) => sum + count, 0);
+                      const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+
+                      return (
+                        <View
+                          key={option.id}
+                          style={[
+                            styles.pollOptionResult,
+                            {
+                              backgroundColor: theme.colors.surface,
+                              borderColor: theme.colors.border,
+                            },
+                          ]}>
+                          <View style={styles.pollOptionContent}>
+                            <Text
+                              style={[
+                                styles.pollOptionText,
+                                {color: theme.colors.text},
+                              ]}>
+                              {option.text}
+                            </Text>
+                            <Text style={[styles.pollVoteCountDisplay, {color: theme.colors.primary}]}>
+                              {voteCount} {voteCount === 1 ? 'vote' : 'votes'} {percentage > 0 && `(${percentage}%)`}
+                            </Text>
+                          </View>
+                          {voteCount > 0 && (
+                            <View
+                              style={[
+                                styles.pollProgressBar,
+                                {
+                                  width: `${percentage}%`,
+                                  backgroundColor: theme.colors.primary + '40',
+                                },
+                              ]}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                    {Object.values(pollVotes).reduce((sum, count) => sum + count, 0) === 0 && (
+                      <Text style={[styles.pollNoVotes, {color: theme.colors.textSecondary}]}>
+                        No votes yet
+                      </Text>
+                    )}
+                  </>
+                ) : hasVoted && selectedPollOption ? (
+                  // Other user's poll after voting: Show only the selected option as static text
+                  (() => {
+                    const selectedOption = buzz.pollOptions?.find(opt => opt.id === selectedPollOption);
+                    return selectedOption ? (
+                      <View style={styles.selectedPollOption}>
+                        <Text style={[styles.selectedPollOptionText, {color: theme.colors.textSecondary}]}>
+                          {selectedOption.text}
+                        </Text>
+                      </View>
+                    ) : null;
+                  })()
+                ) : (
+                  // Other user's poll before voting: Show all poll options with voting capability
+                  <>
+                    <View style={styles.pollHeader}>
+                      <Icon name="poll" size={18} color={theme.colors.primary} />
+                      <Text style={[styles.pollTitle, {color: theme.colors.text}]}>
+                        Poll
+                      </Text>
+                    </View>
+                    {buzz.pollOptions.map((option) => {
+                      return (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[
+                            styles.pollOption,
+                            {
+                              backgroundColor: theme.colors.surface,
+                              borderColor: theme.colors.border,
+                            },
+                          ]}
+                          onPress={() => handlePollVote(option.id)}
+                          activeOpacity={0.7}>
+                          <View style={styles.pollOptionContent}>
+                            <Text
+                              style={[
+                                styles.pollOptionText,
+                                {color: theme.colors.text},
+                              ]}>
+                              {option.text}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
+              </View>
+            )}
+
             {/* Media Thumbnail (if exists) */}
-            {hasImage ? (
+            {hasImage && !imageLoadError ? (
               <Image
                 source={{uri: mediaUri as string}}
                 style={styles.mediaThumbnail}
                 resizeMode="cover"
                 onError={(error) => {
-                  console.log('Image load error:', error.nativeEvent.error);
+                  console.log('Image load error - hiding broken image:', error.nativeEvent.error);
                   console.log('Image URI:', mediaUri);
+                  setImageLoadError(true);
                 }}
                 onLoad={() => {
                   console.log('Image loaded successfully:', mediaUri);
+                  setImageLoadError(false);
                 }}
               />
-            ) : hasVideo ? (
+            ) : hasVideo && !videoLoadError ? (
               <View style={styles.videoContainer}>
                 <TouchableOpacity
-                  activeOpacity={0.9}
+                  activeOpacity={1}
                   onPress={() => setVideoPaused(!videoPaused)}
                   style={styles.mediaThumbnail}>
                   <Video
+                    ref={videoRef}
                     source={{uri: mediaUri as string}}
                     style={styles.mediaThumbnail}
                     resizeMode={ResizeMode.COVER}
                     paused={videoPaused}
-                    muted={false}
+                    muted={videoMuted}
                     controls={false}
                     repeat={false}
                     onError={(error) => {
-                      console.log('Video load error:', error);
+                      console.log('Video load error - hiding broken video:', error);
                       console.log('Video URI:', mediaUri);
+                      setVideoLoadError(true);
                     }}
-                    onLoad={() => {
+                    onLoad={(data) => {
                       console.log('Video loaded successfully:', mediaUri);
+                      setVideoDuration(data.duration);
+                    }}
+                    onProgress={(data) => {
+                      setVideoCurrentTime(data.currentTime);
                     }}
                   />
+
+                  {/* Play/Pause Button Overlay */}
                   {videoPaused && (
                     <View style={styles.videoPlayBadge}>
-                      <Icon name="play-circle-filled" size={60} color="#FFFFFF" />
+                      <Icon name="play-circle-filled" size={60} color="rgba(255, 255, 255, 0.9)" />
                     </View>
                   )}
-                  {!videoPaused && (
-                    <View style={styles.videoPauseBadge}>
-                      <Icon name="pause-circle-filled" size={60} color="#FFFFFF" />
+
+                  {/* Video Controls Overlay - YouTube Style */}
+                  <View style={styles.videoControlsOverlay}>
+                    {/* Single Row with All Controls */}
+                    <View style={styles.youtubeControlsRow}>
+                      {/* Play/Pause Button */}
+                      <TouchableOpacity
+                        style={styles.playPauseButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setVideoPaused(!videoPaused);
+                        }}
+                        activeOpacity={0.8}>
+                        <Icon
+                          name={videoPaused ? 'play-arrow' : 'pause'}
+                          size={28}
+                          color="#FFFFFF"
+                        />
+                      </TouchableOpacity>
+
+                      {/* Current Time */}
+                      <Text style={styles.videoTimeTextLeft}>
+                        {formatTime(videoCurrentTime)}
+                      </Text>
+
+                      {/* Progress Slider */}
+                      <Slider
+                        style={styles.videoSliderYoutube}
+                        minimumValue={0}
+                        maximumValue={videoDuration || 1}
+                        value={videoCurrentTime}
+                        onValueChange={(value) => {
+                          setVideoCurrentTime(value);
+                        }}
+                        onSlidingComplete={(value) => {
+                          videoRef.current?.seek(value);
+                        }}
+                        minimumTrackTintColor="#FF0000"
+                        maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+                        thumbTintColor="#FF0000"
+                      />
+
+                      {/* Duration Time */}
+                      <Text style={styles.videoTimeTextRight}>
+                        {formatTime(videoDuration)}
+                      </Text>
+
+                      {/* Volume Button */}
+                      <TouchableOpacity
+                        style={styles.controlIconButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setVideoMuted(!videoMuted);
+                        }}
+                        activeOpacity={0.8}>
+                        <Icon
+                          name={videoMuted ? 'volume-off' : 'volume-up'}
+                          size={24}
+                          color="#FFFFFF"
+                        />
+                      </TouchableOpacity>
+
+                      {/* Fullscreen Button */}
+                      <TouchableOpacity
+                        style={styles.controlIconButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setShowFullScreen(true);
+                        }}
+                        activeOpacity={0.8}>
+                        <Icon name="fullscreen" size={24} color="#FFFFFF" />
+                      </TouchableOpacity>
                     </View>
-                  )}
+                  </View>
                 </TouchableOpacity>
-                {!videoPaused && (
-                  <TouchableOpacity
-                    style={styles.videoStopButton}
-                    onPress={() => setVideoPaused(true)}
-                    activeOpacity={0.8}>
-                    <Icon name="stop" size={24} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
               </View>
             ) : null}
 
@@ -553,21 +777,6 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* Go Live button */}
-            <TouchableOpacity
-              style={[styles.goLiveButton, {borderColor: theme.colors.primary}]}
-              onPress={() => {
-                // Navigate to Go Live screen with buzz context
-                navigation.navigate('GoBuzzLive' as never, {
-                  relatedBuzzId: buzz.id,
-                  relatedBuzzContent: buzz.content,
-                  relatedBuzzInterests: buzz.interests,
-                } as never);
-              }}
-              activeOpacity={0.8}>
-              <Text style={[styles.goLiveText, {color: theme.colors.primary}]}>Go Live on this</Text>
-            </TouchableOpacity>
           </View>
         </Animatable.View>
       </TouchableOpacity>
@@ -589,6 +798,124 @@ const BuzzCard: React.FC<BuzzCardProps> = ({buzz, onLike, onShare, onPress, isFo
         onRemove={handleRemove}
         isOwnBuzz={isOwnBuzz}
       />
+
+      {/* Full Screen Video Modal */}
+      <Modal
+        visible={showFullScreen}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={() => setShowFullScreen(false)}>
+        <View style={styles.fullScreenContainer}>
+          <Video
+            ref={fullScreenVideoRef}
+            source={{uri: mediaUri as string}}
+            style={styles.fullScreenVideo}
+            resizeMode={ResizeMode.CONTAIN}
+            paused={videoPaused}
+            muted={videoMuted}
+            controls={false}
+            repeat={false}
+            onLoad={(data) => {
+              setVideoDuration(data.duration);
+              // Seek to current position when video loads in fullscreen
+              if (fullScreenVideoRef.current && videoCurrentTime > 0) {
+                fullScreenVideoRef.current.seek(videoCurrentTime);
+              }
+            }}
+            onProgress={(data) => {
+              setVideoCurrentTime(data.currentTime);
+            }}
+          />
+
+          {/* Full Screen Controls */}
+          <View style={styles.fullScreenControls}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.fullScreenCloseButton}
+              onPress={() => setShowFullScreen(false)}
+              activeOpacity={0.8}>
+              <Icon name="close" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            {/* Play/Pause Button */}
+            <TouchableOpacity
+              style={styles.fullScreenPlayButton}
+              onPress={() => setVideoPaused(!videoPaused)}
+              activeOpacity={0.8}>
+              <Icon
+                name={videoPaused ? 'play-circle-filled' : 'pause-circle-filled'}
+                size={80}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+
+            {/* Bottom Controls - YouTube Style */}
+            <View style={styles.fullScreenBottomControls}>
+              <View style={styles.fullScreenYoutubeRow}>
+                {/* Play/Pause */}
+                <TouchableOpacity
+                  style={styles.fullScreenPlayButton}
+                  onPress={() => setVideoPaused(!videoPaused)}
+                  activeOpacity={0.8}>
+                  <Icon
+                    name={videoPaused ? 'play-arrow' : 'pause'}
+                    size={32}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+
+                {/* Current Time */}
+                <Text style={styles.fullScreenTimeText}>
+                  {formatTime(videoCurrentTime)}
+                </Text>
+
+                {/* Progress Slider */}
+                <Slider
+                  style={styles.fullScreenSlider}
+                  minimumValue={0}
+                  maximumValue={videoDuration || 1}
+                  value={videoCurrentTime}
+                  onValueChange={(value) => {
+                    setVideoCurrentTime(value);
+                  }}
+                  onSlidingComplete={(value) => {
+                    fullScreenVideoRef.current?.seek(value);
+                    videoRef.current?.seek(value);
+                  }}
+                  minimumTrackTintColor="#FF0000"
+                  maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+                  thumbTintColor="#FF0000"
+                />
+
+                {/* Duration */}
+                <Text style={styles.fullScreenTimeText}>
+                  {formatTime(videoDuration)}
+                </Text>
+
+                {/* Volume */}
+                <TouchableOpacity
+                  style={styles.fullScreenIconButton}
+                  onPress={() => setVideoMuted(!videoMuted)}
+                  activeOpacity={0.8}>
+                  <Icon
+                    name={videoMuted ? 'volume-off' : 'volume-up'}
+                    size={28}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+
+                {/* Exit Fullscreen */}
+                <TouchableOpacity
+                  style={styles.fullScreenIconButton}
+                  onPress={() => setShowFullScreen(false)}
+                  activeOpacity={0.8}>
+                  <Icon name="fullscreen-exit" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -672,24 +999,131 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
   },
-  videoPauseBadge: {
-    ...StyleSheet.absoluteFillObject,
+  videoControlsOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  youtubeControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  playPauseButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    marginRight: 4,
   },
-  videoStopButton: {
+  videoTimeTextLeft: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    minWidth: 40,
+    textAlign: 'right',
+  },
+  videoSliderYoutube: {
+    flex: 1,
+    height: 40,
+    marginHorizontal: 4,
+  },
+  videoTimeTextRight: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    minWidth: 40,
+    textAlign: 'left',
+  },
+  controlIconButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  fullScreenControls: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+  },
+  fullScreenCloseButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 40,
+    right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  fullScreenPlayButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{translateX: -40}, {translateY: -40}],
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenBottomControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  fullScreenYoutubeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fullScreenPlayButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
+  },
+  fullScreenSlider: {
+    flex: 1,
+    height: 40,
+    marginHorizontal: 8,
+  },
+  fullScreenTimeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+    minWidth: 48,
+    textAlign: 'center',
+  },
+  fullScreenIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   countdownPill: {
     flexDirection: 'row',
@@ -796,6 +1230,86 @@ const styles = StyleSheet.create({
     opacity: 0.08,
     marginVertical: 6,
     marginHorizontal: 16,
+  },
+  pollContainer: {
+    marginTop: 12,
+    gap: 10,
+  },
+  pollHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pollTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pollOption: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  pollOptionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    zIndex: 1,
+  },
+  pollOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  pollOptionTextSelected: {
+    fontWeight: '600',
+  },
+  pollPercentage: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  pollProgressBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0.2,
+    zIndex: 0,
+  },
+  pollVoteCount: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  pollOptionResult: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  pollVoteCountDisplay: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  pollNoVotes: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  selectedPollOption: {
+    marginTop: 8,
+    paddingVertical: 8,
+  },
+  selectedPollOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontStyle: 'italic',
   },
 });
 

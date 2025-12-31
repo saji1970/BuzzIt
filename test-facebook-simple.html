@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Facebook OAuth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1877f2;
+        }
+        .url-box {
+            background: #f7f7f7;
+            padding: 15px;
+            border-radius: 5px;
+            word-break: break-all;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .button {
+            background: #1877f2;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            background: #166fe5;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔵 Test Facebook OAuth</h1>
+
+        <div class="info">
+            <strong>Your App ID:</strong> 1385131833212514<br>
+            <strong>Redirect URI:</strong> https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+        </div>
+
+        <h2>Test URL:</h2>
+        <div class="url-box">
+            https://www.facebook.com/v18.0/dialog/oauth?client_id=1385131833212514&redirect_uri=https%3A%2F%2Fbuzzit-production.up.railway.app%2Fapi%2Fsocial-auth%2Foauth%2Ffacebook%2Fcallback&scope=email%2Cpublic_profile&response_type=code&state=test
+        </div>
+
+        <a href="https://www.facebook.com/v18.0/dialog/oauth?client_id=1385131833212514&redirect_uri=https%3A%2F%2Fbuzzit-production.up.railway.app%2Fapi%2Fsocial-auth%2Foauth%2Ffacebook%2Fcallback&scope=email%2Cpublic_profile&response_type=code&state=test" class="button" target="_blank">
+            Click Here to Test Facebook OAuth
+        </a>
+
+        <div class="warning">
+            <h3>✅ What You Should See:</h3>
+            <ul>
+                <li>Facebook login page with your app name</li>
+                <li>"Continue as [Your Name]" button</li>
+                <li>Permission request for email and public profile</li>
+            </ul>
+
+            <h3>❌ Common Errors:</h3>
+            <ul>
+                <li><strong>"Invalid Redirect URI"</strong> - Check redirect URIs in Facebook app settings</li>
+                <li><strong>"Invalid App ID"</strong> - App doesn't exist or wrong ID</li>
+                <li><strong>"Cannot load URL"</strong> - Network issue or Facebook blocked</li>
+            </ul>
+        </div>
+
+        <h3>Alternative: Test in Facebook's Graph API Explorer</h3>
+        <p>If the direct URL doesn't work, try testing in Facebook's official tool:</p>
+        <a href="https://developers.facebook.com/tools/explorer/" class="button" target="_blank">
+            Open Graph API Explorer
+        </a>
+    </div>
+</body>
+</html>

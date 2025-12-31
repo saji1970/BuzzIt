@@ -1,0 +1,63 @@
+========================================
+FACEBOOK OAUTH TEST URL
+========================================
+
+Your App ID: 1385131833212514
+
+========================================
+TEST URL - Copy and paste in browser:
+========================================
+
+https://www.facebook.com/v18.0/dialog/oauth?client_id=1385131833212514&redirect_uri=https%3A%2F%2Fbuzzit-production.up.railway.app%2Fapi%2Fsocial-auth%2Foauth%2Ffacebook%2Fcallback&scope=email%2Cpublic_profile&response_type=code&state=test
+
+========================================
+DECODED VERSION (for reference):
+========================================
+
+https://www.facebook.com/v18.0/dialog/oauth?
+  client_id=1385131833212514
+  &redirect_uri=https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+  &scope=email,public_profile
+  &response_type=code
+  &state=test
+
+========================================
+WHAT YOU SHOULD SEE:
+========================================
+
+✅ GOOD: Facebook login page with your app name asking for permissions
+✅ GOOD: "Continue as [Your Name]" button
+✅ GOOD: List of permissions being requested
+
+❌ BAD: "Invalid Redirect URI" error
+❌ BAD: "Invalid App ID" error
+❌ BAD: "App Not Set Up" error
+
+========================================
+IF YOU SEE ERRORS:
+========================================
+
+"Invalid Redirect URI":
+- Go back to Facebook app settings
+- Make sure you added BOTH redirect URIs as separate lines
+- Click "Save Changes"
+- Wait 1-2 minutes and try again
+
+"Invalid App ID":
+- Double check App ID is 1385131833212514
+- Make sure you're using the correct Facebook account
+
+"App Not Set Up":
+- Add Facebook Login product to your app
+- Configure the settings
+
+========================================
+AFTER SUCCESSFUL TEST:
+========================================
+
+If you see the Facebook login page (not an error):
+1. Update Railway with your new credentials
+2. Wait for Railway to redeploy
+3. Test from mobile app
+
+========================================

@@ -97,38 +97,38 @@ const themes: {[key: string]: Theme} = {
   default: {
     name: 'Buzzit Modern',
     colors: {
-      primary: '#2F80FF',
-      secondary: '#6BD6FF',
-      accent: '#1AC0FF',
-      background: '#EEF6FF',
-      surface: '#FFFFFF',
-      text: '#0F172A',
-      textSecondary: '#6B7280',
-      border: '#DCE8FD',
+      primary: '#2F7BFF',  // primaryBlue - main brand blue
+      secondary: '#54A9FF', // lighter blue for gradients
+      accent: '#5D3BFF',    // accentPurple for highlights
+      background: '#EAF4FF', // backgroundTop - very light blue
+      surface: '#FFFFFF',    // backgroundBase - pure white
+      text: '#0F172A',       // textPrimary - deep navy
+      textSecondary: '#6B7280', // textSecondary - medium gray
+      border: '#E5E7EB',     // borderSubtle
       success: '#2DD4BF',
       warning: '#FBBF24',
       error: '#EF4444',
     },
     gradients: {
-      background: ['#DFF0FF', '#FFFFFF'],
-      header: ['#4EA8FF', '#7BD7FF'],
-      accent: ['#2F80FF', '#56CCF2'],
+      background: ['#EAF4FF', '#FFFFFF'], // Light blue to white
+      header: ['#2F7BFF', '#5D3BFF'],     // Blue to purple gradient for hero
+      accent: ['#54A9FF', '#2F7BFF'],     // Light to main blue for buttons
     },
     layout: {
       spacing: {
-        xxs: 2,
-        xs: 4,
-        sm: 8,
-        md: 12,
-        lg: 16,
-        xl: 24,
-        xxl: 32,
+        xxs: 4,   // 4px
+        xs: 8,    // 8px
+        sm: 12,   // 12px
+        md: 16,   // 16px
+        lg: 20,   // 20px
+        xl: 24,   // 24px
+        xxl: 32,  // 32px
       },
       radii: {
-        sm: 8,
-        md: 12,
-        lg: 16,
-        xl: 24,
+        sm: 12,   // chips/cards - 12px
+        md: 18,   // medium cards - 18px
+        lg: 20,   // buttons/search - 20px
+        xl: 24,   // large containers (hero, bottom bar) - 24px
         pill: 999,
         full: 9999,
       },

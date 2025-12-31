@@ -150,6 +150,12 @@ const SocialPlatformSelector: React.FC<SocialPlatformSelectorProps> = ({
         colors: ['#FFFC00', '#FFF700'],
         gradient: ['#FFFC00', '#FFF700'],
       },
+      twitter: {
+        name: 'Twitter',
+        icon: 'chat-bubble',
+        colors: ['#1DA1F2', '#0C8BD9'],
+        gradient: ['#1DA1F2', '#0C8BD9'],
+      },
     };
 
     return {
@@ -228,7 +234,7 @@ const SocialPlatformSelector: React.FC<SocialPlatformSelectorProps> = ({
       </View>
 
       <View style={styles.platformsGrid}>
-        {(['facebook', 'instagram', 'snapchat'] as SocialPlatform[]).map(platform => {
+        {(['facebook', 'instagram', 'twitter', 'snapchat'] as SocialPlatform[]).map(platform => {
           const info = getPlatformInfo(platform);
           const statusBadge = getStatusBadge(platform);
           const isRefreshing = refreshing === platform;
@@ -437,5 +443,6 @@ const styles = StyleSheet.create({
 });
 
 export default SocialPlatformSelector;
+
 
 

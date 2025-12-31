@@ -53,16 +53,45 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({
   const loadFollowedItems = async () => {
     setLoading(true);
     try {
-      // Get all users from API
-      const response = await ApiService.getAllUsers();
+      // Get all users and live streams in parallel
+      const [usersResponse, streamsResponse] = await Promise.all([
+        ApiService.getAllUsers(),
+        ApiService.getLiveStreams(),
+      ]);
       
-      if (response.success && response.data) {
+      if (usersResponse.success && usersResponse.data) {
         let itemsToShow: FollowedItem[] = [];
         const subscribedIds = user?.subscribedChannels || [];
         
+        // Get web-based live streams (not BuzzLive/IVS)
+        const webBasedLiveStreams = (streamsResponse.success && streamsResponse.data) 
+          ? streamsResponse.data.filter((stream: any) => {
+              if (!stream.isLive) return false;
+              
+              // Check if stream has a streamUrl
+              const hasStreamUrl = stream.streamUrl && stream.streamUrl.trim() !== '';
+              
+              // Check if it's an IVS/BuzzLive stream
+              const isIvsStream = stream.streamUrl && (
+                stream.streamUrl.includes('ivs') ||
+                stream.streamUrl.includes('amazonaws.com') ||
+                stream.streamUrl.includes('playback.live-video.net') ||
+                stream.ivsPlaybackUrl
+              );
+              
+              // Only include web-based streams (have streamUrl but NOT IVS)
+              return hasStreamUrl && !isIvsStream;
+            })
+          : [];
+        
+        // Create a map of userId -> isLive for quick lookup
+        const liveUserIds = new Set(
+          webBasedLiveStreams.map((stream: any) => stream.userId)
+        );
+        
         // Always show all users, but prioritize followed users first
         // This way users can see both who they follow AND discover new users
-        const allUsers = response.data
+        const allUsers = usersResponse.data
           .filter((u: any) => u.id !== user?.id) // Exclude current user
           .map((u: any) => {
             // Determine if this is a channel or user
@@ -78,7 +107,7 @@ const SubscribedChannels: React.FC<SubscribedChannelsProps> = ({
               username: u.username,
               name: u.displayName || u.username,
               avatar: u.avatar,
-              isLive: false,
+              isLive: liveUserIds.has(u.id), // Only show live for web-based streams
               type: isChannel ? 'channel' : 'user',
               isSubscribed: subscribedIds.includes(u.id), // Mark if subscribed
             } as FollowedItem & {isSubscribed?: boolean};

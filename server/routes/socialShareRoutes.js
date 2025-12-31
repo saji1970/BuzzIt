@@ -73,6 +73,8 @@ router.post('/buzz/:buzzId/share', verifyToken, async (req, res) => {
           shareResult = await shareInstagramPost(buzz, account);
         } else if (account.platform === 'snapchat') {
           shareResult = await shareSnapchatPost(buzz, account);
+        } else if (account.platform === 'twitter') {
+          shareResult = await shareTwitterPost(buzz, account);
         }
 
         results.push({
@@ -162,13 +164,27 @@ async function shareInstagramPost(buzz, account) {
 
 // Helper function to share to Snapchat
 async function shareSnapchatPost(buzz, account) {
-  // Snapchat Creative Kit / Stories API
   const message = buzz.content;
   const accessToken = account.accessToken;
+  const mediaUrl = buzz.media?.url || buzz.mediaUrl;
+  const mediaType = buzz.media?.type || buzz.mediaType;
 
-  // Note: Snapchat API is limited and requires special approval
-  // This is a placeholder implementation
-  throw new Error('Snapchat sharing is not yet supported. Please check back later.');
+  if (!mediaUrl) {
+    throw new Error('Snapchat requires media (image or video) to post.');
+  }
+
+  // Use the publishToSnapchat function
+  return await publishToSnapchat(message, mediaUrl, mediaType, account);
+}
+
+// Helper function to share to Twitter
+async function shareTwitterPost(buzz, account) {
+  const message = buzz.content;
+  const mediaUrl = buzz.media?.url || buzz.mediaUrl;
+  const mediaType = buzz.media?.type || buzz.mediaType;
+
+  // Use the publishToTwitter function
+  return await publishToTwitter(message, mediaUrl, mediaType, account);
 }
 
 // Get share preview (what will be posted)
@@ -267,10 +283,12 @@ router.post('/:platform/publish', verifyToken, async (req, res) => {
         publishResult = await publishToInstagram(content, mediaUrl, mediaType, account);
       } else if (platform === 'snapchat') {
         publishResult = await publishToSnapchat(content, mediaUrl, mediaType, account);
+      } else if (platform === 'twitter') {
+        publishResult = await publishToTwitter(content, mediaUrl, mediaType, account);
       } else {
         return res.status(400).json({
           success: false,
-          error: 'Unsupported platform'
+          error: 'Unsupported platform. Supported: facebook, instagram, snapchat, twitter'
         });
       }
 
@@ -395,37 +413,121 @@ async function publishToInstagram(content, mediaUrl, mediaType, account) {
 
 // Helper function to publish to Snapchat
 async function publishToSnapchat(content, mediaUrl, mediaType, account) {
-  // Snapchat API is limited and requires special approval
-  // This is a basic implementation for the Creative Kit API
-
   const accessToken = account.accessToken;
 
   if (!mediaUrl) {
     throw new Error('Snapchat requires media (image or video) to post.');
   }
 
-  // Snapchat Stories API endpoint
-  // Note: This requires Snapchat for Business approval and proper scopes
-  const response = await axios.post(
-    'https://adsapi.snapchat.com/v1/creatives',
-    {
-      name: 'BuzzIt Post',
-      type: 'SNAP',
-      snap: {
-        media_urls: [mediaUrl],
-        headline: content.substring(0, 34), // Snapchat headline limit
-        brand_name: 'BuzzIt'
-      }
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  // Snapchat Creative Kit API
+  // Note: This requires Snapchat for Business approval and Creative Kit API access
+  // Documentation: https://developers.snap.com/api/creative-kit
 
-  return response.data;
+  try {
+    // Step 1: Upload media to Snapchat
+    const uploadResponse = await axios.post(
+      'https://kit.snapchat.com/v1/media',
+      {
+        media: {
+          type: mediaType.toUpperCase(), // IMAGE or VIDEO
+          url: mediaUrl
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const mediaId = uploadResponse.data.media.id;
+
+    // Step 2: Create snap/story with the uploaded media
+    const createResponse = await axios.post(
+      'https://kit.snapchat.com/v1/stories',
+      {
+        story: {
+          media_id: mediaId,
+          caption: content.substring(0, 250), // Snapchat caption limit
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return {
+      id: createResponse.data.story.id,
+      mediaId: mediaId,
+      status: 'published'
+    };
+  } catch (error) {
+    // Check if error is due to missing API access
+    if (error.response?.status === 403) {
+      throw new Error('Snapchat Creative Kit API access required. Please apply for API access in your Snapchat developer portal.');
+    }
+    throw error;
+  }
+}
+
+// Helper function to publish to Twitter
+async function publishToTwitter(content, mediaUrl, mediaType, account) {
+  const accessToken = account.accessToken;
+
+  try {
+    let tweetData = {
+      text: content.substring(0, 280), // Twitter character limit
+    };
+
+    // If media is provided, upload it first
+    if (mediaUrl && mediaType) {
+      // Twitter requires media to be uploaded separately using v1.1 API
+      // Then the media_id is attached to the tweet
+
+      // For now, we'll use v2 API which requires the media to be already uploaded
+      // In a full implementation, you'd need to:
+      // 1. Download the media from mediaUrl
+      // 2. Upload to Twitter using v1.1 media/upload endpoint
+      // 3. Get media_id
+      // 4. Attach to tweet
+
+      // Simplified: Post tweet with URL (Twitter will auto-embed)
+      tweetData.text += `\n${mediaUrl}`;
+    }
+
+    // Post tweet using Twitter API v2
+    const response = await axios.post(
+      'https://api.twitter.com/2/tweets',
+      tweetData,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return {
+      id: response.data.data.id,
+      text: response.data.data.text,
+      postId: response.data.data.id,
+    };
+  } catch (error) {
+    // Handle Twitter-specific errors
+    if (error.response?.status === 403) {
+      throw new Error('Twitter API access denied. Please check your API subscription and permissions.');
+    } else if (error.response?.status === 429) {
+      throw new Error('Twitter rate limit exceeded. Please try again later.');
+    } else if (error.response?.data?.errors) {
+      const errorMsg = error.response.data.errors.map(e => e.message).join(', ');
+      throw new Error(`Twitter API error: ${errorMsg}`);
+    }
+    throw error;
+  }
 }
 
 module.exports = router;

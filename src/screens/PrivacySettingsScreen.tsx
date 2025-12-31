@@ -16,6 +16,7 @@ import {useUser} from '../context/UserContext';
 import {useNavigation} from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
 import ApiService from '../services/APIService';
+import SocialMediaService, {SocialAccount, SocialPlatform} from '../services/SocialMediaService';
 
 interface PrivacySettings {
   shareEmail: boolean;
@@ -23,13 +24,6 @@ interface PrivacySettings {
   shareLocation: boolean;
   shareBio: boolean;
   shareInterests: boolean;
-}
-
-interface ConnectedAccount {
-  platform: string;
-  username: string;
-  profilePicture?: string;
-  connectedAt: string;
 }
 
 const PrivacySettingsScreen: React.FC = () => {
@@ -46,9 +40,10 @@ const PrivacySettingsScreen: React.FC = () => {
     shareInterests: true,
   });
 
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [connectingPlatform, setConnectingPlatform] = useState<SocialPlatform | null>(null);
 
   useEffect(() => {
     if (user?.privacySettings) {
@@ -60,10 +55,8 @@ const PrivacySettingsScreen: React.FC = () => {
   const loadConnectedAccounts = async () => {
     setLoading(true);
     try {
-      const response = await ApiService.getConnectedSocialAccounts();
-      if (response.success && response.accounts) {
-        setConnectedAccounts(response.accounts);
-      }
+      const accounts = await SocialMediaService.getConnectedAccounts();
+      setConnectedAccounts(accounts);
     } catch (error) {
       console.error('Error loading connected accounts:', error);
     } finally {
@@ -95,41 +88,61 @@ const PrivacySettingsScreen: React.FC = () => {
     }
   };
 
-  const handleConnectSocialMedia = async (platform: string) => {
+  const handleConnectSocialMedia = async (platform: SocialPlatform) => {
+    setConnectingPlatform(platform);
     try {
-      const response = await ApiService.getSocialAuthUrl(platform);
-      if (response.success && response.authUrl) {
-        // Show info that OAuth is not fully implemented yet
+      const result = await SocialMediaService.connectPlatform(
+        platform,
+        async (success, error) => {
+          setConnectingPlatform(null);
+          if (success) {
+            // Reload accounts
+            await loadConnectedAccounts();
+            Alert.alert(
+              'Success',
+              `Successfully connected to ${platform.charAt(0).toUpperCase() + platform.slice(1)}!`,
+              [{text: 'OK'}]
+            );
+          } else {
+            Alert.alert(
+              'Connection Failed',
+              error || `Failed to connect to ${platform}. Please try again.`,
+              [{text: 'OK'}]
+            );
+          }
+        }
+      );
+
+      if (!result.success) {
+        setConnectingPlatform(null);
         Alert.alert(
-          `${platform.charAt(0).toUpperCase() + platform.slice(1)} Integration`,
-          'Social media integration is being configured. This feature will be available soon!\n\nWhat you can do:\n• Share buzzes manually\n• Export content to share\n• Stay tuned for updates',
-          [{text: 'Got it'}]
-        );
-        console.log(`${platform} auth URL:`, response.authUrl);
-      } else {
-        // Show user-friendly message instead of technical error
-        Alert.alert(
-          'Feature Not Available',
-          `Social media integration for ${platform} is currently being set up and will be available soon!\n\nIn the meantime, you can still share your buzzes manually.`,
+          'Connection Error',
+          result.error || `Failed to start ${platform} connection. Please try again.`,
           [{text: 'OK'}]
         );
-        console.error(`Failed to get ${platform} auth URL:`, response.error);
+      } else {
+        // Show instruction to complete OAuth in browser
+        Alert.alert(
+          'Complete Connection',
+          `Please complete the ${platform.charAt(0).toUpperCase() + platform.slice(1)} authentication in your browser. You'll be redirected back to the app when done.`,
+          [{text: 'OK'}]
+        );
       }
-    } catch (error) {
-      // Show user-friendly error
+    } catch (error: any) {
+      setConnectingPlatform(null);
+      console.error(`Error connecting to ${platform}:`, error);
       Alert.alert(
-        'Coming Soon',
-        `We're working on ${platform} integration! This feature will be available in a future update.`,
+        'Error',
+        `Failed to connect to ${platform}. ${error.message || 'Please try again.'}`,
         [{text: 'OK'}]
       );
-      console.error(`Error connecting to ${platform}:`, error);
     }
   };
 
-  const handleDisconnectSocialMedia = async (platform: string) => {
+  const handleDisconnectSocialMedia = async (platform: SocialPlatform) => {
     Alert.alert(
       'Disconnect Account',
-      `Are you sure you want to disconnect your ${platform} account?`,
+      `Are you sure you want to disconnect your ${platform.charAt(0).toUpperCase() + platform.slice(1)} account?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
@@ -137,17 +150,19 @@ const PrivacySettingsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await ApiService.disconnectSocialAccount(platform);
-              if (response.success) {
-                setConnectedAccounts(connectedAccounts.filter(acc => acc.platform !== platform));
-                // Success handled silently - no alert
+              const result = await SocialMediaService.disconnectPlatform(platform);
+              if (result.success) {
+                await loadConnectedAccounts();
+                Alert.alert('Success', `Disconnected from ${platform.charAt(0).toUpperCase() + platform.slice(1)}.`);
               } else {
-                // Log error but don't show alert
-                console.error(`Failed to disconnect ${platform}:`, response.error);
+                Alert.alert(
+                  'Error',
+                  result.error || `Failed to disconnect ${platform}. Please try again.`
+                );
               }
-            } catch (error) {
-              // Log error but don't show alert
+            } catch (error: any) {
               console.error(`Error disconnecting ${platform}:`, error);
+              Alert.alert('Error', `Failed to disconnect ${platform}. Please try again.`);
             }
           },
         },
@@ -183,12 +198,26 @@ const PrivacySettingsScreen: React.FC = () => {
     </Animatable.View>
   );
 
-  const renderSocialAccount = (platform: string, index: number) => {
+  const renderSocialAccount = (platform: SocialPlatform, index: number) => {
     const connected = connectedAccounts.find(acc => acc.platform === platform);
+    const isConnecting = connectingPlatform === platform;
     const platformIcons = {
       facebook: 'facebook',
       instagram: 'photo-camera',
       snapchat: 'camera',
+    };
+
+    const getStatusText = () => {
+      if (!connected) return 'Not connected';
+      if (connected.status === 'expired') return 'Token expired - Reconnect needed';
+      if (connected.status === 'error') return 'Connection error - Reconnect needed';
+      return `Connected as @${connected.username}`;
+    };
+
+    const getStatusColor = () => {
+      if (!connected) return theme.colors.textSecondary;
+      if (connected.status === 'expired' || connected.status === 'error') return theme.colors.error;
+      return theme.colors.primary;
     };
 
     return (
@@ -199,36 +228,44 @@ const PrivacySettingsScreen: React.FC = () => {
         style={[styles.socialAccountItem, {backgroundColor: theme.colors.surface}]}>
         <View style={styles.socialAccountLeft}>
           <View style={[styles.socialIcon, {backgroundColor: theme.colors.primary}]}>
-            <Icon name={platformIcons[platform as keyof typeof platformIcons] || 'link'} size={24} color="#FFFFFF" />
+            <Icon name={platformIcons[platform] || 'link'} size={24} color="#FFFFFF" />
           </View>
           <View style={styles.socialAccountInfo}>
             <Text style={[styles.socialAccountName, {color: theme.colors.text}]}>
               {platform.charAt(0).toUpperCase() + platform.slice(1)}
             </Text>
-            {connected ? (
-              <Text style={[styles.socialAccountStatus, {color: theme.colors.primary}]}>
-                Connected as @{connected.username}
-              </Text>
-            ) : (
-              <Text style={[styles.socialAccountStatus, {color: theme.colors.textSecondary}]}>
-                Not connected
-              </Text>
-            )}
+            <Text style={[styles.socialAccountStatus, {color: getStatusColor()}]}>
+              {isConnecting ? 'Connecting...' : getStatusText()}
+            </Text>
           </View>
         </View>
-        {connected ? (
+        {connected && connected.isConnected && connected.status === 'connected' ? (
           <TouchableOpacity
             style={[styles.disconnectButton, {borderColor: theme.colors.error}]}
-            onPress={() => handleDisconnectSocialMedia(platform)}>
+            onPress={() => handleDisconnectSocialMedia(platform)}
+            disabled={isConnecting}>
             <Text style={[styles.disconnectButtonText, {color: theme.colors.error}]}>
               Disconnect
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.connectButton, {backgroundColor: theme.colors.primary}]}
-            onPress={() => handleConnectSocialMedia(platform)}>
-            <Text style={styles.connectButtonText}>Connect</Text>
+            style={[
+              styles.connectButton,
+              {
+                backgroundColor: isConnecting ? theme.colors.textSecondary : theme.colors.primary,
+                opacity: isConnecting ? 0.6 : 1,
+              },
+            ]}
+            onPress={() => handleConnectSocialMedia(platform)}
+            disabled={isConnecting}>
+            {isConnecting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.connectButtonText}>
+                {connected?.status === 'expired' || connected?.status === 'error' ? 'Reconnect' : 'Connect'}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
       </Animatable.View>

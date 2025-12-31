@@ -29,8 +29,9 @@ android {
         applicationId 'com.buzzit.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 4
+        versionName "1.0.3"
+        multiDexEnabled true
 
         buildConfigField("boolean", "REACT_NATIVE_UNSTABLE_USE_RUNTIME_SCHEDULER_ALWAYS", (findProperty("reactNative.unstable_useRuntimeSchedulerAlways") ?: true).toString())
     }
@@ -88,6 +89,9 @@ dependencies {
     // Ensure Activity Result APIs used by some RN libraries are available
     implementation("androidx.activity:activity:1.7.2")
     implementation("androidx.activity:activity-ktx:1.7.2")
+    
+    // Multidex support to fix DEX merging issues
+    implementation("androidx.multidex:multidex:2.0.1")
 
     debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")
     debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {

@@ -156,3 +156,9 @@ adb logcat -d *:E | Select-String -Pattern "Video|ExoPlayer|MediaPlayer|HLS" -Ca
 - The issue appears to be specific to the Android video player implementation
 - Consider using the native AWS IVS player for better compatibility
 
+
+
+
+
+
+

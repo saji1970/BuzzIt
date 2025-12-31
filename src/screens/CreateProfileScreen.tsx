@@ -273,10 +273,7 @@ const CreateProfileScreen: React.FC = () => {
       return;
     }
 
-    if (!avatarUri) {
-      Alert.alert('Add Profile Photo', 'Please add a profile photo or avatar before continuing.');
-      return;
-    }
+    // Profile photo is now optional - users can add it later
 
     // Validate profile details
     if (!username.trim()) {

@@ -1,39 +1,36 @@
 {
+  "cli": {
+    "version": ">= 5.0.0"
+  },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "bundleIdentifier": "com.buzzit.app"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "android": {
-        "buildType": "apk",
-        "image": "latest"
-      },
-      "env": {
-        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dkotlin.daemon.jvm.options=-Xmx4g -Dkotlin.incremental=false"
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.buzzit.app"
       }
     },
     "production": {
+      "distribution": "store",
       "ios": {
-        "simulator": false
-      },
-      "android": {
-        "buildType": "app-bundle"
+        "bundleIdentifier": "com.buzzit.app"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "your-app-store-connect-app-id",
-        "appleTeamId": "your-team-id",
-        "sku": "com.buzzit.app"
-      },
-      "android": {
-        "serviceAccountKeyPath": "./service-account-key.json",
-        "track": "internal"
+        "appleId": "",
+        "ascAppId": "",
+        "appleTeamId": ""
       }
     }
   }
