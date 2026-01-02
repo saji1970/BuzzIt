@@ -695,6 +695,11 @@ try {
   // Mount social media routes
   app.use('/api/social-auth', socialAuthRoutes);
   app.use('/api/social-share', socialShareRoutes);
+
+  // Also mount OAuth callback at root level for Facebook compatibility
+  // Facebook prefers simpler redirect URIs without /api/ prefix
+  app.use('/oauth', socialAuthRoutes);
+
   console.log('✅ Social media routes loaded');
 } catch (error) {
   console.log('⚠️  Social media routes not available:', error.message);

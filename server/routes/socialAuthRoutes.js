@@ -111,7 +111,8 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
     });
   }
 
-  const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
+  // Facebook prefers simpler redirect URIs without /api/ prefix
+  const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/oauth/callback/${platform}`;
   const state = Buffer.from(JSON.stringify({ userId: req.userId })).toString('base64');
 
   const params = new URLSearchParams({
@@ -156,7 +157,8 @@ router.get('/oauth/:platform/callback', async (req, res) => {
     const userId = stateData.userId;
 
     // Exchange code for access token
-    const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
+    // Facebook prefers simpler redirect URIs without /api/ prefix
+  const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/oauth/callback/${platform}`;
 
     let tokenResponse;
     if (platform === 'facebook' || platform === 'instagram') {
@@ -351,7 +353,8 @@ router.post('/oauth/:platform/callback', verifyToken, async (req, res) => {
 
   try {
     // Exchange code for access token
-    const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/social-auth/oauth/${platform}/callback`;
+    // Facebook prefers simpler redirect URIs without /api/ prefix
+  const redirectUri = `${process.env.APP_BASE_URL || 'http://localhost:3000'}/oauth/callback/${platform}`;
 
     let tokenResponse;
     if (platform === 'facebook' || platform === 'instagram') {
