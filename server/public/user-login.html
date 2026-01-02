@@ -155,6 +155,24 @@
             color: #666;
         }
 
+        .nav-btn {
+            padding: 8px 16px;
+            background: #fff;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
         .header .logout-btn {
             padding: 8px 16px;
             background: #f8f9fa;
@@ -284,6 +302,9 @@
             <h1>🎥 Create Live Stream</h1>
             <div class="user-info">
                 <span id="currentUsername"></span>
+                <a href="create-buzz.html" class="nav-btn">🐝 Create Buzz</a>
+                <a href="social-settings.html" class="nav-btn">🔗 Social Settings</a>
+                <a href="user-streaming.html" class="nav-btn">🎥 My Streams</a>
                 <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
         </div>
