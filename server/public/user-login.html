@@ -380,8 +380,11 @@
                 if (data.success && data.token) {
                     authToken = data.token;
                     localStorage.setItem('userToken', authToken);
+                    localStorage.setItem('authToken', authToken); // Also store as authToken for other pages
+                    localStorage.setItem('user', JSON.stringify(data.user)); // Store user data
                     currentUser = data.user;
-                    showStreamingPanel();
+                    // Redirect to streaming page instead of showing panel
+                    window.location.href = 'user-streaming.html';
                 } else {
                     showError(data.error || 'Login failed');
                 }
@@ -401,9 +404,14 @@
                 const data = await response.json();
                 if (data.success) {
                     currentUser = data.data;
-                    showStreamingPanel();
+                    localStorage.setItem('authToken', authToken); // Ensure authToken is stored
+                    localStorage.setItem('user', JSON.stringify(data.data)); // Store user data
+                    // Redirect to streaming page if already logged in
+                    window.location.href = 'user-streaming.html';
                 } else {
                     localStorage.removeItem('userToken');
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user');
                     authToken = null;
                 }
             } catch (error) {
