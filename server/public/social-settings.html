@@ -360,19 +360,24 @@
 
         function handleOAuthCallback() {
             const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
+            const success = urlParams.get('success');
             const platform = urlParams.get('platform');
             const error = urlParams.get('error');
 
             if (error) {
-                showAlert(`OAuth error: ${error}`, 'error');
+                const description = urlParams.get('description') || 'Authentication failed';
+                showAlert(`OAuth error: ${description}`, 'error');
                 // Clean URL
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
 
-            if (code && platform) {
-                processOAuthCallback(platform, code);
+            if (success === 'true' && platform) {
+                showAlert(`Successfully connected ${platform.charAt(0).toUpperCase() + platform.slice(1)}!`, 'success');
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                // Refresh accounts
+                setTimeout(() => fetchConnectedAccounts(), 1000);
             }
         }
 

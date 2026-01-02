@@ -138,16 +138,16 @@ router.get('/oauth/:platform/callback', async (req, res) => {
 
   // Handle OAuth errors
   if (error) {
-    return res.redirect(`/settings?social_error=${error}&description=${error_description || 'OAuth failed'}`);
+    return res.redirect(`/social-settings.html?error=${error}&description=${error_description || 'OAuth failed'}`);
   }
 
   if (!code || !state) {
-    return res.redirect('/settings?social_error=missing_code');
+    return res.redirect('/social-settings.html?error=missing_code');
   }
 
   const config = SOCIAL_CONFIG[platform];
   if (!config) {
-    return res.redirect('/settings?social_error=invalid_platform');
+    return res.redirect('/social-settings.html?error=invalid_platform');
   }
 
   try {
@@ -314,10 +314,10 @@ router.get('/oauth/:platform/callback', async (req, res) => {
     );
 
     // Redirect back to settings with success message
-    res.redirect(`/settings?social_success=${platform}`);
+    res.redirect(`/social-settings.html?success=true&platform=${platform}`);
   } catch (error) {
     console.error(`OAuth ${platform} callback error:`, error);
-    res.redirect(`/settings?social_error=${platform}_auth_failed`);
+    res.redirect(`/social-settings.html?error=${platform}_auth_failed`);
   }
 });
 
