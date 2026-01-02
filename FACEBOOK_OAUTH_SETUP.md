@@ -27,10 +27,10 @@ Getting error: "This app isn't available - This app needs at least one supported
 1. Go to **Facebook Login** → **Settings**
 2. Set **Valid OAuth Redirect URIs**:
    ```
-   https://buzzit-production.up.railway.app/social-settings.html
-   https://buzzit-production.up.railway.app/oauth/callback
-   http://localhost:3000/social-settings.html (for local testing)
+   https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
+   http://localhost:3000/api/social-auth/oauth/facebook/callback
    ```
+   **⚠️ IMPORTANT**: The redirect URI MUST exactly match what's configured in your code
 3. Set **Allowed Domains for the JavaScript SDK**:
    ```
    buzzit-production.up.railway.app
@@ -112,8 +112,9 @@ Choose one of the following:
 ### Issue: "Redirect URI Mismatch"
 **Solution**: Ensure the redirect URI in Facebook Login settings exactly matches:
 ```
-https://buzzit-production.up.railway.app/social-settings.html
+https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback
 ```
+This is the backend endpoint that Facebook redirects to after user authorization.
 
 ### Issue: "This app isn't available"
 **Solution**:
@@ -156,4 +157,13 @@ Your code is currently using:
 - **Scope**: `public_profile`
 - **Auth URL**: `https://www.facebook.com/v18.0/dialog/oauth`
 - **Token URL**: `https://graph.facebook.com/v18.0/oauth/access_token`
-- **Redirect URI**: Should be `https://buzzit-production.up.railway.app/social-settings.html`
+- **Redirect URI**: `https://buzzit-production.up.railway.app/api/social-auth/oauth/facebook/callback`
+
+### OAuth Flow:
+1. User clicks "Connect Facebook" → Frontend calls backend `/api/social-auth/oauth/facebook/url`
+2. Backend returns Facebook OAuth URL with redirect_uri
+3. Frontend redirects user to Facebook authorization page
+4. User authorizes → Facebook redirects to backend: `/api/social-auth/oauth/facebook/callback`
+5. Backend exchanges code for access token, saves to database
+6. Backend redirects user back to frontend: `/social-settings.html?success=true&platform=facebook`
+7. Frontend displays success message
