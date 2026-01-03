@@ -4236,6 +4236,21 @@ app.post('/api/facebook-data-deletion', async (req, res) => {
   }
 });
 
+// GET handler for Facebook Data Deletion endpoint (for browser access/testing)
+app.get('/api/facebook-data-deletion', (req, res) => {
+  res.status(200).json({
+    endpoint: '/api/facebook-data-deletion',
+    method: 'POST',
+    description: 'Facebook Data Deletion Callback endpoint',
+    usage: 'This endpoint is called by Facebook when a user deletes your app from their Facebook account.',
+    required_parameter: 'signed_request (in POST body)',
+    status: 'Active and ready to receive requests',
+    documentation: 'See FACEBOOK_APP_SUBMISSION.md for more details',
+    user_deletion_url: '/data-deletion-request.html',
+    note: 'This endpoint only accepts POST requests from Facebook. For user-initiated deletions, use the web form at /data-deletion-request.html'
+  });
+});
+
 // Helper function to delete all user data
 async function deleteUserData(userId) {
   try {
