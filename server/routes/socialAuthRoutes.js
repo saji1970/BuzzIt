@@ -123,6 +123,11 @@ router.get('/oauth/:platform/url', verifyToken, (req, res) => {
     state: state,
   });
 
+  // Add Facebook Login for Business config_id if available
+  if (platform === 'facebook' && process.env.FACEBOOK_CONFIG_ID) {
+    params.append('config_id', process.env.FACEBOOK_CONFIG_ID);
+  }
+
   const authUrl = `${config.authUrl}?${params.toString()}`;
 
   res.json({

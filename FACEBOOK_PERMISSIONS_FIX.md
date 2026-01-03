@@ -1,6 +1,11 @@
 # Fix: "This app needs at least one supported permission"
 
-This error occurs when your Facebook app doesn't have permissions properly configured. Follow these steps to fix it.
+This error occurs when your Facebook app doesn't have permissions properly configured. This guide covers two scenarios:
+
+1. **Standard Facebook Login** - Configure permissions and OAuth
+2. **Facebook Login for Business** - Also requires a `config_id` (see Step 2A below)
+
+**Note**: If your Facebook app shows "Facebook Login for Business" instead of "Facebook Login", see `FACEBOOK_LOGIN_FOR_BUSINESS_SETUP.md` for the complete guide.
 
 ---
 
@@ -32,6 +37,31 @@ In the Facebook Login → Settings page:
 4. **Use Strict Mode for Redirect URIs** - Set to **YES**
 
 5. Click **"Save Changes"**
+
+### Step 2A: Configure Facebook Login for Business (If Applicable)
+
+**IMPORTANT**: If your app uses **"Facebook Login for Business"** instead of regular "Facebook Login", you MUST also:
+
+1. Go to **"Products"** → **"Facebook Login for Business"** → **"Configurations"**
+
+2. Click **"Create Configuration"**
+
+3. Fill in:
+   - Configuration Name: `BuzzIt Web Login`
+   - Configuration Type: `Web`
+   - Allowed Domains: `your-railway-domain.up.railway.app`
+   - Valid OAuth Redirect URIs: `https://your-railway-domain.up.railway.app/oauth/callback/facebook`
+
+4. Click **"Save"** and copy the **Configuration ID** (e.g., `1592342735525633`)
+
+5. Add to Railway environment variables:
+   ```
+   FACEBOOK_CONFIG_ID=1592342735525633
+   ```
+
+6. Redeploy your server
+
+**See `FACEBOOK_LOGIN_FOR_BUSINESS_SETUP.md` for detailed instructions.**
 
 ### Step 3: Request Basic Permissions
 
