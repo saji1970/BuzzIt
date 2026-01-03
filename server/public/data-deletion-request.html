@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuzzIt - Data Deletion Request</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        h1 {
+            color: #1a73e8;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px 0;
+        }
+
+        .info-box {
+            background: #e8f0fe;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .info-box h2 {
+            color: #1a73e8;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: #555;
+        }
+
+        .info-box li {
+            margin-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        input[type="email"],
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        input[type="email"]:focus,
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 10px;
+            margin-top: 4px;
+            width: 18px;
+            height: 18px;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+        }
+
+        button {
+            background: #1a73e8;
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1557b0;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .success-message {
+            display: none;
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .warning-box p {
+            color: #856404;
+            margin: 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            border-top: 2px solid #e0e0e0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Data Deletion Request</h1>
+            <p class="subtitle">Request deletion of your BuzzIt account and data</p>
+        </header>
+
+        <div class="content">
+            <div class="info-box">
+                <h2>What will be deleted?</h2>
+                <p>When you submit this request, we will delete:</p>
+                <ul>
+                    <li>Your account information (username, email, phone number)</li>
+                    <li>Your profile data (profile picture, bio, settings)</li>
+                    <li>All your Buzz posts (text, images, videos)</li>
+                    <li>Your comments and interactions</li>
+                    <li>Connected social media accounts (Facebook, Instagram, etc.)</li>
+                    <li>Your live stream history</li>
+                    <li>All other personal data associated with your account</li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <p><strong>Warning:</strong> This action cannot be undone. All your data will be permanently deleted within 30 days.</p>
+            </div>
+
+            <form id="deletionForm">
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        required
+                        placeholder="Enter your account email"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Username (optional)</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Enter your username"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="reason">Reason for deletion (optional)</label>
+                    <textarea
+                        id="reason"
+                        name="reason"
+                        placeholder="Let us know why you're deleting your account (this helps us improve)"
+                    ></textarea>
+                </div>
+
+                <div class="checkbox-group">
+                    <input
+                        type="checkbox"
+                        id="confirm"
+                        name="confirm"
+                        required
+                    >
+                    <label for="confirm">
+                        I understand that this action is permanent and cannot be undone. All my data will be deleted within 30 days.
+                    </label>
+                </div>
+
+                <button type="submit" id="submitBtn">Submit Deletion Request</button>
+            </form>
+
+            <div id="successMessage" class="success-message">
+                <h3 style="margin-bottom: 10px;">Request Submitted Successfully</h3>
+                <p>Your data deletion request has been received. We will process your request within 30 days. You will receive a confirmation email once the deletion is complete.</p>
+            </div>
+
+            <div id="errorMessage" class="error-message">
+                <h3 style="margin-bottom: 10px;">Request Failed</h3>
+                <p id="errorText">An error occurred while submitting your request. Please try again or contact support.</p>
+            </div>
+
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-bottom: 10px; color: #333;">Need Help?</h3>
+                <p style="color: #666; margin-bottom: 10px;">If you have questions about data deletion or need assistance:</p>
+                <ul style="margin-left: 20px; color: #666;">
+                    <li>Email: <a href="mailto:privacy@buzzit.com">privacy@buzzit.com</a></li>
+                    <li>Email: <a href="mailto:support@buzzit.com">support@buzzit.com</a></li>
+                    <li>Privacy Policy: <a href="/privacy-policy.html">View our Privacy Policy</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 BuzzIt. All rights reserved.</p>
+            <p style="margin-top: 10px;"><a href="/">Back to Home</a></p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('deletionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+
+            // Reset messages
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            try {
+                const formData = {
+                    email: document.getElementById('email').value,
+                    username: document.getElementById('username').value,
+                    reason: document.getElementById('reason').value,
+                    timestamp: new Date().toISOString()
+                };
+
+                const response = await fetch('/api/data-deletion-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    successMessage.style.display = 'block';
+                    document.getElementById('deletionForm').reset();
+                    // Scroll to success message
+                    successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    throw new Error(result.error || 'Failed to submit request');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorText.textContent = error.message || 'An error occurred while submitting your request. Please try again or contact support.';
+                errorMessage.style.display = 'block';
+                // Scroll to error message
+                errorMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Deletion Request';
+            }
+        });
+    </script>
+</body>
+</html>

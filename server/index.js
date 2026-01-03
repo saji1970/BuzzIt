@@ -4079,6 +4079,218 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Data Deletion Request endpoint (for user-initiated deletion)
+app.post('/api/data-deletion-request', async (req, res) => {
+  try {
+    const { email, username, reason } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    console.log('📧 Data deletion request received:', {
+      email: email.trim(),
+      username: username ? username.trim() : 'N/A',
+      reason: reason ? reason.substring(0, 100) : 'N/A',
+      timestamp: new Date().toISOString()
+    });
+
+    // Find user by email
+    let user = null;
+    if (db.isConnected()) {
+      const result = await db.query(
+        'SELECT id, username, email FROM users WHERE LOWER(email) = $1',
+        [email.toLowerCase().trim()]
+      );
+      user = result.rows[0];
+    }
+
+    if (!user) {
+      // Even if user not found, return success to avoid revealing user existence
+      console.log('⚠️ User not found for deletion request, but returning success for privacy');
+      return res.json({
+        success: true,
+        message: 'Data deletion request received. If an account exists with this email, it will be deleted within 30 days.'
+      });
+    }
+
+    // Log the deletion request
+    const deletionRequestId = uuidv4();
+    if (db.isConnected()) {
+      try {
+        await db.query(
+          `INSERT INTO data_deletion_requests (id, user_id, email, username, reason, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+          [deletionRequestId, user.id, email.trim(), username?.trim() || user.username, reason?.trim() || null, 'pending']
+        );
+      } catch (dbError) {
+        // If table doesn't exist, just log it
+        console.log('💡 Note: data_deletion_requests table may not exist yet. Request logged to console only.');
+      }
+    }
+
+    // Perform the actual deletion
+    await deleteUserData(user.id);
+
+    res.json({
+      success: true,
+      message: 'Data deletion request processed successfully. Your account and all associated data will be deleted within 30 days.',
+      confirmationCode: deletionRequestId
+    });
+
+  } catch (error) {
+    console.error('❌ Data deletion request error:', error);
+    res.status(500).json({ error: 'Failed to process deletion request. Please try again or contact support.' });
+  }
+});
+
+// Facebook Data Deletion Callback endpoint
+// This is the callback URL you provide to Facebook for handling data deletion requests
+app.post('/api/facebook-data-deletion', async (req, res) => {
+  try {
+    const { signed_request } = req.body;
+
+    if (!signed_request) {
+      return res.status(400).json({ error: 'Missing signed_request parameter' });
+    }
+
+    console.log('📘 Facebook data deletion callback received:', {
+      signed_request: signed_request.substring(0, 50) + '...',
+      timestamp: new Date().toISOString()
+    });
+
+    // Parse the signed request from Facebook
+    // Format: encoded_signature.payload
+    const [encodedSig, payload] = signed_request.split('.');
+
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid signed_request format' });
+    }
+
+    // Decode the payload (base64 URL decode)
+    const decodedPayload = Buffer.from(payload, 'base64').toString('utf8');
+    const data = JSON.parse(decodedPayload);
+
+    const userId = data.user_id; // Facebook user ID
+    const appId = data.app_id; // Facebook app ID
+
+    console.log('📘 Facebook deletion request for user:', { userId, appId });
+
+    // Find user by Facebook ID
+    let user = null;
+    if (db.isConnected()) {
+      const result = await db.query(
+        'SELECT id, username, email FROM users WHERE facebook_id = $1',
+        [userId]
+      );
+      user = result.rows[0];
+    }
+
+    if (user) {
+      // Log the deletion request
+      const deletionRequestId = uuidv4();
+      if (db.isConnected()) {
+        try {
+          await db.query(
+            `INSERT INTO data_deletion_requests (id, user_id, email, username, reason, status, source, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
+            [deletionRequestId, user.id, user.email, user.username, 'Facebook-initiated deletion', 'pending', 'facebook']
+          );
+        } catch (dbError) {
+          console.log('💡 Note: data_deletion_requests table may not exist yet. Request logged to console only.');
+        }
+      }
+
+      // Delete user data
+      await deleteUserData(user.id);
+
+      // Return the confirmation code and status URL to Facebook
+      const statusUrl = `${process.env.APP_BASE_URL || 'https://yourdomain.com'}/data-deletion-status?id=${deletionRequestId}`;
+
+      res.json({
+        url: statusUrl,
+        confirmation_code: deletionRequestId
+      });
+    } else {
+      // User not found, but still return success
+      const deletionRequestId = uuidv4();
+      const statusUrl = `${process.env.APP_BASE_URL || 'https://yourdomain.com'}/data-deletion-status?id=${deletionRequestId}`;
+
+      console.log('⚠️ Facebook user not found in our database, returning success');
+
+      res.json({
+        url: statusUrl,
+        confirmation_code: deletionRequestId
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Facebook data deletion callback error:', error);
+    res.status(500).json({ error: 'Failed to process deletion request' });
+  }
+});
+
+// Helper function to delete all user data
+async function deleteUserData(userId) {
+  try {
+    if (!db.isConnected()) {
+      console.log('⚠️ Database not connected, cannot delete user data');
+      return;
+    }
+
+    console.log(`🗑️ Starting data deletion for user ID: ${userId}`);
+
+    // Delete in this order to respect foreign key constraints:
+
+    // 1. Delete user interactions
+    await db.query('DELETE FROM user_interactions WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted user interactions');
+
+    // 2. Delete social accounts
+    await db.query('DELETE FROM social_accounts WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted social accounts');
+
+    // 3. Delete verification codes
+    await db.query('DELETE FROM verification_codes WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted verification codes');
+
+    // 4. Delete stream comments
+    await db.query('DELETE FROM stream_comments WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted stream comments');
+
+    // 5. Delete live streams
+    await db.query('DELETE FROM live_streams WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted live streams');
+
+    // 6. Delete buzzes
+    await db.query('DELETE FROM buzzes WHERE user_id = $1', [userId]);
+    console.log('  ✓ Deleted buzzes');
+
+    // 7. Delete subscriptions
+    await db.query('DELETE FROM subscriptions WHERE user_id = $1 OR creator_id = $1', [userId]);
+    console.log('  ✓ Deleted subscriptions');
+
+    // 8. Delete channels (if user is owner)
+    await db.query('DELETE FROM channels WHERE owner_id = $1', [userId]);
+    console.log('  ✓ Deleted channels');
+
+    // 9. Finally, delete the user account
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+    console.log('  ✓ Deleted user account');
+
+    console.log(`✅ Successfully deleted all data for user ID: ${userId}`);
+  } catch (error) {
+    console.error('❌ Error deleting user data:', error);
+    throw error;
+  }
+}
+
 // Clean up expired verification codes every hour
 setInterval(() => {
   const now = Date.now();
